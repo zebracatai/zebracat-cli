@@ -34,6 +34,33 @@ go install github.com/zebracatai/zebracat-cli@latest   # installs as `zebracat-c
 # or grab a binary from the Releases page
 ```
 
+## Interactive shell
+
+Just run `zebracat` (no arguments) to open the interactive shell — a branded,
+purple-themed REPL:
+
+```
+╭───────────────────────────────────────────────────────╮
+│     __ ___ _ ___ _ _ __ __ _ ___                        │
+│    |_ / -_) '_ \ '_/ _`/ _/ _`|  _|                     │
+│    /__\___|_.__/_| \__,_\__\__,_|\__|                    │
+│                                                         │
+│  AI video generation, right in your terminal.           │
+│                                                         │
+│  Type /help for commands · /quit to exit                │
+│  Try /video — or just describe the video you want.      │
+╰───────────────────────────────────────────────────────╯
+🦓 › a 30-second cinematic ad for my coffee brand
+```
+
+- **Slash commands** with autocomplete: `/video`, `/status`, `/projects`, `/voices`,
+  `/styles`, `/account`, `/login`, `/help`, `/quit` (start typing `/` and press Tab).
+- **Just describe a video** in plain language and it walks you through the rest.
+- Output stays in your scrollback after you exit (no alt-screen).
+
+Prefer one-shot commands? Everything below also works non-interactively
+(`zebracat video create …`), which is what scripts and agents should use.
+
 ## Authentication — two ways, two wallets
 
 | Method | How | Billed from |
