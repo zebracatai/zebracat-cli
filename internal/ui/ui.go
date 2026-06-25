@@ -1,0 +1,197 @@
+// Package ui handles all terminal output: machine-readable JSON by default,
+// pretty "human" rendering on request, plus the Zebracat brand (purple + zebra).
+//
+// Design contract (shared with HeyGen-style agent tooling):
+//   - JSON on stdout (stable, unaltered) so output is pipeable.
+//   - Structured error envelope on stderr.
+//   - Color/spinners only on a TTY and only in human mode.
+package ui
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+	"time"
+)
+
+// Brand colors (Zebracat purple) + basics. Empty when color is disabled.
+var (
+	purple = "\x1b[38;5;141m"
+	bold   = "\x1b[1m"
+	dim    = "\x1b[2m"
+	green  = "\x1b[32m"
+	red    = "\x1b[31m"
+	yellow = "\x1b[33m"
+	reset  = "\x1b[0m"
+)
+
+func init() {
+	if !colorEnabled() {
+		purple, bold, dim, green, red, yellow, reset = "", "", "", "", "", "", ""
+	}
+}
+
+func colorEnabled() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	return isTTY(os.Stdout)
+}
+
+// isTTY reports whether f is a character device (a real terminal).
+func isTTY(f *os.File) bool {
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// Logo is the Zebracat wordmark + zebra, shown on `--help` and `version`.
+const logoArt = `   ____     _                          _
+  |_  /___ | |__ _ _ __ _ __ __ _ _ __| |_
+   / // -_)| '_ \ '_/ _` + "`" + ` / _/ _` + "`" + ` |  _|
+  /___\___||_.__/_| \__,_\__\__,_|\__|`
+
+// Banner returns the branded banner for help/version screens.
+func Banner() string {
+	return fmt.Sprintf("%s%s%s\n  %sAI video generation, from your terminal.%s\n", purple+bold, logoArt, reset, dim, reset)
+}
+
+// PrintJSON writes v as indented JSON to stdout.
+func PrintJSON(v any) error {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	return enc.Encode(v)
+}
+
+// PrintError writes the structured error envelope to stderr.
+func PrintError(code, message, hint string) {
+	env := map[string]any{"error": map[string]string{"code": code, "message": message}}
+	if hint != "" {
+		env["error"].(map[string]string)["hint"] = hint
+	}
+	b, _ := json.MarshalIndent(env, "", "  ")
+	fmt.Fprintln(os.Stderr, string(b))
+}
+
+// Success prints a green check line (human mode) to stderr so it never pollutes
+// piped JSON on stdout.
+func Success(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "%s✓%s %s\n", green, reset, fmt.Sprintf(format, args...))
+}
+
+// Info prints a dim informational line to stderr.
+func Info(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "%s%s%s\n", dim, fmt.Sprintf(format, args...), reset)
+}
+
+// Warn prints a yellow warning to stderr.
+func Warn(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, "%s!%s %s\n", yellow, reset, fmt.Sprintf(format, args...))
+}
+
+// Heading prints a purple bold heading (human mode).
+func Heading(s string) {
+	fmt.Printf("%s%s%s%s\n", purple, bold, s, reset)
+}
+
+// KV prints aligned key/value pairs (human mode). order preserves field order.
+func KV(pairs [][2]string) {
+	w := 0
+	for _, p := range pairs {
+		if len(p[0]) > w {
+			w = len(p[0])
+		}
+	}
+	for _, p := range pairs {
+		fmt.Printf("  %s%-*s%s  %s\n", dim, w, p[0], reset, p[1])
+	}
+}
+
+// Table prints a simple aligned table (human mode). headers + rows of strings.
+func Table(headers []string, rows [][]string) {
+	widths := make([]int, len(headers))
+	for i, h := range headers {
+		widths[i] = len(h)
+	}
+	for _, row := range rows {
+		for i, c := range row {
+			if i < len(widths) && len(c) > widths[i] {
+				widths[i] = len(c)
+			}
+		}
+	}
+	var sb strings.Builder
+	for i, h := range headers {
+		sb.WriteString(fmt.Sprintf("%s%-*s%s  ", bold, widths[i], strings.ToUpper(h), reset))
+	}
+	fmt.Println(strings.TrimRight(sb.String(), " "))
+	for _, row := range rows {
+		var line strings.Builder
+		for i := range headers {
+			c := ""
+			if i < len(row) {
+				c = row[i]
+			}
+			line.WriteString(fmt.Sprintf("%-*s  ", widths[i], c))
+		}
+		fmt.Println(strings.TrimRight(line.String(), " "))
+	}
+}
+
+// SortedKeys is a small helper for stable map rendering.
+func SortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// Spinner is a minimal stderr spinner shown only on a TTY in human mode.
+type Spinner struct {
+	stop chan struct{}
+	done chan struct{}
+	on   bool
+}
+
+// StartSpinner begins a spinner with the given label, or a no-op off a TTY.
+func StartSpinner(label string) *Spinner {
+	s := &Spinner{stop: make(chan struct{}), done: make(chan struct{})}
+	if !isTTY(os.Stderr) {
+		close(s.done)
+		return s
+	}
+	s.on = true
+	go func() {
+		defer close(s.done)
+		frames := []rune{'⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'}
+		i := 0
+		t := time.NewTicker(90 * time.Millisecond)
+		defer t.Stop()
+		for {
+			select {
+			case <-s.stop:
+				fmt.Fprint(os.Stderr, "\r\033[K")
+				return
+			case <-t.C:
+				fmt.Fprintf(os.Stderr, "\r%s%c%s %s", purple, frames[i%len(frames)], reset, label)
+				i++
+			}
+		}
+	}()
+	return s
+}
+
+// Stop ends the spinner.
+func (s *Spinner) Stop() {
+	if s.on {
+		close(s.stop)
+	}
+	<-s.done
+}

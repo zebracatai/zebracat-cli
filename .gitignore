@@ -1,0 +1,8 @@
+/bin/
+/dist/
+zebracat
+zebracat.exe
+*.out
+*.test
+.DS_Store
+.env

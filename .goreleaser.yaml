@@ -1,0 +1,44 @@
+version: 2
+project_name: zebracat
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: zebracat
+    main: .
+    binary: zebracat
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/zebracatai/zebracat-cli/internal/version.Version={{.Version}}
+      - -X github.com/zebracatai/zebracat-cli/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/zebracatai/zebracat-cli/internal/version.Date={{.Date}}
+
+archives:
+  - id: zebracat
+    # Matches install.sh: zebracat_<os>_<arch>.tar.gz
+    name_template: "zebracat_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: zebracatai
+    name: zebracat-cli
