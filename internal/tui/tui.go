@@ -3,6 +3,10 @@
 // It's an inline REPL (no alt-screen, so your results stay in the terminal after
 // you exit), themed in Zebracat purple, with a branded splash, slash commands,
 // autocomplete hints, and a guided "make a video" flow.
+//
+// It is auth-aware: when you're not signed in it shows that in the header and the
+// status line, and it refuses to run anything that would spend credits until you
+// /login. Once signed in it greets you with your plan + balance.
 package tui
 
 import (
@@ -61,6 +65,13 @@ var commands = []slashCmd{
 	{"/quit", "Exit the shell"},
 }
 
+// openCmds are the only commands allowed while signed out. Everything else is
+// gated behind /login so we never try to spend credits for an anonymous user.
+var openCmds = map[string]bool{
+	"/login": true, "/logout": true, "/help": true,
+	"/clear": true, "/quit": true, "/exit": true,
+}
+
 // ---- messages -------------------------------------------------------------
 type apiMsg struct {
 	kind string // "create" | "generic"
@@ -73,6 +84,7 @@ type pollMsg struct {
 	err    error
 }
 type loginMsg struct{ err error }
+type acctMsg struct{ a *account }
 type printMsg string // emitted to scrollback from a goroutine
 
 type wizard struct {
@@ -80,6 +92,14 @@ type wizard struct {
 	idea   string
 	dur    int
 	render bool
+}
+
+// account is the slice of GET /account we surface in the header + status line.
+type account struct {
+	email      string
+	plan       string
+	credits    string // remaining plan credit, pretty-printed
+	apiDollars string // pay-as-you-go balance (api_dollar_balance)
 }
 
 type model struct {
@@ -92,12 +112,13 @@ type model struct {
 	width   int
 	matches []string
 	wiz     *wizard
+	acct    *account
+	greeted bool
 }
 
 // New builds the TUI model + program.
 func New(cl *client.Client, baseURL string) *tea.Program {
 	ti := textinput.New()
-	ti.Placeholder = "Describe a video, or type /help …"
 	ti.Prompt = "🦓 › "
 	ti.PromptStyle = stPrompt
 	ti.Cursor.Style = lipgloss.NewStyle().Foreground(cPurpLt)
@@ -109,6 +130,7 @@ func New(cl *client.Client, baseURL string) *tea.Program {
 	sp.Style = lipgloss.NewStyle().Foreground(cPurpLt)
 
 	m := &model{cl: cl, baseURL: baseURL, in: ti, sp: sp}
+	m.syncPlaceholder()
 	p := tea.NewProgram(m)
 	m.prog = p
 	return p
@@ -116,7 +138,12 @@ func New(cl *client.Client, baseURL string) *tea.Program {
 
 func (m *model) Init() tea.Cmd {
 	fmt.Print(splash())
-	return tea.Batch(textinput.Blink, m.sp.Tick)
+	fmt.Print(m.authLine() + "\n\n")
+	cmds := []tea.Cmd{textinput.Blink, m.sp.Tick}
+	if m.cl.IsAuthenticated() {
+		cmds = append(cmds, m.accountCmd())
+	}
+	return tea.Batch(cmds...)
 }
 
 func splash() string {
@@ -125,6 +152,19 @@ func splash() string {
 		"Type " + stKey.Render("/help") + " for commands · " + stKey.Render("/quit") + " to exit\n" +
 		stMuted.Render("Try ") + stKey.Render("/video") + stMuted.Render(" — or just describe the video you want.")
 	return stBox.Render(body) + "\n\n"
+}
+
+// authLine is the one-shot banner under the splash: signed-in mode or a /login nudge.
+func (m *model) authLine() string {
+	switch m.cl.AuthMode() {
+	case "oauth":
+		return stOK.Render("● ") + stMuted.Render("Signed in — spending your plan credits.")
+	case "api_key":
+		return stOK.Render("● ") + stMuted.Render("Authenticated with an API key — pay-as-you-go.")
+	default:
+		return stErr.Render("○ ") + stMuted.Render("You're not signed in. Type ") +
+			stKey.Render("/login") + stMuted.Render(" to start — it uses your plan credits, no API key needed.")
+	}
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -161,10 +201,27 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			return m, tea.Println(stErr.Render("✗ Sign-in failed: ") + msg.err.Error())
 		}
-		// Reload credentials into a fresh client.
+		// Reload credentials into a fresh client, then re-greet from /account.
 		creds, _ := config.LoadCredentials()
 		m.cl = client.New(m.baseURL, creds, "")
-		return m, tea.Println(stOK.Render("✓ Signed in. You're spending your plan credits."))
+		m.acct = nil
+		m.greeted = false
+		m.syncPlaceholder()
+		return m, tea.Batch(
+			tea.Println(stOK.Render("✓ Signed in. ")+stMuted.Render("You're spending your plan credits.")),
+			m.accountCmd(),
+		)
+
+	case acctMsg:
+		if msg.a == nil {
+			return m, nil
+		}
+		m.acct = msg.a
+		if m.greeted {
+			return m, nil
+		}
+		m.greeted = true
+		return m, tea.Println(m.greeting())
 
 	case apiMsg:
 		m.busy = false
@@ -240,9 +297,72 @@ func (m *model) View() string {
 	}
 	b.WriteString(m.in.View() + "\n")
 	if m.busy {
-		b.WriteString(m.sp.View() + stMuted.Render(" working…"))
+		b.WriteString(m.sp.View() + stMuted.Render(" working…") + "\n")
 	}
+	b.WriteString(m.statusLine())
 	return b.String()
+}
+
+// statusLine is the persistent footer: who you are + balance.
+func (m *model) statusLine() string {
+	switch m.cl.AuthMode() {
+	case "oauth":
+		s := "signed in"
+		if m.acct != nil {
+			if m.acct.email != "" {
+				s = m.acct.email
+			}
+			if m.acct.plan != "" {
+				s += " · " + m.acct.plan
+			}
+			if m.acct.credits != "" {
+				s += " · " + m.acct.credits + " credits"
+			}
+		}
+		return "  " + stOK.Render("●") + " " + stMuted.Render(s)
+	case "api_key":
+		s := "API key · pay-as-you-go"
+		if m.acct != nil && m.acct.apiDollars != "" {
+			s = "API key · $" + m.acct.apiDollars + " balance"
+		}
+		return "  " + stOK.Render("●") + " " + stMuted.Render(s)
+	default:
+		return "  " + stErr.Render("○") + " " + stMuted.Render("not signed in — type ") + stKey.Render("/login")
+	}
+}
+
+// greeting is the welcome line printed once /account resolves.
+func (m *model) greeting() string {
+	who := "there"
+	if m.acct != nil && m.acct.email != "" {
+		who = m.acct.email
+	}
+	line := stOK.Render("👋 Welcome back, ") + stKey.Render(who)
+	if m.acct == nil {
+		return line
+	}
+	if m.cl.AuthMode() == "api_key" {
+		if m.acct.apiDollars != "" {
+			line += stMuted.Render(" · $" + m.acct.apiDollars + " API balance")
+		}
+		return line
+	}
+	if m.acct.plan != "" {
+		line += stMuted.Render(" · " + m.acct.plan)
+	}
+	if m.acct.credits != "" {
+		line += stMuted.Render(" · " + m.acct.credits + " credits left")
+	}
+	return line
+}
+
+// syncPlaceholder makes the input hint match the auth state.
+func (m *model) syncPlaceholder() {
+	if m.cl != nil && m.cl.IsAuthenticated() {
+		m.in.Placeholder = "Describe a video, or type /help …"
+	} else {
+		m.in.Placeholder = "Type /login to get started …"
+	}
 }
 
 // ---- input handling -------------------------------------------------------
@@ -261,28 +381,55 @@ func (m *model) handleEnter() (tea.Model, tea.Cmd) {
 	if strings.HasPrefix(text, "/") {
 		return m.handleSlash(text, echo)
 	}
-	// Bare text = a video idea. Jump into the wizard with it pre-filled.
+	// Bare text = a video idea — but that spends credits, so require sign-in.
+	if !m.cl.IsAuthenticated() {
+		return m, tea.Batch(echo, tea.Println(m.lockMsg()))
+	}
 	m.wiz = &wizard{step: 1, idea: text}
 	return m, tea.Batch(echo, tea.Println(stMuted.Render("Length in seconds? 15 / 30 / 60 / 120 / 180  (Enter for 30)")))
+}
+
+// lockMsg is the friendly "you need to sign in" nudge for gated actions.
+func (m *model) lockMsg() string {
+	return stErr.Render("🔒 Not signed in. ") +
+		stMuted.Render("Type ") + stKey.Render("/login") +
+		stMuted.Render(" to continue — it uses your plan credits (or set ") +
+		stKey.Render("ZEBRACAT_API_KEY") + stMuted.Render(" for pay-as-you-go).")
 }
 
 func (m *model) handleSlash(text string, echo tea.Cmd) (tea.Model, tea.Cmd) {
 	fields := strings.Fields(text)
 	cmd := fields[0]
+
+	// Gate everything that talks to the API behind sign-in.
+	if !openCmds[cmd] && !m.cl.IsAuthenticated() {
+		return m, tea.Batch(echo, tea.Println(m.lockMsg()))
+	}
+
 	switch cmd {
 	case "/help":
 		return m, tea.Batch(echo, tea.Println(helpText()))
 	case "/quit", "/exit":
 		return m, tea.Quit
 	case "/clear":
-		return m, tea.Batch(echo, tea.ClearScreen, func() tea.Msg { fmt.Print(splash()); return nil })
+		return m, tea.Batch(echo, tea.ClearScreen, func() tea.Msg {
+			fmt.Print(splash())
+			fmt.Print(m.authLine() + "\n\n")
+			return nil
+		})
 	case "/login":
+		if m.cl.IsAuthenticated() {
+			return m, tea.Batch(echo, tea.Println(stOK.Render("✓ You're already signed in. ")+stMuted.Render("Use /logout to switch accounts.")))
+		}
 		m.busy = true
 		return m, tea.Batch(echo, tea.Println(stMuted.Render("Opening your browser to sign in…")), m.loginCmd())
 	case "/logout":
 		_ = config.ClearCredentials()
 		m.cl = client.New(m.baseURL, &config.Credentials{}, "")
-		return m, tea.Batch(echo, tea.Println(stOK.Render("✓ Signed out.")))
+		m.acct = nil
+		m.greeted = false
+		m.syncPlaceholder()
+		return m, tea.Batch(echo, tea.Println(stOK.Render("✓ Signed out.")), tea.Println(m.authLine()))
 	case "/whoami", "/account":
 		return m.runAPI(echo, "GET", "/api/public/account", nil)
 	case "/voices":
@@ -389,6 +536,29 @@ func (m *model) poll(taskID string) tea.Msg {
 	return pollMsg{taskID: taskID, out: out, err: err}
 }
 
+// accountCmd fetches GET /account in the background to populate the header.
+func (m *model) accountCmd() tea.Cmd {
+	cl := m.cl
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		var out map[string]any
+		if _, err := cl.Do(ctx, "GET", "/api/public/account", nil, &out); err != nil {
+			return acctMsg{a: nil}
+		}
+		a := &account{}
+		a.email, _ = out["email"].(string)
+		a.plan, _ = out["plan"].(string)
+		if ac, ok := out["account_credit"].(map[string]any); ok {
+			if r, ok := ac["remaining"].(float64); ok {
+				a.credits = fmtCredits(r)
+			}
+		}
+		a.apiDollars, _ = out["api_dollar_balance"].(string)
+		return acctMsg{a: a}
+	}
+}
+
 func (m *model) loginCmd() tea.Cmd {
 	prog, base := m.prog, m.baseURL
 	return func() tea.Msg {
@@ -439,4 +609,26 @@ func isTerminal(s string) bool {
 		return true
 	}
 	return false
+}
+
+// fmtCredits prints a credit count with thousands separators (and ≤1 decimal).
+func fmtCredits(f float64) string {
+	if f == float64(int64(f)) {
+		return groupThousands(strconv.FormatInt(int64(f), 10))
+	}
+	return strconv.FormatFloat(f, 'f', 1, 64)
+}
+
+func groupThousands(s string) string {
+	neg := strings.HasPrefix(s, "-")
+	if neg {
+		s = s[1:]
+	}
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	if neg {
+		return "-" + s
+	}
+	return s
 }
