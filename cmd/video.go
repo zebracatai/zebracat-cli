@@ -70,9 +70,7 @@ Examples:
 		}
 		taskID, _ := created["task_id"].(string)
 		if !vWait || taskID == "" {
-			return emit(created, func() {
-				ui.Success("Submitted. task_id=%s", taskID)
-			})
+			return emit(created, func() { submittedHuman(created, taskID) })
 		}
 		final, err := pollStatus(c, taskID, vTimeout)
 		if err != nil {
@@ -277,16 +275,23 @@ var videoDownloadCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		urlStr, _ := st["video_url"].(string)
-		if urlStr == "" {
+		mp4 := renderedMP4(st)
+		if mp4 == "" {
+			// Not a rendered file yet (e.g. an editable draft) — send them to studio.
+			if s := studioURL(st); s != "" {
+				return emit(map[string]any{"task_id": args[0], "studio_url": s, "status": st["status"]}, func() {
+					ui.Info("No rendered MP4 (status: %v) — open it in the studio instead:", st["status"])
+					ui.Link("✎", s)
+				})
+			}
 			return clierr.API("video is not ready (status: %v)", st["status"])
 		}
 		if vOut == "" {
-			return emit(map[string]any{"task_id": args[0], "video_url": urlStr}, func() {
-				fmt.Println(urlStr)
+			return emit(map[string]any{"task_id": args[0], "video_url": mp4}, func() {
+				fmt.Println(mp4)
 			})
 		}
-		if err := downloadFile(urlStr, vOut); err != nil {
+		if err := downloadFile(mp4, vOut); err != nil {
 			return err
 		}
 		ui.Success("Saved %s", vOut)
@@ -307,7 +312,7 @@ var videoTranslateCmd = &cobra.Command{
 		}
 		payload := map[string]any{
 			"video_url":       vURL,
-			"target_language": vTo,
+			"target_language": toLangCode(vTo),
 			"enable_caption":  !vNoCaption,
 			"should_render":   vRender,
 		}
@@ -319,7 +324,7 @@ var videoTranslateCmd = &cobra.Command{
 		}
 		taskID, _ := created["task_id"].(string)
 		if !vWait || taskID == "" {
-			return emit(created, func() { ui.Success("Submitted. task_id=%s", taskID) })
+			return emit(created, func() { submittedHuman(created, taskID) })
 		}
 		final, err := pollStatus(c, taskID, vTimeout)
 		if err != nil {
@@ -372,13 +377,74 @@ func printStatusHuman(m map[string]any) {
 		{"status", fmt.Sprint(m["status"])},
 		{"type", fmt.Sprint(m["video_type"])},
 	}
-	if u, ok := m["video_url"].(string); ok && u != "" {
-		pairs = append(pairs, [2]string{"video_url", u})
-	}
 	if e, ok := m["error"].(string); ok && e != "" {
 		pairs = append(pairs, [2]string{"error", e})
 	}
 	ui.KV(pairs)
+	if mp4 := renderedMP4(m); mp4 != "" {
+		ui.Link("▶ Video:", mp4)
+	}
+	if s := studioURL(m); s != "" {
+		ui.Link("✎ Open in studio:", s)
+	}
+}
+
+// projectID extracts the numeric project id as a clean string.
+func projectID(m map[string]any) string {
+	switch v := m["project_id"].(type) {
+	case float64:
+		return fmt.Sprintf("%d", int64(v))
+	case string:
+		return v
+	case int:
+		return fmt.Sprintf("%d", v)
+	}
+	return ""
+}
+
+// studioURL is the human "open / watch / edit" link for a project.
+func studioURL(m map[string]any) string {
+	if pid := projectID(m); pid != "" {
+		return "https://studio.zebracat.ai/storyboard/" + pid
+	}
+	return ""
+}
+
+// renderedMP4 returns the result URL only when it's an actual playable file
+// (never the raw project video.json).
+func renderedMP4(m map[string]any) string {
+	u, _ := m["video_url"].(string)
+	if strings.HasSuffix(u, ".mp4") {
+		return u
+	}
+	return ""
+}
+
+// langCodes maps friendly language names to the 2-letter codes /video/translate
+// expects. Anything already a code passes through.
+var langCodes = map[string]string{
+	"english": "en", "hindi": "hi", "portuguese": "pt", "chinese": "zh", "mandarin": "zh",
+	"spanish": "es", "french": "fr", "german": "de", "japanese": "ja", "arabic": "ar",
+	"russian": "ru", "korean": "ko", "indonesian": "id", "italian": "it", "dutch": "nl",
+	"turkish": "tr", "polish": "pl", "swedish": "sv", "malay": "ms", "romanian": "ro",
+	"ukrainian": "uk", "greek": "el", "czech": "cs", "danish": "da", "finnish": "fi",
+	"bulgarian": "bg", "croatian": "hr", "slovak": "sk", "tamil": "ta",
+}
+
+func toLangCode(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if c, ok := langCodes[s]; ok {
+		return c
+	}
+	return s // assume it's already a 2-letter code
+}
+
+// submittedHuman prints the friendly "submitted" lines with a studio link.
+func submittedHuman(created map[string]any, taskID string) {
+	ui.Success("Submitted. task_id=%s", taskID)
+	if s := studioURL(created); s != "" {
+		ui.Link("✎ Track in studio:", s)
+	}
 }
 
 func downloadFile(url, dest string) error {

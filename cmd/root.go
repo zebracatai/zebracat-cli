@@ -20,6 +20,7 @@ import (
 
 var (
 	flagHuman   bool
+	flagJSON    bool
 	flagAPIKey  string
 	flagBaseURL string
 	flagQuiet   bool
@@ -52,7 +53,8 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVar(&flagHuman, "human", false, "Human-readable output instead of JSON")
+	rootCmd.PersistentFlags().BoolVar(&flagHuman, "human", false, "Force human-readable output (default when run in a terminal)")
+	rootCmd.PersistentFlags().BoolVar(&flagJSON, "json", false, "Force JSON output (default when piped or scripted)")
 	rootCmd.PersistentFlags().StringVar(&flagAPIKey, "api-key", "", "API key (overrides ZEBRACAT_API_KEY / stored credentials)")
 	rootCmd.PersistentFlags().StringVar(&flagBaseURL, "base-url", "", "Override the API base URL")
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "Suppress non-essential stderr output")
@@ -104,19 +106,34 @@ func newClient() (*client.Client, error) {
 	return client.New(config.ResolveBaseURL(s), creds, flagAPIKey), nil
 }
 
-// humanMode reports whether to render human output.
+// humanMode reports whether to render themed human output. Explicit flags/env/
+// config win; otherwise we default to human in an interactive terminal and JSON
+// when piped or scripted (so agents and pipelines still get clean JSON).
 func humanMode() bool {
-	if flagHuman {
+	switch {
+	case flagJSON:
+		return false
+	case flagHuman:
 		return true
 	}
-	s, _ := config.LoadSettings()
-	return config.ResolveOutput(s) == "human"
+	if v := os.Getenv("ZEBRACAT_OUTPUT"); v != "" {
+		return v == "human"
+	}
+	if s, _ := config.LoadSettings(); s != nil && s.Output != "" {
+		return s.Output == "human"
+	}
+	return ui.IsTTY(os.Stdout)
 }
 
-// emit prints v as JSON, or calls human() when in human mode (human may be nil).
+// emit prints v as JSON, or themed human output when in human mode. If a bespoke
+// human renderer is provided it's used; otherwise a generic themed renderer runs.
 func emit(v any, human func()) error {
-	if humanMode() && human != nil {
-		human()
+	if humanMode() {
+		if human != nil {
+			human()
+		} else {
+			ui.Auto(v)
+		}
 		return nil
 	}
 	return ui.PrintJSON(v)

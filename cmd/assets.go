@@ -39,7 +39,22 @@ func getAndEmit(path string) error {
 	if err != nil {
 		return err
 	}
-	return emit(out, nil) // lists render as JSON; pipe-friendly by default
+	return emit(out, nil) // themed table on a terminal, JSON when piped
+}
+
+// postAndEmit POSTs a JSON body and renders the result.
+func postAndEmit(path string, body any) error {
+	c, err := newClient()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := ctxTimeout(2 * time.Minute)
+	defer cancel()
+	var out any
+	if _, err := c.Do(ctx, "POST", path, body, &out); err != nil {
+		return err
+	}
+	return emit(out, nil)
 }
 
 // ---- voice ----
@@ -109,13 +124,12 @@ var styleListCmd = &cobra.Command{
 var musicCmd = &cobra.Command{Use: "music", Short: "List background music"}
 var musicListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List background music (by mood)",
+	Short: "List background music for a mood",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		p := "/api/v1/public/music"
-		if aMood != "" {
-			p += "?mood=" + url.QueryEscape(aMood)
+		if aMood == "" {
+			return clierr.Usage("--mood is required (e.g. energetic, happy, calm, epic)")
 		}
-		return getAndEmit(p)
+		return postAndEmit("/api/v1/public/music", map[string]any{"mood": aMood})
 	},
 }
 
@@ -132,11 +146,41 @@ var templateListCmd = &cobra.Command{
 	},
 }
 
-var characterCmd = &cobra.Command{Use: "character", Short: "List saved characters"}
+var characterCmd = &cobra.Command{Use: "character", Short: "List and create characters"}
 var characterListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List saved characters",
 	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/characters") },
+}
+
+var (
+	charName     string
+	charDesc     string
+	charImageURL string
+)
+var characterCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create a saved character",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if charName == "" {
+			return clierr.Usage("--name is required")
+		}
+		body := map[string]any{"name": charName}
+		if charDesc != "" {
+			body["description"] = charDesc
+		}
+		if charImageURL != "" {
+			body["image_url"] = charImageURL
+		}
+		return postAndEmit("/api/v1/public/characters", body)
+	},
+}
+
+var brandCmd = &cobra.Command{Use: "brand", Short: "List your brand kits"}
+var brandListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List your brand kits (logo, colors, fonts)",
+	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/brands") },
 }
 
 var videoPromptStylesCmd = &cobra.Command{
@@ -163,14 +207,19 @@ func init() {
 
 	styleCmd.AddCommand(styleListCmd)
 
-	musicListCmd.Flags().StringVar(&aMood, "mood", "", "Filter by mood")
+	musicListCmd.Flags().StringVar(&aMood, "mood", "", "Mood (e.g. energetic, happy, calm, epic) — required")
 	musicCmd.AddCommand(musicListCmd)
 
 	templateListCmd.Flags().StringVar(&aCategory, "category", "", "ai|stock|sketch|infinite_zoom")
 	templateCmd.AddCommand(templateListCmd)
 
-	characterCmd.AddCommand(characterListCmd)
+	characterCreateCmd.Flags().StringVar(&charName, "name", "", "Character name (required)")
+	characterCreateCmd.Flags().StringVar(&charDesc, "description", "", "Character description")
+	characterCreateCmd.Flags().StringVar(&charImageURL, "image-url", "", "Reference image URL")
+	characterCmd.AddCommand(characterListCmd, characterCreateCmd)
+
+	brandCmd.AddCommand(brandListCmd)
 
 	videoCmd.AddCommand(videoPromptStylesCmd, langCmd)
-	rootCmd.AddCommand(voiceCmd, avatarCmd, styleCmd, musicCmd, templateCmd, characterCmd)
+	rootCmd.AddCommand(voiceCmd, avatarCmd, styleCmd, musicCmd, templateCmd, characterCmd, brandCmd)
 }

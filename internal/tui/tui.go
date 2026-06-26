@@ -351,10 +351,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if isTerminal(status) {
 			m.busy = false
 			if status == "completed" {
-				url, _ := msg.out["video_url"].(string)
-				return m, tea.Println(stOK.Render("✓ Done! ") + url)
+				return m, tea.Println(stOK.Render("✓ Done! ") + stKey.Render(bestLink(msg.out)))
 			}
-			return m, tea.Println(stErr.Render("✗ Video " + status))
+			emsg, _ := msg.out["error"].(string)
+			line := stErr.Render("✗ Video " + status)
+			if emsg != "" {
+				line += stMuted.Render(" — " + emsg)
+			}
+			return m, tea.Println(line)
 		}
 		return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return m.poll(msg.taskID) })
 
@@ -788,6 +792,26 @@ func isTerminal(s string) bool {
 		return true
 	}
 	return false
+}
+
+// bestLink turns a status payload into a human link: the rendered MP4 if there
+// is one, else the studio project page (never the raw video.json).
+func bestLink(m map[string]any) string {
+	if u, _ := m["video_url"].(string); strings.HasSuffix(u, ".mp4") {
+		return u
+	}
+	switch v := m["project_id"].(type) {
+	case float64:
+		return "https://studio.zebracat.ai/storyboard/" + strconv.FormatInt(int64(v), 10)
+	case string:
+		if v != "" {
+			return "https://studio.zebracat.ai/storyboard/" + v
+		}
+	}
+	if u, _ := m["video_url"].(string); u != "" {
+		return u
+	}
+	return "(no link)"
 }
 
 // fmtCredits prints a credit count with thousands separators (and ≤1 decimal).

@@ -112,8 +112,174 @@ func KV(pairs [][2]string) {
 		}
 	}
 	for _, p := range pairs {
-		fmt.Printf("  %s%-*s%s  %s\n", dim, w, p[0], reset, p[1])
+		fmt.Printf("  %s%-*s%s  %s\n", purple, w, p[0], reset, p[1])
 	}
+}
+
+// Link prints a labelled, highlighted URL (human mode).
+func Link(label, url string) {
+	fmt.Printf("  %s%s%s %s%s%s\n", dim, label, reset, purple+bold, url, reset)
+}
+
+// ---- generic themed rendering (for commands without a bespoke renderer) -----
+
+// Auto renders decoded JSON the themed way: an object becomes a key/value block,
+// an array of objects becomes a table, a wrapper {count, items:[...]} shows both.
+func Auto(v any) {
+	switch t := v.(type) {
+	case map[string]any:
+		if key, arr := wrappedList(t); arr != nil {
+			var meta [][2]string
+			for _, k := range SortedKeys(t) {
+				if k == key {
+					continue
+				}
+				if s, ok := scalarStr(t[k]); ok {
+					meta = append(meta, [2]string{k, s})
+				}
+			}
+			if len(meta) > 0 {
+				KV(meta)
+				fmt.Println()
+			}
+			renderRows(arr)
+			Info("%d %s", len(arr), key)
+			return
+		}
+		renderObject(t)
+	case []any:
+		renderRows(t)
+		Info("%d items", len(t))
+	default:
+		fmt.Println(v)
+	}
+}
+
+func renderObject(m map[string]any) {
+	var pairs [][2]string
+	for _, k := range objectKeys(m) {
+		if s, ok := scalarStr(m[k]); ok {
+			pairs = append(pairs, [2]string{k, s})
+		} else {
+			pairs = append(pairs, [2]string{k, dim + "{…}" + reset})
+		}
+	}
+	KV(pairs)
+}
+
+func renderRows(arr []any) {
+	if len(arr) == 0 {
+		Info("(none)")
+		return
+	}
+	first, ok := arr[0].(map[string]any)
+	if !ok {
+		for _, e := range arr {
+			if s, ok := scalarStr(e); ok {
+				fmt.Println("  " + s)
+			}
+		}
+		return
+	}
+	cols := pickColumns(first)
+	rows := make([][]string, 0, len(arr))
+	for _, e := range arr {
+		m, _ := e.(map[string]any)
+		row := make([]string, len(cols))
+		for i, c := range cols {
+			s, _ := scalarStr(m[c])
+			row[i] = truncate(s, 44)
+		}
+		rows = append(rows, row)
+	}
+	Table(cols, rows)
+}
+
+// wrappedList finds an array field inside a wrapper object (the response payload).
+func wrappedList(m map[string]any) (string, []any) {
+	for _, k := range []string{"videos", "voices", "avatars", "styles", "visual_styles", "templates", "characters", "brands", "music", "prices", "items", "results", "data"} {
+		if a, ok := m[k].([]any); ok {
+			return k, a
+		}
+	}
+	for _, k := range SortedKeys(m) { // fall back to any array field
+		if a, ok := m[k].([]any); ok {
+			return k, a
+		}
+	}
+	return "", nil
+}
+
+func pickColumns(m map[string]any) []string {
+	pref := []string{"id", "task_id", "name", "title", "label", "voice_id", "status", "video_type", "type", "language", "gender", "accent", "category", "mood", "duration", "email", "plan", "service", "created_at"}
+	var cols []string
+	seen := map[string]bool{}
+	for _, k := range pref {
+		if _, ok := m[k]; ok {
+			cols = append(cols, k)
+			seen[k] = true
+			if len(cols) >= 5 {
+				return cols
+			}
+		}
+	}
+	for _, k := range SortedKeys(m) {
+		if seen[k] {
+			continue
+		}
+		if _, ok := scalarStr(m[k]); ok {
+			cols = append(cols, k)
+			if len(cols) >= 5 {
+				break
+			}
+		}
+	}
+	return cols
+}
+
+func objectKeys(m map[string]any) []string {
+	pref := []string{"id", "task_id", "name", "email", "plan", "status", "video_type"}
+	var keys []string
+	seen := map[string]bool{}
+	for _, k := range pref {
+		if _, ok := m[k]; ok {
+			keys = append(keys, k)
+			seen[k] = true
+		}
+	}
+	for _, k := range SortedKeys(m) {
+		if !seen[k] {
+			keys = append(keys, k)
+		}
+	}
+	return keys
+}
+
+func scalarStr(v any) (string, bool) {
+	switch x := v.(type) {
+	case nil:
+		return "—", true
+	case string:
+		return x, true
+	case bool:
+		return fmt.Sprintf("%v", x), true
+	case float64:
+		if x == float64(int64(x)) {
+			return fmt.Sprintf("%d", int64(x)), true
+		}
+		return fmt.Sprintf("%g", x), true
+	case json.Number:
+		return x.String(), true
+	}
+	return "", false
+}
+
+func truncate(s string, n int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	if len(s) <= n {
+		return s
+	}
+	return s[:n-1] + "…"
 }
 
 // Table prints a simple aligned table (human mode). headers + rows of strings.
@@ -131,7 +297,7 @@ func Table(headers []string, rows [][]string) {
 	}
 	var sb strings.Builder
 	for i, h := range headers {
-		sb.WriteString(fmt.Sprintf("%s%-*s%s  ", bold, widths[i], strings.ToUpper(h), reset))
+		sb.WriteString(fmt.Sprintf("%s%-*s%s  ", purple+bold, widths[i], strings.ToUpper(h), reset))
 	}
 	fmt.Println(strings.TrimRight(sb.String(), " "))
 	for _, row := range rows {

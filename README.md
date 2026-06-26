@@ -122,12 +122,15 @@ zebracat video translate --url https://.../in.mp4 --to spanish --render --wait
 zebracat auth        login | logout | status | whoami
 zebracat video       create | list | get | status | download | cancel | translate
                      prompt-styles | languages
+zebracat script      <idea>                     # generate a voice-over script (no video)
+zebracat image       <prompt>                   # generate AI image(s)
 zebracat voice       list | clone
 zebracat avatar      list
 zebracat style       list
-zebracat music       list
+zebracat music       list --mood <mood>
 zebracat template    list
-zebracat character   list
+zebracat character   list | create
+zebracat brand       list
 zebracat account     show | pricing | usage
 zebracat webhook     list | create | delete
 zebracat config      list | set
@@ -136,6 +139,13 @@ zebracat update | version
 ```
 
 Run `zebracat <command> --help` for full flags.
+
+## Output: themed for you, JSON for scripts
+
+In a terminal you get **themed, branded output** (purple tables, key/value blocks);
+when piped or scripted it emits **JSON** automatically. Force either with `--human`
+or `--json` (or set `ZEBRACAT_OUTPUT`). Finished videos print a **studio link**
+(`studio.zebracat.ai/storyboard/<id>`) and the MP4 when rendered — never raw JSON.
 
 ## Output & exit codes (agent-friendly)
 
