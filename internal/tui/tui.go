@@ -42,12 +42,13 @@ var (
 	stErr    = lipgloss.NewStyle().Foreground(cRed)
 	stOK     = lipgloss.NewStyle().Foreground(cGreen)
 	stBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cPurple).Padding(0, 2)
+	stInput  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cPurple).Padding(0, 1)
 	stKey    = lipgloss.NewStyle().Foreground(cPurpLt)
 )
 
-const logo = `   __ ___ _ ___ _ _ __ __ _ ___
-  |_ / -_) '_ \ '_/ _` + "`" + `/ _/ _` + "`" + `|  _|
-  /__\___|_.__/_| \__,_\__\__,_|\__|`
+const logo = `╺━┓ ┏━╸ ┣━┓ ┏━┓ ┏━┓ ┏━╸ ┏━┓ ╺┳╸
+ ┏┛ ┣━╸ ┣━┫ ┣┳┛ ┣━┫ ┃   ┣━┫  ┃
+┗━╸ ┗━╸ ┗━┛ ┻┗╸ ┻ ┻ ┗━╸ ┻ ┻  ╹ `
 
 type slashCmd struct{ name, desc string }
 
@@ -146,7 +147,7 @@ func (m *model) Init() tea.Cmd {
 	// mode, so a bare "\n" wouldn't return the cursor to column 0 and the box would
 	// staircase. tea.Println writes proper CR+LF and keeps it above the input.
 	cmds := []tea.Cmd{
-		tea.Println(splash() + m.authLine()),
+		tea.Println(splash()),
 		textinput.Blink,
 		m.sp.Tick,
 		m.updateCheckCmd(),
@@ -159,10 +160,10 @@ func (m *model) Init() tea.Cmd {
 
 func splash() string {
 	body := stTitle.Render(logo) + "\n\n" +
-		stMuted.Render("AI video generation, right in your terminal.") + "\n\n" +
-		"Type " + stKey.Render("/help") + " for commands · " + stKey.Render("/quit") + " to exit\n" +
-		stMuted.Render("Try ") + stKey.Render("/video") + stMuted.Render(" — or just describe the video you want.")
-	return stBox.Render(body) + "\n\n"
+		stMuted.Render("🦓  AI video generation, right in your terminal.") + "\n\n" +
+		stMuted.Render("Type ") + stKey.Render("/help") + stMuted.Render(" for commands") +
+		stMuted.Render("   ·   ") + stKey.Render("/login") + stMuted.Render(" to start")
+	return stBox.Render(body) + "\n"
 }
 
 // authLine is the one-shot banner under the splash: signed-in mode or a /login nudge.
@@ -182,7 +183,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
-		m.in.Width = msg.Width - 8
+		iw := msg.Width - 10
+		if iw < 10 {
+			iw = 10
+		}
+		m.in.Width = iw
 		return m, nil
 
 	case tea.KeyMsg:
@@ -312,11 +317,16 @@ func (m *model) View() string {
 	} else if m.wiz != nil {
 		b.WriteString(stMuted.Render("  "+m.wizPrompt()) + "\n")
 	}
-	b.WriteString(m.in.View() + "\n")
-	if m.busy {
-		b.WriteString(m.sp.View() + stMuted.Render(" working…") + "\n")
+	w := m.width
+	if w < 24 {
+		w = 60
 	}
-	b.WriteString(m.statusLine())
+	b.WriteString(stInput.Width(w-2).Render(m.in.View()) + "\n")
+	foot := m.statusLine()
+	if m.busy {
+		foot += stMuted.Render("   ") + m.sp.View() + stMuted.Render(" working…")
+	}
+	b.WriteString(foot)
 	return b.String()
 }
 
@@ -461,7 +471,7 @@ func (m *model) handleSlash(text string, echo tea.Cmd) (tea.Model, tea.Cmd) {
 	case "/quit", "/exit":
 		return m, tea.Quit
 	case "/clear":
-		return m, tea.Sequence(tea.ClearScreen, tea.Println(splash()+m.authLine()))
+		return m, tea.Sequence(tea.ClearScreen, tea.Println(splash()))
 	case "/login":
 		if m.cl.IsAuthenticated() {
 			return m, tea.Batch(echo, tea.Println(stOK.Render("✓ You're already signed in. ")+stMuted.Render("Use /logout to switch accounts.")))
