@@ -121,6 +121,13 @@ func Link(label, url string) {
 	fmt.Printf("  %s%s%s %s%s%s\n", dim, label, reset, purple+bold, url, reset)
 }
 
+// Colour wrappers (no-ops when colour is disabled, e.g. piped output).
+func Green(s string) string  { return green + s + reset }
+func Red(s string) string    { return red + s + reset }
+func Yellow(s string) string { return yellow + s + reset }
+func Dim(s string) string    { return dim + s + reset }
+func Purple(s string) string { return purple + s + reset }
+
 // ---- generic themed rendering (for commands without a bespoke renderer) -----
 
 // Auto renders decoded JSON the themed way: an object becomes a key/value block,

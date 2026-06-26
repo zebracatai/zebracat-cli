@@ -13,6 +13,7 @@ import (
 
 	"github.com/zebracatai/zebracat-cli/internal/client"
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
+	"github.com/zebracatai/zebracat-cli/internal/dash"
 	"github.com/zebracatai/zebracat-cli/internal/ui"
 )
 
@@ -180,19 +181,7 @@ var videoListCmd = &cobra.Command{
 		if _, err := c.Do(ctx, "GET", path, nil, &out); err != nil {
 			return err
 		}
-		return emit(out, func() {
-			rows := [][]string{}
-			if vids, ok := out["videos"].([]any); ok {
-				for _, v := range vids {
-					m, _ := v.(map[string]any)
-					rows = append(rows, []string{
-						fmt.Sprint(m["task_id"]), fmt.Sprint(m["video_type"]),
-						fmt.Sprint(m["status"]), fmt.Sprint(m["created_at"]),
-					})
-				}
-			}
-			ui.Table([]string{"task_id", "type", "status", "created"}, rows)
-		})
+		return emit(out, func() { printProjectsDashboard(out) })
 	},
 }
 
@@ -445,6 +434,56 @@ func submittedHuman(created map[string]any, taskID string) {
 	if s := studioURL(created); s != "" {
 		ui.Link("✎ Track in studio:", s)
 	}
+}
+
+// printProjectsDashboard renders the project list like a dashboard: a coloured
+// status badge, a friendly type, when it was made, and a studio link (or the
+// failure reason) — no task IDs, JSON or other technical noise.
+func printProjectsDashboard(out map[string]any) {
+	vids, _ := out["videos"].([]any)
+	ui.Heading("Your videos")
+	if len(vids) == 0 {
+		ui.Info(`Nothing here yet — make one with: zebracat video create --prompt "..."`)
+		return
+	}
+	fmt.Println()
+	for _, v := range vids {
+		m, _ := v.(map[string]any)
+		status := fmt.Sprint(m["status"])
+		badge := colorByKind(dash.Kind(status))(fmt.Sprintf("%s %-10s", dash.Icon(status), dash.Label(status)))
+		kind := fmt.Sprintf("%-17s", dash.HumanType(fmt.Sprint(m["video_type"])))
+		when := fmt.Sprintf("%-9s", dash.RelTime(fmt.Sprint(m["created_at"])))
+		tail := ui.Dim(dash.StudioURL(m["project_id"]))
+		if dash.Kind(status) == "failed" {
+			if e, _ := m["error"].(string); e != "" {
+				tail = ui.Red(truncate(e, 56))
+			}
+		}
+		fmt.Printf("  %s  %s %s %s\n", badge, kind, when, tail)
+	}
+	fmt.Println()
+	ui.Info("%v total", out["total"])
+}
+
+func colorByKind(kind string) func(string) string {
+	switch kind {
+	case "ok":
+		return ui.Green
+	case "working":
+		return ui.Yellow
+	case "failed":
+		return ui.Red
+	default:
+		return ui.Dim
+	}
+}
+
+func truncate(s string, n int) string {
+	s = strings.ReplaceAll(s, "\n", " ")
+	if len(s) <= n {
+		return s
+	}
+	return s[:n-1] + "…"
 }
 
 func downloadFile(url, dest string) error {

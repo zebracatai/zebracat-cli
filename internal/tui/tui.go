@@ -24,6 +24,7 @@ import (
 
 	"github.com/zebracatai/zebracat-cli/internal/client"
 	"github.com/zebracatai/zebracat-cli/internal/config"
+	"github.com/zebracatai/zebracat-cli/internal/dash"
 	"github.com/zebracatai/zebracat-cli/internal/update"
 	"github.com/zebracatai/zebracat-cli/internal/version"
 )
@@ -89,6 +90,10 @@ type pollMsg struct {
 	err    error
 }
 type acctMsg struct{ a *account }
+type projectsMsg struct {
+	out map[string]any
+	err error
+}
 type updMsg struct{ latest string } // background "is a newer version out?"
 type updDoneMsg struct {            // result of an in-shell /update
 	tag string
@@ -302,6 +307,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.greeted = true
 		return m, tea.Println(m.greeting())
+
+	case projectsMsg:
+		m.busy = false
+		if msg.err != nil {
+			return m, tea.Println(stErr.Render("✗ ") + msg.err.Error())
+		}
+		return m, tea.Println(m.dashboardView(msg.out))
 
 	case updMsg:
 		if msg.latest != "" && update.Newer("v"+version.Version, msg.latest) {
@@ -612,7 +624,8 @@ func (m *model) handleSlash(text string, echo tea.Cmd) (tea.Model, tea.Cmd) {
 	case "/styles":
 		return m.runAPI(echo, "GET", "/api/v1/public/visual_styles", nil)
 	case "/projects":
-		return m.runAPI(echo, "GET", "/api/v1/public/projects?limit=10", nil)
+		m.busy = true
+		return m, tea.Batch(echo, m.projectsCmd())
 	case "/status":
 		if len(fields) < 2 {
 			return m, tea.Batch(echo, tea.Println(stErr.Render("Usage: /status <task_id>")))
@@ -733,6 +746,62 @@ func (m *model) accountCmd() tea.Cmd {
 		a.apiDollars, _ = out["api_dollar_balance"].(string)
 		return acctMsg{a: a}
 	}
+}
+
+// projectsCmd fetches the project list for the dashboard view.
+func (m *model) projectsCmd() tea.Cmd {
+	cl := m.cl
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		var out map[string]any
+		_, err := cl.Do(ctx, "GET", "/api/v1/public/projects?limit=15", nil, &out)
+		return projectsMsg{out: out, err: err}
+	}
+}
+
+var stWorking = lipgloss.NewStyle().Foreground(lipgloss.Color("#eab308"))
+
+// dashboardView renders the project list like a dashboard: a coloured status
+// badge, a friendly type, when it was made, and a studio link (or failure
+// reason) — no task IDs or JSON.
+func (m *model) dashboardView(out map[string]any) string {
+	vids, _ := out["videos"].([]any)
+	var b strings.Builder
+	b.WriteString(stTitle.Render("Your videos") + "\n\n")
+	if len(vids) == 0 {
+		return b.String() + stMuted.Render("  Nothing here yet — type ") + stKey.Render("/video") + stMuted.Render(" to make one.")
+	}
+	for _, v := range vids {
+		mm, _ := v.(map[string]any)
+		status := fmt.Sprint(mm["status"])
+		var st lipgloss.Style
+		switch dash.Kind(status) {
+		case "ok":
+			st = stOK
+		case "failed":
+			st = stErr
+		case "working":
+			st = stWorking
+		default:
+			st = stMuted
+		}
+		badge := st.Render(fmt.Sprintf("%s %-10s", dash.Icon(status), dash.Label(status)))
+		kind := stMuted.Render(fmt.Sprintf("%-16s", dash.HumanType(fmt.Sprint(mm["video_type"]))))
+		when := stMuted.Render(fmt.Sprintf("%-9s", dash.RelTime(fmt.Sprint(mm["created_at"]))))
+		tail := stKey.Render(dash.StudioURL(mm["project_id"]))
+		if dash.Kind(status) == "failed" {
+			if e, _ := mm["error"].(string); e != "" {
+				if len(e) > 58 {
+					e = e[:57] + "…"
+				}
+				tail = stErr.Render(strings.ReplaceAll(e, "\n", " "))
+			}
+		}
+		b.WriteString("  " + badge + "  " + kind + " " + when + " " + tail + "\n")
+	}
+	b.WriteString("\n" + stMuted.Render(fmt.Sprintf("  %v total", out["total"])))
+	return b.String()
 }
 
 // updateCheckCmd asks GitHub (cached, ≤1 network call/day) whether a newer
