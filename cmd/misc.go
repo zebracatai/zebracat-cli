@@ -115,8 +115,12 @@ Use --check to only report whether an update is available, without installing.`,
 		if err != nil {
 			return clierr.API("%v", err)
 		}
-		out := map[string]any{"current": current, "latest": latest, "updated": true}
-		return emit(out, func() { ui.Success("Updated %s → %s. Run `zebracat version` to confirm.", current, latest) })
+		path := update.CurrentPath()
+		out := map[string]any{"current": current, "latest": latest, "updated": true, "path": path}
+		return emit(out, func() {
+			ui.Success("Updated %s → %s", current, latest)
+			ui.Info("Binary: %s — restart zebracat to use it.", path)
+		})
 	},
 }
 

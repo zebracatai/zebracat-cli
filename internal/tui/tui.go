@@ -44,6 +44,8 @@ var (
 	stBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cPurple).Padding(0, 2)
 	stInput  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cPurple).Padding(0, 1)
 	stKey    = lipgloss.NewStyle().Foreground(cPurpLt)
+	stSel    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ffffff")).Background(cPurple).Bold(true)
+	stHint   = lipgloss.NewStyle().Foreground(cMuted).Italic(true)
 )
 
 const logo = `╺━┓ ┏━╸ ┣━┓ ┏━┓ ┏━┓ ┏━╸ ┏━┓ ╺┳╸
@@ -93,11 +95,57 @@ type updDoneMsg struct {            // result of an in-shell /update
 	err error
 }
 
+// ---- guided "make a video" wizard -----------------------------------------
+type wizChoice struct{ label, value string }
+
+// wizStep is one question. No choices => a free-text step (the idea).
+type wizStep struct {
+	key     string
+	prompt  string
+	choices []wizChoice
+}
+
+var wizSteps = []wizStep{
+	{key: "idea", prompt: "What should your video be about?"},
+	{key: "video_type", prompt: "What kind of video?", choices: []wizChoice{
+		{"🎬  AI Video — cinematic AI-generated footage", "ai_video"},
+		{"🖼  Moving AI Images — animated still scenes", "moving_ai_images"},
+		{"🧑  Avatar — a presenter delivers your script", "ai_avatar"},
+		{"📹  Stock footage — real-world clips", "stock_footage"},
+		{"🧠  Brainrot — fast, punchy, viral style", "brainrot"},
+	}},
+	{key: "duration", prompt: "How long should it be?", choices: []wizChoice{
+		{"15 seconds — quick hook", "15"},
+		{"30 seconds — standard short", "30"},
+		{"60 seconds — full short", "60"},
+		{"2 minutes", "120"},
+		{"3 minutes", "180"},
+	}},
+	{key: "aspect_ratio", prompt: "Which format?", choices: []wizChoice{
+		{"📱  Vertical · 9:16 — TikTok, Reels, Shorts", "vertical"},
+		{"⬛  Square · 1:1 — feed posts", "square"},
+		{"🖥  Horizontal · 16:9 — YouTube", "horizontal"},
+	}},
+	{key: "should_render", prompt: "Render the final video now?", choices: []wizChoice{
+		{"✨  Yes — render the MP4 now", "yes"},
+		{"📝  No — save an editable draft", "no"},
+	}},
+}
+
 type wizard struct {
 	step   int
-	idea   string
-	dur    int
-	render bool
+	cursor int
+	vals   map[string]string
+}
+
+func (w *wizard) cur() wizStep { return wizSteps[w.step] }
+
+func newWizard(startStep int, idea string) *wizard {
+	w := &wizard{step: startStep, vals: map[string]string{}}
+	if idea != "" {
+		w.vals["idea"] = idea
+	}
+	return w
 }
 
 // account is the slice of GET /account we surface in the header + status line.
@@ -191,9 +239,39 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// During a choice step, the arrow keys drive the menu (keyboard select).
+		if m.wiz != nil && !m.busy && len(m.wiz.cur().choices) > 0 {
+			switch {
+			case msg.Type == tea.KeyCtrlC:
+				return m, tea.Sequence(tea.Println(stMuted.Render("Goodbye 🦓")), tea.Quit)
+			case msg.Type == tea.KeyEsc:
+				m.wiz = nil
+				return m, tea.Println(stMuted.Render("Cancelled — nothing was created."))
+			case msg.Type == tea.KeyUp || msg.String() == "k":
+				if m.wiz.cursor > 0 {
+					m.wiz.cursor--
+				}
+				return m, nil
+			case msg.Type == tea.KeyDown || msg.String() == "j":
+				if m.wiz.cursor < len(m.wiz.cur().choices)-1 {
+					m.wiz.cursor++
+				}
+				return m, nil
+			case msg.Type == tea.KeyEnter:
+				return m.wizAdvance("")
+			}
+			return m, nil // ignore stray typing while choosing
+		}
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			return m, tea.Sequence(tea.Println(stMuted.Render("Goodbye 🦓")), tea.Quit)
+		case tea.KeyEsc:
+			if m.wiz != nil {
+				m.wiz = nil
+				m.in.Reset()
+				return m, tea.Println(stMuted.Render("Cancelled — nothing was created."))
+			}
+			return m, nil
 		case tea.KeyTab:
 			if len(m.matches) > 0 {
 				m.in.SetValue(m.matches[0] + " ")
@@ -306,6 +384,9 @@ func (m *model) refreshMatches() {
 }
 
 func (m *model) View() string {
+	if m.wiz != nil {
+		return m.wizView()
+	}
 	var b strings.Builder
 	// autocomplete hint line
 	if len(m.matches) > 0 {
@@ -314,8 +395,6 @@ func (m *model) View() string {
 			parts = append(parts, stKey.Render(mtc))
 		}
 		b.WriteString(stMuted.Render("  ↹ ") + strings.Join(parts, stMuted.Render(" · ")) + "\n")
-	} else if m.wiz != nil {
-		b.WriteString(stMuted.Render("  "+m.wizPrompt()) + "\n")
 	}
 	w := m.width
 	if w < 24 {
@@ -327,6 +406,35 @@ func (m *model) View() string {
 		foot += stMuted.Render("   ") + m.sp.View() + stMuted.Render(" working…")
 	}
 	b.WriteString(foot)
+	return b.String()
+}
+
+// wizView renders the guided wizard: a bold prompt, then either a text box (the
+// idea) or an arrow-key choice list with the current row highlighted.
+func (m *model) wizView() string {
+	step := m.wiz.cur()
+	var b strings.Builder
+	b.WriteString("\n" + stTitle.Render("  "+step.prompt) +
+		stMuted.Render(fmt.Sprintf("    step %d/%d", m.wiz.step+1, len(wizSteps))) + "\n\n")
+
+	if len(step.choices) == 0 { // free-text step (the idea)
+		w := m.width
+		if w < 24 {
+			w = 60
+		}
+		b.WriteString(stInput.Width(w-2).Render(m.in.View()) + "\n")
+		b.WriteString(stHint.Render("  Enter to continue · Esc to cancel"))
+		return b.String()
+	}
+
+	for i, c := range step.choices {
+		if i == m.wiz.cursor {
+			b.WriteString("  " + stSel.Render(" ▶ "+c.label+" ") + "\n")
+		} else {
+			b.WriteString("     " + stMuted.Render(c.label) + "\n")
+		}
+	}
+	b.WriteString("\n" + stHint.Render("  ↑/↓ move · Enter select · Esc cancel"))
 	return b.String()
 }
 
@@ -394,6 +502,11 @@ func (m *model) syncPlaceholder() {
 
 // ---- input handling -------------------------------------------------------
 func (m *model) handleEnter() (tea.Model, tea.Cmd) {
+	// Wizard free-text step (choice steps are driven by arrow keys in Update).
+	if m.wiz != nil && !m.askKey {
+		return m.wizAdvance(m.in.Value())
+	}
+
 	text := strings.TrimSpace(m.in.Value())
 	m.in.Reset()
 	m.matches = nil
@@ -406,9 +519,6 @@ func (m *model) handleEnter() (tea.Model, tea.Cmd) {
 	}
 	echo := tea.Println(stPrompt.Render("🦓 › ") + text)
 
-	if m.wiz != nil {
-		return m.handleWizard(text, echo)
-	}
 	if strings.HasPrefix(text, "/") {
 		return m.handleSlash(text, echo)
 	}
@@ -416,8 +526,9 @@ func (m *model) handleEnter() (tea.Model, tea.Cmd) {
 	if !m.cl.IsAuthenticated() {
 		return m, tea.Batch(echo, tea.Println(m.lockMsg()))
 	}
-	m.wiz = &wizard{step: 1, idea: text}
-	return m, tea.Batch(echo, tea.Println(stMuted.Render("Length in seconds? 15 / 30 / 60 / 120 / 180  (Enter for 30)")))
+	// Use the description as the idea and jump straight into the choices.
+	m.wiz = newWizard(1, text)
+	return m, tea.Batch(echo, tea.Println(stHint.Render("Got it — just a few quick choices…")))
 }
 
 // lockMsg is the friendly "you need to sign in" nudge for gated actions.
@@ -504,56 +615,57 @@ func (m *model) handleSlash(text string, echo tea.Cmd) (tea.Model, tea.Cmd) {
 		}
 		return m.runAPI(echo, "GET", "/api/v1/public/video/status?task_id="+fields[1], nil)
 	case "/video":
-		m.wiz = &wizard{step: 0}
-		return m, tea.Batch(echo, tea.Println(stMuted.Render("What should the video be about?")))
+		m.wiz = newWizard(0, "")
+		return m, echo
 	default:
 		return m, tea.Batch(echo, tea.Println(stErr.Render("Unknown command ")+cmd+stMuted.Render("  — try /help")))
 	}
 }
 
-func (m *model) handleWizard(val string, echo tea.Cmd) (tea.Model, tea.Cmd) {
-	w := m.wiz
-	switch w.step {
-	case 0:
-		if val == "" {
-			return m, tea.Batch(echo, tea.Println(stMuted.Render("Tell me what the video is about:")))
+// wizAdvance records the current step's answer (a typed idea, or the highlighted
+// choice), echoes it to scrollback, and either moves to the next step or submits.
+func (m *model) wizAdvance(textVal string) (tea.Model, tea.Cmd) {
+	step := m.wiz.cur()
+	var answer, display string
+	if len(step.choices) == 0 {
+		answer = strings.TrimSpace(textVal)
+		if answer == "" {
+			return m, nil // wait for a non-empty idea
 		}
-		w.idea = val
-		w.step = 1
-		return m, tea.Batch(echo, tea.Println(stMuted.Render("Length in seconds? 15 / 30 / 60 / 120 / 180  (Enter for 30)")))
-	case 1:
-		dur := 30
-		if val != "" {
-			n, err := strconv.Atoi(val)
-			if err != nil || !validDur(n) {
-				return m, tea.Batch(echo, tea.Println(stErr.Render("Pick one of 15 / 30 / 60 / 120 / 180")))
-			}
-			dur = n
-		}
-		w.dur = dur
-		w.step = 2
-		return m, tea.Batch(echo, tea.Println(stMuted.Render("Render the final MP4 now? y / N  (N saves an editable draft)")))
-	case 2:
-		w.render = val == "y" || val == "Y" || strings.EqualFold(val, "yes")
-		idea, dur, render := w.idea, w.dur, w.render
-		m.wiz = nil
-		m.busy = true
-		body := map[string]any{"prompt": idea, "duration": dur, "should_render": render}
-		return m, tea.Batch(echo, tea.Println(stMuted.Render("Building your video…")), m.createCmd(body))
+		m.in.Reset()
+		display = answer
+	} else {
+		c := step.choices[m.wiz.cursor]
+		answer, display = c.value, c.label
 	}
-	return m, echo
+	m.wiz.vals[step.key] = answer
+	echo := tea.Println(stMuted.Render("  "+step.prompt+"  ") + stKey.Render(display))
+
+	m.wiz.step++
+	m.wiz.cursor = 0
+	if m.wiz.step < len(wizSteps) {
+		return m, echo
+	}
+
+	// All answered — build the request and submit.
+	v := m.wiz.vals
+	m.wiz = nil
+	m.busy = true
+	body := map[string]any{
+		"prompt":        v["idea"],
+		"video_type":    v["video_type"],
+		"duration":      atoiOr(v["duration"], 30),
+		"aspect_ratio":  v["aspect_ratio"],
+		"should_render": v["should_render"] == "yes",
+	}
+	return m, tea.Batch(echo, tea.Println(stOK.Render("✓ ")+stMuted.Render("Building your video…")), m.createCmd(body))
 }
 
-func (m *model) wizPrompt() string {
-	switch m.wiz.step {
-	case 0:
-		return "describe the video"
-	case 1:
-		return "15 / 30 / 60 / 120 / 180"
-	case 2:
-		return "y / N"
+func atoiOr(s string, def int) int {
+	if n, err := strconv.Atoi(s); err == nil {
+		return n
 	}
-	return ""
+	return def
 }
 
 // ---- commands -------------------------------------------------------------
@@ -669,8 +781,6 @@ func helpText() string {
 	b.WriteString("\n" + stMuted.Render("Tip: just type what you want — e.g. ") + stKey.Render("\"a 30s ad for my coffee brand\""))
 	return b.String()
 }
-
-func validDur(n int) bool { return n == 15 || n == 30 || n == 60 || n == 120 || n == 180 }
 
 func isTerminal(s string) bool {
 	switch s {

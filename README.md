@@ -67,7 +67,8 @@ purple-themed REPL:
   `/styles`, `/account`, `/login`, `/update`, `/help`, `/quit` (type `/` and press Tab).
 - **Auth-aware**: signed out, it shows a `/login` nudge and gates anything that spends
   credits; `/login` lets you paste your API key (stored locally, never shown).
-- **Just describe a video** in plain language and it walks you through the rest.
+- **Just describe a video** in plain language, then pick type / length / format /
+  render with **↑/↓ + Enter** — a guided, keyboard-driven wizard.
 - Output stays in your scrollback after you exit (no alt-screen).
 
 Prefer one-shot commands? Everything below also works non-interactively

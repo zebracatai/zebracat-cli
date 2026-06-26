@@ -24,15 +24,6 @@ func signedIn(t *testing.T) *model {
 	return &model{in: textinput.New(), cl: cl}
 }
 
-func TestValidDur(t *testing.T) {
-	if !validDur(30) || !validDur(180) {
-		t.Fatal("expected 30 and 180 to be valid")
-	}
-	if validDur(45) || validDur(0) {
-		t.Fatal("expected 45 and 0 to be invalid")
-	}
-}
-
 func TestIsTerminal(t *testing.T) {
 	for _, s := range []string{"completed", "failed", "cancelled"} {
 		if !isTerminal(s) {
@@ -68,29 +59,40 @@ func TestRefreshMatchesAutocomplete(t *testing.T) {
 }
 
 func TestWizardFlow(t *testing.T) {
-	m := &model{in: textinput.New(), wiz: &wizard{step: 0}}
-	m.handleWizard("a cat video", nil)
-	if m.wiz == nil || m.wiz.step != 1 || m.wiz.idea != "a cat video" {
+	m := &model{in: textinput.New(), wiz: newWizard(0, "")}
+	// Step 0 is the free-text idea.
+	m.in.SetValue("a cat video")
+	m.wizAdvance(m.in.Value())
+	if m.wiz == nil || m.wiz.step != 1 || m.wiz.vals["idea"] != "a cat video" {
 		t.Fatalf("after idea: %+v", m.wiz)
 	}
-	m.handleWizard("30", nil)
-	if m.wiz == nil || m.wiz.step != 2 || m.wiz.dur != 30 {
-		t.Fatalf("after duration: %+v", m.wiz)
+	// Remaining steps are choice steps — accept the highlighted option each time.
+	guard := 0
+	for m.wiz != nil && guard < 20 {
+		m.wizAdvance("")
+		guard++
 	}
-	m.handleWizard("y", nil)
 	if m.wiz != nil {
-		t.Fatal("wizard should be cleared after submit")
+		t.Fatal("wizard should be cleared after the final step")
 	}
 	if !m.busy {
 		t.Fatal("model should be busy after submitting the video")
 	}
 }
 
-func TestWizardRejectsBadDuration(t *testing.T) {
-	m := &model{in: textinput.New(), wiz: &wizard{step: 1, idea: "x"}}
-	m.handleWizard("45", nil)
-	if m.wiz.step != 1 {
-		t.Fatal("bad duration should keep the wizard on the duration step")
+func TestWizardChoiceRecordsValue(t *testing.T) {
+	m := &model{in: textinput.New(), wiz: newWizard(1, "x")} // step 1 = video_type (choices)
+	if len(m.wiz.cur().choices) == 0 {
+		t.Fatal("step 1 should be a choice step")
+	}
+	m.wiz.cursor = 2 // arrow down twice
+	want := m.wiz.cur().choices[2].value
+	m.wizAdvance("")
+	if m.wiz == nil || m.wiz.step != 2 {
+		t.Fatalf("expected to advance to step 2, got %+v", m.wiz)
+	}
+	if m.wiz.vals["video_type"] != want {
+		t.Fatalf("expected video_type=%q, got %q", want, m.wiz.vals["video_type"])
 	}
 }
 

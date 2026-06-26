@@ -151,7 +151,10 @@ func Apply(ctx context.Context, tag string) error {
 	dir := filepath.Dir(exe)
 	tmp, err := os.CreateTemp(dir, ".zebracat-update-*")
 	if err != nil {
-		return fmt.Errorf("cannot write to %s (re-run with sudo, or set ZEBRACAT_BIN_DIR and reinstall): %w", dir, err)
+		if os.IsPermission(err) {
+			return fmt.Errorf("can't write to %s — re-run with: sudo zebracat update", dir)
+		}
+		return fmt.Errorf("cannot write to %s: %w", dir, err)
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
@@ -166,9 +169,25 @@ func Apply(ctx context.Context, tag string) error {
 		return err
 	}
 	if err := os.Rename(tmpName, exe); err != nil {
+		if os.IsPermission(err) {
+			return fmt.Errorf("can't replace %s — re-run with: sudo zebracat update", exe)
+		}
 		return fmt.Errorf("could not replace %s: %w", exe, err)
 	}
 	return nil
+}
+
+// CurrentPath returns the absolute path of the running binary (resolved through
+// symlinks), for display in the update notice.
+func CurrentPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "zebracat"
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		return resolved
+	}
+	return exe
 }
 
 func extractBinary(r io.Reader) ([]byte, error) {
