@@ -86,9 +86,9 @@ zebracat auth whoami           # account + balances
 With `ZEBRACAT_API_KEY` set, nothing reads the terminal — the CLI is non-interactive
 by default, which is what scripts and agents should use.
 
-> Prefer plan-credit billing and a browser sign-in? `zebracat auth login --oauth`
-> (or `--oauth --device` on a headless box) uses OAuth instead. OAuth is also what
-> the **MCP server** uses for editor/agent integrations.
+> The **CLI is API-key only**. The **MCP server** (for editors/agents) accepts
+> *either* an API key *or* OAuth sign-in (which bills your plan credits) — see the
+> MCP docs.
 
 ## Quick start
 

@@ -9,16 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/zebracatai/zebracat-cli/internal/auth"
 	"github.com/zebracatai/zebracat-cli/internal/client"
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/config"
 	"github.com/zebracatai/zebracat-cli/internal/ui"
-)
-
-var (
-	flagDevice bool
-	flagOAuth  bool
 )
 
 var authCmd = &cobra.Command{
@@ -28,22 +22,16 @@ var authCmd = &cobra.Command{
 
 var authLoginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Save your API key (or use --oauth to sign in via browser)",
-	Long: `By default, log in with your Zebracat API key — the public API uses key auth,
+	Short: "Log in with your Zebracat API key",
+	Long: `Log in with your Zebracat API key. The CLI uses the public API, which is
 billed pay-as-you-go from your API dollar balance. Create a key at
 https://studio.zebracat.ai → API Keys.
 
   zebracat auth login                # paste your API key (or pass --api-key)
   echo "$KEY" | zebracat auth login  # read the key from stdin (CI-friendly)
-  zebracat auth login --oauth        # browser sign-in, billed from plan credits
 
 For non-interactive use you can also just set ZEBRACAT_API_KEY and skip login.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if flagOAuth {
-			return oauthLogin()
-		}
-		return apiKeyLogin()
-	},
+	RunE: func(cmd *cobra.Command, args []string) error { return apiKeyLogin() },
 }
 
 // apiKeyLogin stores an API key (from --api-key, stdin, or an interactive
@@ -52,7 +40,7 @@ func apiKeyLogin() error {
 	key := strings.TrimSpace(flagAPIKey)
 	if key == "" {
 		if ui.IsTTY(os.Stdin) {
-			fmt.Fprint(os.Stderr, "Paste your Zebracat API key (https://studio.zebracat.ai → API Keys): ")
+			fmt.Fprint(os.Stderr, "Enter your Zebracat API key (https://studio.zebracat.ai → API Keys): ")
 		}
 		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		key = strings.TrimSpace(line)
@@ -66,7 +54,6 @@ func apiKeyLogin() error {
 		creds = &config.Credentials{}
 	}
 	creds.APIKey = key
-	creds.AccessToken, creds.RefreshToken, creds.ClientID = "", "", "" // drop any stale OAuth session
 	if err := config.SaveCredentials(creds); err != nil {
 		return clierr.API("could not save credentials: %v", err)
 	}
@@ -81,38 +68,6 @@ func apiKeyLogin() error {
 	}
 	ui.Success("Logged in as %v. Key saved to ~/.zebracat/credentials.json", acct["email"])
 	return emit(map[string]any{"status": "logged_in", "auth": "api_key", "email": acct["email"]}, func() {})
-}
-
-// oauthLogin runs the browser/device OAuth flow (opt-in, plan-credit billing).
-func oauthLogin() error {
-	s, err := settings()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := ctxTimeout(5 * time.Minute)
-	defer cancel()
-
-	prompt := func(u string) {
-		ui.Info("Opening your browser to sign in. If it doesn't open, visit:")
-		fmt.Fprintln(os.Stderr, "  "+u)
-	}
-	readCode := func() (string, error) {
-		fmt.Fprint(os.Stderr, "Paste the code here: ")
-		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-		return line, err
-	}
-
-	sp := ui.StartSpinner("Waiting for sign-in…")
-	creds, err := auth.Login(ctx, config.ResolveBaseURL(s), flagDevice, prompt, readCode)
-	sp.Stop()
-	if err != nil {
-		return err
-	}
-	if err := config.SaveCredentials(creds); err != nil {
-		return clierr.API("could not save credentials: %v", err)
-	}
-	ui.Success("Logged in. Credentials saved to ~/.zebracat/credentials.json")
-	return emit(map[string]any{"status": "logged_in", "auth": "oauth"}, func() {})
 }
 
 var authLogoutCmd = &cobra.Command{
@@ -173,8 +128,6 @@ var authWhoamiCmd = &cobra.Command{
 }
 
 func init() {
-	authLoginCmd.Flags().BoolVar(&flagOAuth, "oauth", false, "Sign in via browser (plan-credit billing) instead of an API key")
-	authLoginCmd.Flags().BoolVar(&flagDevice, "device", false, "With --oauth: paste a code instead of opening a browser")
 	authCmd.AddCommand(authLoginCmd, authLogoutCmd, authStatusCmd, authWhoamiCmd)
 	rootCmd.AddCommand(authCmd)
 }
