@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 # Zebracat CLI installer.
-#   curl -fsSL https://static.zebracat.ai/cli/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/zebracatai/zebracat-cli/main/install.sh | bash
 #
-# Installs the latest `zebracat` binary into ~/.local/bin (override with ZEBRACAT_BIN_DIR).
+# Installs the `zebracat` binary into ~/.local/bin. Binaries are pulled from the
+# project's GitHub Releases, so this script works unchanged from any host you put
+# it on (e.g. a branded https://get.zebracat.ai/install.sh on your own CDN).
+#
+# Env overrides:
+#   ZEBRACAT_BIN_DIR          install dir (default: ~/.local/bin)
+#   ZEBRACAT_INSTALL_VERSION  pin a release tag (e.g. v0.1.0; default: latest)
 set -euo pipefail
 
 REPO="zebracatai/zebracat-cli"
@@ -28,7 +34,10 @@ esac
 
 command -v curl >/dev/null 2>&1 || err "curl is required"
 
-tag="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+tag="${ZEBRACAT_INSTALL_VERSION:-}"
+if [ -z "$tag" ]; then
+  tag="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+fi
 [ -n "$tag" ] || err "could not determine the latest release (none published yet?)"
 
 asset="${BIN}_${os}_${arch}.tar.gz"
