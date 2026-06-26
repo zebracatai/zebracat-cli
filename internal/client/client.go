@@ -197,6 +197,11 @@ func apiError(status int, raw []byte) *clierr.Error {
 	// Try the {"error": "...", "error_description": "..."} / {"error": {...}} shapes.
 	var generic map[string]any
 	msg := strings.TrimSpace(string(raw))
+	if strings.HasPrefix(msg, "<") {
+		// A proxy/CDN returned HTML (e.g. an nginx 404) instead of JSON — almost
+		// always a wrong base URL or a gateway that isn't routing to the API.
+		msg = "the server returned a non-JSON response — check your base URL (ZEBRACAT_BASE_URL / --base-url)"
+	}
 	if json.Unmarshal(raw, &generic) == nil {
 		if e, ok := generic["error"].(string); ok {
 			msg = e

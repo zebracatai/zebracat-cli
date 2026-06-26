@@ -22,7 +22,7 @@ var accountShowCmd = &cobra.Command{
 		ctx, cancel := ctxTimeout(60 * time.Second)
 		defer cancel()
 		var acct map[string]any
-		if _, err := c.Do(ctx, "GET", "/api/public/account", nil, &acct); err != nil {
+		if _, err := c.Do(ctx, "GET", "/api/v1/public/account", nil, &acct); err != nil {
 			return err
 		}
 		return emit(acct, func() {
@@ -40,13 +40,13 @@ var accountShowCmd = &cobra.Command{
 var accountPricingCmd = &cobra.Command{
 	Use:   "pricing",
 	Short: "Show pay-as-you-go pricing",
-	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/public/pricing") },
+	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/pricing") },
 }
 
 var accountUsageCmd = &cobra.Command{
 	Use:   "usage",
 	Short: "Show API usage summary",
-	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/public/credit/usage") },
+	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/credit/usage") },
 }
 
 func init() {

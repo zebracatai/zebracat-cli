@@ -122,13 +122,13 @@ func buildCreate() (string, map[string]any, error) {
 		if vType != "" {
 			p["video_type"] = vType
 		}
-		return "/api/public/video/agentic", p, nil
+		return "/api/v1/public/video/agentic", p, nil
 	case "idea":
 		if text == "" {
 			return "", nil, clierr.Usage("--prompt (the idea) is required")
 		}
 		common["idea"] = text
-		return "/api/public/video/idea", common, nil
+		return "/api/v1/public/video/idea", common, nil
 	case "script":
 		s := vScript
 		if s == "" {
@@ -138,7 +138,7 @@ func buildCreate() (string, map[string]any, error) {
 			return "", nil, clierr.Usage("--script or --prompt is required")
 		}
 		common["script"] = s
-		return "/api/public/video/script", common, nil
+		return "/api/v1/public/video/script", common, nil
 	case "blog":
 		u := vURL
 		if u == "" {
@@ -148,7 +148,7 @@ func buildCreate() (string, map[string]any, error) {
 			return "", nil, clierr.Usage("--url is required")
 		}
 		common["url"] = u
-		return "/api/public/video/blog", common, nil
+		return "/api/v1/public/video/blog", common, nil
 	case "audio":
 		a := vAudioURL
 		if a == "" {
@@ -158,7 +158,7 @@ func buildCreate() (string, map[string]any, error) {
 			return "", nil, clierr.Usage("--audio-url is required")
 		}
 		common["audio_url"] = a
-		return "/api/public/video/audio", common, nil
+		return "/api/v1/public/video/audio", common, nil
 	default:
 		return "", nil, clierr.Usage("unknown --from %q (use idea|script|blog|audio|agentic)", vFrom)
 	}
@@ -172,7 +172,7 @@ var videoListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		path := fmt.Sprintf("/api/public/projects?limit=%d", vLimit)
+		path := fmt.Sprintf("/api/v1/public/projects?limit=%d", vLimit)
 		if vStatus != "" {
 			path += "&status=" + vStatus
 		}
@@ -255,7 +255,7 @@ var videoCancelCmd = &cobra.Command{
 		ctx, cancel := ctxTimeout(60 * time.Second)
 		defer cancel()
 		var out map[string]any
-		if _, err := c.Do(ctx, "POST", "/api/public/video/"+args[0]+"/cancel", nil, &out); err != nil {
+		if _, err := c.Do(ctx, "POST", "/api/v1/public/video/"+args[0]+"/cancel", nil, &out); err != nil {
 			return err
 		}
 		return emit(out, func() { ui.Success("Cancelled %s", args[0]) })
@@ -314,7 +314,7 @@ var videoTranslateCmd = &cobra.Command{
 		ctx, cancel := ctxTimeout(2 * time.Minute)
 		defer cancel()
 		var created map[string]any
-		if _, err := c.Do(ctx, "POST", "/api/public/video/translate", payload, &created); err != nil {
+		if _, err := c.Do(ctx, "POST", "/api/v1/public/video/translate", payload, &created); err != nil {
 			return err
 		}
 		taskID, _ := created["task_id"].(string)
@@ -338,7 +338,7 @@ var terminalStatuses = map[string]bool{
 
 func fetchStatus(c *client.Client, ctx context.Context, taskID string) (map[string]any, error) {
 	var out map[string]any
-	if _, err := c.Do(ctx, "GET", "/api/public/video/status?task_id="+taskID, nil, &out); err != nil {
+	if _, err := c.Do(ctx, "GET", "/api/v1/public/video/status?task_id="+taskID, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

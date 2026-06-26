@@ -16,7 +16,7 @@ func TestBuildCreateAgentic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if path != "/api/public/video/agentic" {
+	if path != "/api/v1/public/video/agentic" {
 		t.Fatalf("path = %q", path)
 	}
 	if payload["prompt"] != "a cat video" || payload["video_type"] != "ai_video" || payload["duration"] != 30 {
@@ -31,7 +31,7 @@ func TestBuildCreateIdeaRoutesPromptToIdea(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if path != "/api/public/video/idea" || payload["idea"] != "top productivity tips" {
+	if path != "/api/v1/public/video/idea" || payload["idea"] != "top productivity tips" {
 		t.Fatalf("path=%q payload=%#v", path, payload)
 	}
 }

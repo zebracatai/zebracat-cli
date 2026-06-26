@@ -49,6 +49,10 @@ func isTTY(f *os.File) bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }
 
+// IsTTY reports whether f is an interactive terminal (exported for callers that
+// want to gate human-only output, e.g. the update notice).
+func IsTTY(f *os.File) bool { return isTTY(f) }
+
 // Logo is the Zebracat wordmark + zebra, shown on `--help` and `version`.
 const logoArt = `   ____     _                          _
   |_  /___ | |__ _ _ __ _ __ __ _ _ __| |_

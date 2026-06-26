@@ -20,7 +20,7 @@ var webhookCmd = &cobra.Command{Use: "webhook", Short: "Manage webhooks"}
 var webhookListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List webhooks",
-	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/public/webhooks") },
+	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/webhooks") },
 }
 
 var webhookCreateCmd = &cobra.Command{
@@ -45,7 +45,7 @@ var webhookCreateCmd = &cobra.Command{
 		ctx, cancel := ctxTimeout(60 * time.Second)
 		defer cancel()
 		var out any
-		if _, err := c.Do(ctx, "POST", "/api/public/webhooks", body, &out); err != nil {
+		if _, err := c.Do(ctx, "POST", "/api/v1/public/webhooks", body, &out); err != nil {
 			return err
 		}
 		return emit(out, func() { ui.Success("Webhook created") })
@@ -63,7 +63,7 @@ var webhookDeleteCmd = &cobra.Command{
 		}
 		ctx, cancel := ctxTimeout(60 * time.Second)
 		defer cancel()
-		if _, err := c.Do(ctx, "DELETE", "/api/public/webhooks/"+args[0], nil, nil); err != nil {
+		if _, err := c.Do(ctx, "DELETE", "/api/v1/public/webhooks/"+args[0], nil, nil); err != nil {
 			return err
 		}
 		ui.Success("Webhook %s deleted", args[0])

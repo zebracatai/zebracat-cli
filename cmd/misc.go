@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -11,6 +9,7 @@ import (
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/config"
 	"github.com/zebracatai/zebracat-cli/internal/ui"
+	"github.com/zebracatai/zebracat-cli/internal/update"
 	"github.com/zebracatai/zebracat-cli/internal/version"
 )
 
@@ -80,39 +79,49 @@ var versionCmd = &cobra.Command{
 }
 
 // ---- update ----
+var flagUpdateCheck bool
+
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Check for a newer release",
+	Short: "Update the CLI to the latest release",
+	Long: `Download the latest release and replace this binary in place.
+
+Use --check to only report whether an update is available, without installing.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c := &http.Client{Timeout: 15 * time.Second}
-		resp, err := c.Get("https://api.github.com/repos/zebracatai/zebracat-cli/releases/latest")
+		ctx, cancel := ctxTimeout(60 * time.Second)
+		defer cancel()
+
+		latest, err := update.Latest(ctx)
 		if err != nil {
 			return clierr.API("could not check for updates: %v", err)
 		}
-		defer resp.Body.Close()
-		var rel struct {
-			TagName string `json:"tag_name"`
-		}
-		_ = json.NewDecoder(resp.Body).Decode(&rel)
-		latest := rel.TagName
 		current := "v" + version.Version
-		out := map[string]any{"current": current, "latest": latest}
-		return emit(out, func() {
-			if latest == "" {
-				ui.Warn("No published releases found yet.")
-				return
-			}
-			if latest == current {
-				ui.Success("You're on the latest version (%s).", current)
-				return
-			}
-			ui.Warn("A newer version is available: %s (you have %s)", latest, current)
-			ui.Info("Update with:  curl -fsSL https://static.zebracat.ai/cli/install.sh | bash")
-		})
+
+		if !update.Newer(current, latest) {
+			out := map[string]any{"current": current, "latest": latest, "updated": false}
+			return emit(out, func() { ui.Success("You're on the latest version (%s).", current) })
+		}
+		if flagUpdateCheck {
+			out := map[string]any{"current": current, "latest": latest, "updated": false, "update_available": true}
+			return emit(out, func() {
+				ui.Warn("A newer version is available: %s (you have %s).", latest, current)
+				ui.Info("Install it with:  zebracat update")
+			})
+		}
+
+		sp := ui.StartSpinner(fmt.Sprintf("Updating to %s…", latest))
+		err = update.Apply(ctx, latest)
+		sp.Stop()
+		if err != nil {
+			return clierr.API("%v", err)
+		}
+		out := map[string]any{"current": current, "latest": latest, "updated": true}
+		return emit(out, func() { ui.Success("Updated %s → %s. Run `zebracat version` to confirm.", current, latest) })
 	},
 }
 
 func init() {
 	configCmd.AddCommand(configListCmd, configSetCmd)
+	updateCmd.Flags().BoolVar(&flagUpdateCheck, "check", false, "Only check for an update; don't install it")
 	rootCmd.AddCommand(configCmd, versionCmd, updateCmd)
 }

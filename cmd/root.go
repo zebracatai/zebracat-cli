@@ -4,6 +4,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/config"
 	"github.com/zebracatai/zebracat-cli/internal/ui"
+	"github.com/zebracatai/zebracat-cli/internal/update"
 	"github.com/zebracatai/zebracat-cli/internal/version"
 )
 
@@ -55,6 +57,26 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagBaseURL, "base-url", "", "Override the API base URL")
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "Suppress non-essential stderr output")
 	rootCmd.SetVersionTemplate(ui.Banner() + "zebracat {{.Version}}\n")
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) { maybeNotifyUpdate(cmd) }
+}
+
+// maybeNotifyUpdate prints a one-line "update available" notice to stderr for
+// interactive commands. It's cached (≤1 network check/day) and never touches
+// stdout, so JSON output and pipelines stay clean.
+func maybeNotifyUpdate(cmd *cobra.Command) {
+	switch cmd.Name() {
+	case "zebracat", "update", "version", "completion", "help", "__complete", "__completeNoDesc":
+		return // the TUI shows its own notice; these commands shouldn't nag
+	}
+	if flagQuiet || !ui.IsTTY(os.Stderr) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	latest := update.LatestCached(ctx)
+	if latest != "" && update.Newer("v"+version.Version, latest) {
+		fmt.Fprintf(os.Stderr, "↑ zebracat %s is available (you have v%s) — run `zebracat update`\n", latest, version.Version)
+	}
 }
 
 // settings loads on-disk settings honoring the --base-url override.

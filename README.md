@@ -61,28 +61,34 @@ purple-themed REPL:
 ```
 
 - **Slash commands** with autocomplete: `/video`, `/status`, `/projects`, `/voices`,
-  `/styles`, `/account`, `/login`, `/help`, `/quit` (start typing `/` and press Tab).
+  `/styles`, `/account`, `/login`, `/update`, `/help`, `/quit` (type `/` and press Tab).
+- **Auth-aware**: signed out, it shows a `/login` nudge and gates anything that spends
+  credits; `/login` lets you paste your API key (stored locally, never shown).
 - **Just describe a video** in plain language and it walks you through the rest.
 - Output stays in your scrollback after you exit (no alt-screen).
 
 Prefer one-shot commands? Everything below also works non-interactively
 (`zebracat video create …`), which is what scripts and agents should use.
 
-## Authentication — two ways, two wallets
+## Authentication
 
-| Method | How | Billed from |
-|--------|-----|-------------|
-| **OAuth login** (recommended for people) | `zebracat auth login` → browser sign-in | your **plan credits** |
-| **API key** (recommended for CI/agents) | `export ZEBRACAT_API_KEY=sk-…` | **API dollar balance** (pay-as-you-go) |
-
-With `ZEBRACAT_API_KEY` set, nothing reads the terminal — the CLI is non-interactive
-by default. On a headless box, `zebracat auth login --device` prints a URL + code to paste.
+The CLI uses the **public API**, which authenticates with an **API key** (billed
+pay-as-you-go from your API dollar balance). Create one at
+[studio.zebracat.ai → API Keys](https://studio.zebracat.ai).
 
 ```bash
-zebracat auth login            # browser OAuth (plan credits)
+zebracat auth login            # paste your API key (stored at ~/.zebracat, 0600)
+export ZEBRACAT_API_KEY=sk-…   # …or just set the env var (CI/agents)
 zebracat auth status           # am I logged in?
 zebracat auth whoami           # account + balances
 ```
+
+With `ZEBRACAT_API_KEY` set, nothing reads the terminal — the CLI is non-interactive
+by default, which is what scripts and agents should use.
+
+> Prefer plan-credit billing and a browser sign-in? `zebracat auth login --oauth`
+> (or `--oauth --device` on a headless box) uses OAuth instead. OAuth is also what
+> the **MCP server** uses for editor/agent integrations.
 
 ## Quick start
 
@@ -158,6 +164,16 @@ zebracat video status "$id"
 `~/.zebracat/config.json` (settings) and `~/.zebracat/credentials.json` (secrets, `0600`).
 Override per-invocation with `--base-url`, `--api-key`, or the `ZEBRACAT_API_KEY`,
 `ZEBRACAT_BASE_URL`, `ZEBRACAT_OUTPUT` environment variables.
+
+## Updating
+
+```bash
+zebracat update           # download the latest release and replace this binary
+zebracat update --check   # just tell me if an update is available
+```
+
+The CLI also checks once a day (cached, non-blocking) and prints a one-line notice
+to stderr when a newer version is out. In the interactive shell, run `/update`.
 
 ## License
 

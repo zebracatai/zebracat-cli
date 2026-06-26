@@ -56,7 +56,7 @@ var voiceListCmd = &cobra.Command{
 		if aGender != "" {
 			q.Set("gender", aGender)
 		}
-		p := "/api/public/voices"
+		p := "/api/v1/public/voices"
 		if len(q) > 0 {
 			p += "?" + q.Encode()
 		}
@@ -78,7 +78,7 @@ var voiceCloneCmd = &cobra.Command{
 		ctx, cancel := ctxTimeout(2 * time.Minute)
 		defer cancel()
 		var out any
-		if _, err := c.Do(ctx, "POST", "/api/public/voice/clone", map[string]any{"name": cloneName, "audio_url": cloneURL}, &out); err != nil {
+		if _, err := c.Do(ctx, "POST", "/api/v1/public/voice/clone", map[string]any{"name": cloneName, "audio_url": cloneURL}, &out); err != nil {
 			return err
 		}
 		return emit(out, nil)
@@ -91,7 +91,7 @@ var avatarListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List avatars",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		p := "/api/public/avatars"
+		p := "/api/v1/public/avatars"
 		if aMode != "" {
 			p += "?mode=" + url.QueryEscape(aMode)
 		}
@@ -103,7 +103,7 @@ var styleCmd = &cobra.Command{Use: "style", Short: "List visual styles"}
 var styleListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List visual styles",
-	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/public/visual_styles") },
+	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/visual_styles") },
 }
 
 var musicCmd = &cobra.Command{Use: "music", Short: "List background music"}
@@ -111,7 +111,7 @@ var musicListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List background music (by mood)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		p := "/api/public/music"
+		p := "/api/v1/public/music"
 		if aMood != "" {
 			p += "?mood=" + url.QueryEscape(aMood)
 		}
@@ -124,7 +124,7 @@ var templateListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List preset templates",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		p := "/api/public/templates"
+		p := "/api/v1/public/templates"
 		if aCategory != "" {
 			p += "?category=" + url.QueryEscape(aCategory)
 		}
@@ -136,19 +136,19 @@ var characterCmd = &cobra.Command{Use: "character", Short: "List saved character
 var characterListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List saved characters",
-	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/public/characters") },
+	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/characters") },
 }
 
 var videoPromptStylesCmd = &cobra.Command{
 	Use:   "prompt-styles",
 	Short: "List narration / script styles",
-	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/public/video/prompt_styles") },
+	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/video/prompt_styles") },
 }
 
 var langCmd = &cobra.Command{
 	Use:   "languages",
 	Short: "List supported voice-over languages",
-	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/public/video/languages") },
+	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/video/languages") },
 }
 
 func init() {

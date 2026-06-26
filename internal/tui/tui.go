@@ -22,9 +22,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/zebracatai/zebracat-cli/internal/auth"
 	"github.com/zebracatai/zebracat-cli/internal/client"
 	"github.com/zebracatai/zebracat-cli/internal/config"
+	"github.com/zebracatai/zebracat-cli/internal/update"
+	"github.com/zebracatai/zebracat-cli/internal/version"
 )
 
 // ---- theme (Zebracat purple) ----------------------------------------------
@@ -60,6 +61,7 @@ var commands = []slashCmd{
 	{"/login", "Sign in with your Zebracat account"},
 	{"/logout", "Sign out"},
 	{"/whoami", "Show the signed-in account"},
+	{"/update", "Update the CLI to the latest version"},
 	{"/clear", "Clear the screen"},
 	{"/help", "Show this help"},
 	{"/quit", "Exit the shell"},
@@ -69,7 +71,7 @@ var commands = []slashCmd{
 // gated behind /login so we never try to spend credits for an anonymous user.
 var openCmds = map[string]bool{
 	"/login": true, "/logout": true, "/help": true,
-	"/clear": true, "/quit": true, "/exit": true,
+	"/clear": true, "/quit": true, "/exit": true, "/update": true,
 }
 
 // ---- messages -------------------------------------------------------------
@@ -83,9 +85,12 @@ type pollMsg struct {
 	out    map[string]any
 	err    error
 }
-type loginMsg struct{ err error }
 type acctMsg struct{ a *account }
-type printMsg string // emitted to scrollback from a goroutine
+type updMsg struct{ latest string } // background "is a newer version out?"
+type updDoneMsg struct {            // result of an in-shell /update
+	tag string
+	err error
+}
 
 type wizard struct {
 	step   int
@@ -103,7 +108,6 @@ type account struct {
 }
 
 type model struct {
-	prog    *tea.Program
 	cl      *client.Client
 	baseURL string
 	in      textinput.Model
@@ -114,6 +118,9 @@ type model struct {
 	wiz     *wizard
 	acct    *account
 	greeted bool
+	askKey  bool   // waiting for the user to paste an API key
+	valid   bool   // the next acctMsg is validating a just-entered key
+	newer   string // a newer release tag, if the background check found one
 }
 
 // New builds the TUI model + program.
@@ -131,15 +138,19 @@ func New(cl *client.Client, baseURL string) *tea.Program {
 
 	m := &model{cl: cl, baseURL: baseURL, in: ti, sp: sp}
 	m.syncPlaceholder()
-	p := tea.NewProgram(m)
-	m.prog = p
-	return p
+	return tea.NewProgram(m)
 }
 
 func (m *model) Init() tea.Cmd {
-	fmt.Print(splash())
-	fmt.Print(m.authLine() + "\n\n")
-	cmds := []tea.Cmd{textinput.Blink, m.sp.Tick}
+	// Emit the banner through tea.Println (not fmt.Print): the terminal is in raw
+	// mode, so a bare "\n" wouldn't return the cursor to column 0 and the box would
+	// staircase. tea.Println writes proper CR+LF and keeps it above the input.
+	cmds := []tea.Cmd{
+		tea.Println(splash() + m.authLine()),
+		textinput.Blink,
+		m.sp.Tick,
+		m.updateCheckCmd(),
+	}
 	if m.cl.IsAuthenticated() {
 		cmds = append(cmds, m.accountCmd())
 	}
@@ -163,7 +174,7 @@ func (m *model) authLine() string {
 		return stOK.Render("● ") + stMuted.Render("Authenticated with an API key — pay-as-you-go.")
 	default:
 		return stErr.Render("○ ") + stMuted.Render("You're not signed in. Type ") +
-			stKey.Render("/login") + stMuted.Render(" to start — it uses your plan credits, no API key needed.")
+			stKey.Render("/login") + stMuted.Render(" to add your Zebracat API key.")
 	}
 }
 
@@ -177,8 +188,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC:
-			fmt.Println(stMuted.Render("Goodbye 🦓"))
-			return m, tea.Quit
+			return m, tea.Sequence(tea.Println(stMuted.Render("Goodbye 🦓")), tea.Quit)
 		case tea.KeyTab:
 			if len(m.matches) > 0 {
 				m.in.SetValue(m.matches[0] + " ")
@@ -193,35 +203,42 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleEnter()
 		}
 
-	case printMsg:
-		return m, tea.Println(string(msg))
-
-	case loginMsg:
-		m.busy = false
-		if msg.err != nil {
-			return m, tea.Println(stErr.Render("✗ Sign-in failed: ") + msg.err.Error())
-		}
-		// Reload credentials into a fresh client, then re-greet from /account.
-		creds, _ := config.LoadCredentials()
-		m.cl = client.New(m.baseURL, creds, "")
-		m.acct = nil
-		m.greeted = false
-		m.syncPlaceholder()
-		return m, tea.Batch(
-			tea.Println(stOK.Render("✓ Signed in. ")+stMuted.Render("You're spending your plan credits.")),
-			m.accountCmd(),
-		)
-
 	case acctMsg:
+		m.busy = false
 		if msg.a == nil {
+			if m.valid { // a key we just saved failed to authenticate
+				m.valid = false
+				return m, tea.Println(stErr.Render("✗ That key didn't work. ") + stMuted.Render("Check it and /login again."))
+			}
 			return m, nil
 		}
+		m.valid = false
 		m.acct = msg.a
 		if m.greeted {
 			return m, nil
 		}
 		m.greeted = true
 		return m, tea.Println(m.greeting())
+
+	case updMsg:
+		if msg.latest != "" && update.Newer("v"+version.Version, msg.latest) {
+			m.newer = msg.latest
+			return m, tea.Println(stMuted.Render("↑ ") + stKey.Render(msg.latest) +
+				stMuted.Render(" is available — run ") + stKey.Render("/update"))
+		}
+		return m, nil
+
+	case updDoneMsg:
+		m.busy = false
+		if msg.err != nil {
+			return m, tea.Println(stErr.Render("✗ Update failed: ") + msg.err.Error())
+		}
+		if msg.tag == "" {
+			return m, tea.Println(stOK.Render("✓ You're already on the latest version."))
+		}
+		m.newer = ""
+		return m, tea.Println(stOK.Render("✓ Updated to "+msg.tag+". ") +
+			stMuted.Render("Quit and relaunch zebracat to use it."))
 
 	case apiMsg:
 		m.busy = false
@@ -370,6 +387,10 @@ func (m *model) handleEnter() (tea.Model, tea.Cmd) {
 	text := strings.TrimSpace(m.in.Value())
 	m.in.Reset()
 	m.matches = nil
+
+	if m.askKey { // capturing a pasted API key — never echo the secret
+		return m.saveKey(text)
+	}
 	if text == "" {
 		return m, nil
 	}
@@ -393,8 +414,36 @@ func (m *model) handleEnter() (tea.Model, tea.Cmd) {
 func (m *model) lockMsg() string {
 	return stErr.Render("🔒 Not signed in. ") +
 		stMuted.Render("Type ") + stKey.Render("/login") +
-		stMuted.Render(" to continue — it uses your plan credits (or set ") +
-		stKey.Render("ZEBRACAT_API_KEY") + stMuted.Render(" for pay-as-you-go).")
+		stMuted.Render(" to add your API key (or set ") +
+		stKey.Render("ZEBRACAT_API_KEY") + stMuted.Render(").")
+}
+
+// saveKey persists a pasted API key, restores normal input, and verifies it
+// against /account.
+func (m *model) saveKey(key string) (tea.Model, tea.Cmd) {
+	m.askKey = false
+	m.in.EchoMode = textinput.EchoNormal
+	if key == "" {
+		m.syncPlaceholder()
+		return m, tea.Println(stMuted.Render("Cancelled."))
+	}
+	creds, _ := config.LoadCredentials()
+	if creds == nil {
+		creds = &config.Credentials{}
+	}
+	creds.APIKey = key
+	creds.AccessToken, creds.RefreshToken, creds.ClientID = "", "", ""
+	_ = config.SaveCredentials(creds)
+	m.cl = client.New(m.baseURL, creds, "")
+	m.acct = nil
+	m.greeted = false
+	m.valid = true
+	m.busy = true
+	m.syncPlaceholder()
+	return m, tea.Batch(
+		tea.Println(stOK.Render("✓ API key saved. ")+stMuted.Render("Verifying…")),
+		m.accountCmd(),
+	)
 }
 
 func (m *model) handleSlash(text string, echo tea.Cmd) (tea.Model, tea.Cmd) {
@@ -412,17 +461,18 @@ func (m *model) handleSlash(text string, echo tea.Cmd) (tea.Model, tea.Cmd) {
 	case "/quit", "/exit":
 		return m, tea.Quit
 	case "/clear":
-		return m, tea.Batch(echo, tea.ClearScreen, func() tea.Msg {
-			fmt.Print(splash())
-			fmt.Print(m.authLine() + "\n\n")
-			return nil
-		})
+		return m, tea.Sequence(tea.ClearScreen, tea.Println(splash()+m.authLine()))
 	case "/login":
 		if m.cl.IsAuthenticated() {
 			return m, tea.Batch(echo, tea.Println(stOK.Render("✓ You're already signed in. ")+stMuted.Render("Use /logout to switch accounts.")))
 		}
-		m.busy = true
-		return m, tea.Batch(echo, tea.Println(stMuted.Render("Opening your browser to sign in…")), m.loginCmd())
+		m.askKey = true
+		m.in.EchoMode = textinput.EchoPassword
+		m.in.Placeholder = "Paste your API key and press Enter"
+		return m, tea.Batch(echo, tea.Println(stMuted.Render("Paste your Zebracat API key — create one at ")+
+			stKey.Render("https://studio.zebracat.ai")+stMuted.Render(" → API Keys.")))
+	case "/update":
+		return m.runUpdate(echo)
 	case "/logout":
 		_ = config.ClearCredentials()
 		m.cl = client.New(m.baseURL, &config.Credentials{}, "")
@@ -431,18 +481,18 @@ func (m *model) handleSlash(text string, echo tea.Cmd) (tea.Model, tea.Cmd) {
 		m.syncPlaceholder()
 		return m, tea.Batch(echo, tea.Println(stOK.Render("✓ Signed out.")), tea.Println(m.authLine()))
 	case "/whoami", "/account":
-		return m.runAPI(echo, "GET", "/api/public/account", nil)
+		return m.runAPI(echo, "GET", "/api/v1/public/account", nil)
 	case "/voices":
-		return m.runAPI(echo, "GET", "/api/public/voices", nil)
+		return m.runAPI(echo, "GET", "/api/v1/public/voices", nil)
 	case "/styles":
-		return m.runAPI(echo, "GET", "/api/public/visual_styles", nil)
+		return m.runAPI(echo, "GET", "/api/v1/public/visual_styles", nil)
 	case "/projects":
-		return m.runAPI(echo, "GET", "/api/public/projects?limit=10", nil)
+		return m.runAPI(echo, "GET", "/api/v1/public/projects?limit=10", nil)
 	case "/status":
 		if len(fields) < 2 {
 			return m, tea.Batch(echo, tea.Println(stErr.Render("Usage: /status <task_id>")))
 		}
-		return m.runAPI(echo, "GET", "/api/public/video/status?task_id="+fields[1], nil)
+		return m.runAPI(echo, "GET", "/api/v1/public/video/status?task_id="+fields[1], nil)
 	case "/video":
 		m.wiz = &wizard{step: 0}
 		return m, tea.Batch(echo, tea.Println(stMuted.Render("What should the video be about?")))
@@ -519,7 +569,7 @@ func (m *model) createCmd(body map[string]any) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		var out map[string]any
-		_, err := cl.Do(ctx, "POST", "/api/public/video/agentic", body, &out)
+		_, err := cl.Do(ctx, "POST", "/api/v1/public/video/agentic", body, &out)
 		return apiMsg{kind: "create", out: out, err: err}
 	}
 }
@@ -532,7 +582,7 @@ func (m *model) poll(taskID string) tea.Msg {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	var out map[string]any
-	_, err := m.cl.Do(ctx, "GET", "/api/public/video/status?task_id="+taskID, nil, &out)
+	_, err := m.cl.Do(ctx, "GET", "/api/v1/public/video/status?task_id="+taskID, nil, &out)
 	return pollMsg{taskID: taskID, out: out, err: err}
 }
 
@@ -543,7 +593,7 @@ func (m *model) accountCmd() tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		var out map[string]any
-		if _, err := cl.Do(ctx, "GET", "/api/public/account", nil, &out); err != nil {
+		if _, err := cl.Do(ctx, "GET", "/api/v1/public/account", nil, &out); err != nil {
 			return acctMsg{a: nil}
 		}
 		a := &account{}
@@ -559,25 +609,34 @@ func (m *model) accountCmd() tea.Cmd {
 	}
 }
 
-func (m *model) loginCmd() tea.Cmd {
-	prog, base := m.prog, m.baseURL
+// updateCheckCmd asks GitHub (cached, ≤1 network call/day) whether a newer
+// version is out, for the startup notice.
+func (m *model) updateCheckCmd() tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		creds, err := auth.Login(ctx, base, false,
-			func(u string) {
-				if prog != nil {
-					prog.Send(printMsg(stMuted.Render("If your browser didn't open, visit:\n") + u))
-				}
-			},
-			func() (string, error) { return "", nil },
-		)
-		if err != nil {
-			return loginMsg{err: err}
-		}
-		_ = config.SaveCredentials(creds)
-		return loginMsg{}
+		return updMsg{latest: update.LatestCached(ctx)}
 	}
+}
+
+// runUpdate self-updates the binary from inside the shell.
+func (m *model) runUpdate(echo tea.Cmd) (tea.Model, tea.Cmd) {
+	m.busy = true
+	return m, tea.Batch(echo, tea.Println(stMuted.Render("Checking for updates…")), func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		latest, err := update.Latest(ctx)
+		if err != nil {
+			return updDoneMsg{err: err}
+		}
+		if !update.Newer("v"+version.Version, latest) {
+			return updDoneMsg{} // already on the latest
+		}
+		if err := update.Apply(ctx, latest); err != nil {
+			return updDoneMsg{err: err}
+		}
+		return updDoneMsg{tag: latest}
+	})
 }
 
 // ---- rendering ------------------------------------------------------------
