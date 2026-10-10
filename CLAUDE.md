@@ -28,12 +28,16 @@ zebracat video download "$id" -o out.mp4
 
 ## Repo layout
 
+Full module map and traces: `docs/ARCHITECTURE.md`.
+
 ```
 main.go                     # entrypoint -> cmd.Execute()
 cmd/                        # cobra commands (root, auth, video, assets, account, webhook, misc)
 internal/client/            # HTTP client, auth resolution, OAuth token refresh
-internal/auth/              # interactive OAuth 2.1 (PKCE) login: browser loopback + device
 internal/config/            # ~/.zebracat config + credentials
+internal/tui/               # interactive shell (bubbletea): tui/commands/wizard/api/view/theme
+internal/dash/              # project status labels shared by `video list` and the TUI
+internal/update/            # release check + self-update
 internal/ui/                # JSON/human output, branding, spinner, tables
 internal/clierr/            # error envelope + exit codes
 internal/version/           # version (set via -ldflags)
@@ -50,7 +54,7 @@ make fmt        # gofmt -w .  (run before committing; CI checks build+vet+test)
 
 - Releases: push a `vX.Y.Z` tag → `.github/workflows/release.yml` runs goreleaser and
   publishes archives named `zebracat_<os>_<arch>.(tar.gz|zip)` (consumed by `install.sh`).
-- Keep deps minimal — currently only `spf13/cobra`. Everything else is stdlib.
+- Keep deps minimal — `spf13/cobra` plus charmbracelet (bubbletea/bubbles/lipgloss) for the TUI.
 
 ## Conventions
 

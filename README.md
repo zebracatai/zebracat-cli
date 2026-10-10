@@ -189,6 +189,11 @@ zebracat update --check   # just tell me if an update is available
 The CLI also checks once a day (cached, non-blocking) and prints a one-line notice
 to stderr when a newer version is out. In the interactive shell, run `/update`.
 
+## Development
+
+`make build` · `make test` · `make vet`. How the code is laid out and how a request
+flows through it: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ## License
 
 MIT © Zebracat
