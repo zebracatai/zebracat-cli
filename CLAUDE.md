@@ -15,7 +15,9 @@ billing. Module: `github.com/zebracatai/zebracat-cli`.
 - **Errors** go to stderr as `{"error":{"code","message","hint"}}`.
 - **Exit codes**: `0` ok · `1` API/network · `2` usage · `3` auth · `4` timeout. Branch on these.
 - **Auth**: prefer `ZEBRACAT_API_KEY` (env) for non-interactive runs; it short-circuits any
-  prompt. Otherwise `zebracat auth login` (browser) or `--device` on headless hosts.
+  prompt. Otherwise `zebracat auth login`, which prompts for an API key (or reads it from
+  stdin / `--api-key`) and saves it. There is no browser or device login: the CLI is API-key
+  only, billed pay-as-you-go.
 - **Long jobs**: pass `--wait` to block until the video is ready, or submit and poll
   `zebracat video status <task_id>`.
 

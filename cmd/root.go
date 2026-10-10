@@ -32,8 +32,8 @@ var rootCmd = &cobra.Command{
 	Long: ui.Banner() + `
 Create AI videos, manage projects, and drive Zebracat from scripts and agents.
 
-Auth: run "zebracat auth login" (uses your plan credits) or set ZEBRACAT_API_KEY
-(pay-as-you-go). Output is JSON by default; add --human for readable tables.`,
+Auth: run "zebracat auth login" (saves an API key) or set ZEBRACAT_API_KEY.
+Both bill pay-as-you-go from your API balance. Output is JSON by default; add --human for readable tables.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	Version:       version.Version,

@@ -22,10 +22,14 @@ metadata:
 ## Preflight
 
 1. Is the CLI installed? `zebracat version` (exit 0 = yes). If not:
-   `curl -fsSL https://static.zebracat.ai/cli/install.sh | bash`
-2. Are we authenticated? `zebracat auth status`.
-   - CI / non-interactive: ensure `ZEBRACAT_API_KEY` is set (pay-as-you-go).
-   - Interactive user: `zebracat auth login` (browser; spends plan credits).
+   `npm install -g @zebracat/cli` (or
+   `curl -fsSL https://raw.githubusercontent.com/zebracatai/zebracat-cli/main/install.sh | bash`)
+2. Are we authenticated? `zebracat auth status` prints `"authenticated": true` (it exits 0
+   either way, so read the field).
+   - CI / non-interactive: ensure `ZEBRACAT_API_KEY` is set.
+   - Interactive user: `zebracat auth login` asks for an API key (from
+     https://studio.zebracat.ai → API Keys) and saves it to `~/.zebracat/credentials.json`.
+   Both bill pay-as-you-go from the account's API balance, not plan credits.
    Stop and ask the user to authenticate if neither is available.
 
 ## Create a video
