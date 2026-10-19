@@ -390,7 +390,7 @@ func init() {
 	gf.StringVar(&genIdemKey, "idempotency-key", "", "Idempotency-Key header (default: a new UUID, printed in the output)")
 	gf.DurationVar(&genTimeout, "timeout", 30*time.Minute, "Max time to wait with --wait")
 
-	videoAnswerCmd.Flags().StringVar(&ansQuestion, "question", "", "The question id (from `video status`)")
+	videoAnswerCmd.Flags().StringVar(&ansQuestion, "question", "", "The question id (from video status)")
 	videoAnswerCmd.Flags().StringVar(&ansAnswer, "answer", "", "Your answer")
 
 	cf := videoCloneCmd.Flags()

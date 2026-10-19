@@ -392,7 +392,7 @@ func init() {
 
 	vf := studioVoiceCmd.Flags()
 	vf.StringVar(&stText, "text", "", "The words: a file, or - for stdin (required)")
-	vf.StringVar(&stVoice, "voice", "", "Voice ID (required; see `zebracat voice list`)")
+	vf.StringVar(&stVoice, "voice", "", "Voice ID (required; see zebracat voice list)")
 	vf.StringVar(&stLanguage, "language", "", "Language")
 	vf.BoolVar(&stDryRun, "dry-run", false, "Answer the quote; spend nothing")
 	vf.BoolVar(&stWait, "wait", false, "Block until the audio is ready")
@@ -406,7 +406,7 @@ func init() {
 
 	clf := studioClipCmd.Flags()
 	clf.IntVar(&stSeconds, "seconds", 0, "Clip length in seconds (required)")
-	clf.StringVar(&stModel, "model", "", "Video model (see `zebracat models list`)")
+	clf.StringVar(&stModel, "model", "", "Video model (see zebracat models list)")
 	clf.StringVar(&stAspect, "aspect", "", "Aspect")
 	clf.StringVar(&stImage, "image", "", "Start from this image URL")
 	clf.BoolVar(&stDryRun, "dry-run", false, "Answer the quote; spend nothing")
