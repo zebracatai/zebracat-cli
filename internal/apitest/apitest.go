@@ -5,6 +5,7 @@
 package apitest
 
 import (
+	_ "embed"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -177,28 +178,28 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	if ans.Status == "" {
 		ans.Status = defaultStatus(op, body)
 	}
-	resp := op.Responses[ans.Status]
-	var media *openapi.Media
-	if resp != nil {
-		media = resp.Content["application/json"]
-	}
-	if media == nil || len(media.Examples) == 0 {
-		s.t.Errorf("apitest: %s %s has no example for %s", r.Method, tmpl, ans.Status)
-		w.WriteHeader(500)
-		return
-	}
-	name := ans.Example
-	if name == "" {
-		names := make([]string, 0, len(media.Examples))
-		for n := range media.Examples {
-			names = append(names, n)
+	examples := s.examples(r.Method+" "+tmpl, op, ans.Status)
+	var value []byte
+	switch {
+	case len(examples) > 0:
+		name := ans.Example
+		if name == "" {
+			names := make([]string, 0, len(examples))
+			for n := range examples {
+				names = append(names, n)
+			}
+			sort.Strings(names)
+			name = names[0]
 		}
-		sort.Strings(names)
-		name = names[0]
-	}
-	ex := media.Examples[name]
-	if ex == nil {
-		s.t.Errorf("apitest: %s %s %s has no example %q", r.Method, tmpl, ans.Status, name)
+		if value = examples[name]; value == nil {
+			s.t.Errorf("apitest: %s %s %s has no example %q", r.Method, tmpl, ans.Status, name)
+			w.WriteHeader(500)
+			return
+		}
+	case cannedErrors[ans.Status] != "":
+		value = []byte(cannedErrors[ans.Status])
+	default:
+		s.t.Errorf("apitest: %s %s has no example for %s", r.Method, tmpl, ans.Status)
 		w.WriteHeader(500)
 		return
 	}
@@ -209,7 +210,28 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	code := 200
 	_ = json.Unmarshal([]byte(ans.Status), &code)
 	w.WriteHeader(code)
-	_, _ = w.Write(ex.Value)
+	_, _ = w.Write(value)
+}
+
+// examples are the named answers for one route and status: the schema's own
+// examples, else the test fixtures (fixtures.json) for routes the schema
+// documents without examples.
+func (s *Server) examples(key string, op *openapi.Operation, status string) map[string][]byte {
+	out := map[string][]byte{}
+	if resp := op.Responses[status]; resp != nil {
+		if media := resp.Content["application/json"]; media != nil {
+			for n, ex := range media.Examples {
+				out[n] = ex.Value
+			}
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	for n, v := range fixtures[key][status] {
+		out[n] = v
+	}
+	return out
 }
 
 func (s *Server) next(key string) Answer {
@@ -225,6 +247,21 @@ func (s *Server) next(key string) Answer {
 	}
 	return a
 }
+
+// fixtures are test-owned answers keyed "METHOD path" → status → name, for the
+// routes the live schema documents without examples. They follow the
+// backend's real shapes (public_apis/v2/lifecycle.py, catalogue.py).
+//
+//go:embed fixtures.json
+var fixturesRaw []byte
+
+var fixtures = func() map[string]map[string]map[string]json.RawMessage {
+	f := map[string]map[string]map[string]json.RawMessage{}
+	if err := json.Unmarshal(fixturesRaw, &f); err != nil {
+		panic("apitest: fixtures.json: " + err.Error())
+	}
+	return f
+}()
 
 // defaultStatus: a dry run answers 200; otherwise 202 if the operation is
 // async, else 200.

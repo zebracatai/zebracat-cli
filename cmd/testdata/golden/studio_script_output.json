@@ -1,11 +1,22 @@
 {
+  "asset_id": 812,
   "idempotency_key": "s1",
-  "job_id": "scr_81c2",
-  "result": {
-    "narration_text": "Tip one: keep a schedule. Tip two: dim the lights. Tip three: no screens in bed.",
-    "plain_text": "Tip one: keep a schedule. ...",
-    "title": "Sleep better tonight"
+  "job_id": "8f0c…",
+  "request": {
+    "format": "auto",
+    "idea": "Three habits…",
+    "language": null,
+    "seconds": 30,
+    "tone": "calm"
   },
-  "status": "completed",
-  "tool": "script"
+  "result": {
+    "narration_text": "Mornings are hard…",
+    "plain_text": "Easier mornings\n…",
+    "script_view": {
+      "beats": [],
+      "title": "Easier mornings"
+    },
+    "title": "Easier mornings"
+  },
+  "status": "done"
 }

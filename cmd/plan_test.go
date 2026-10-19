@@ -69,6 +69,9 @@ func TestPlanChatAndUndo(t *testing.T) {
 	if c, _ := srv.Last("POST", "/plan/chat"); c.Body["message"] != "make it funnier" {
 		t.Fatalf("chat body %v", c.Body)
 	}
+	if _, ok := r.JSON(t)["screenplay"]; !ok {
+		t.Fatal("the turn answers the new plan flat")
+	}
 	if r := run(t, "plan", "chat", tid, strings.Repeat("x", 4001)); r.exit() != 2 {
 		t.Fatalf("long message exit %d", r.exit())
 	}
@@ -81,7 +84,8 @@ func TestPlanChatAndUndo(t *testing.T) {
 
 func TestPlanChatAllowanceIsRetryable(t *testing.T) {
 	srv, _ := setup(t)
-	srv.On("POST", "/videos/{task_id}/plan/chat", apitest.Answer{Status: "429"})
+	srv.On("POST", "/videos/{task_id}/plan/chat", apitest.Answer{Status: "429",
+		Raw: `{"error":"Plan-chat allowance used up.","code":"studio_allowance","type":"rate_limited","retryable":true,"retry_after_s":3600,"request_id":"r"}`})
 	r := run(t, "plan", "chat", tid, "again")
 	if r.exit() != 1 || r.err.Code != "studio_allowance" || !r.err.Retryable || r.err.RetryAfter.Hours() != 1 {
 		t.Fatalf("%+v", r.err)
@@ -157,7 +161,7 @@ func TestVideoAnswer(t *testing.T) {
 
 func TestVideoCloneAndCancel(t *testing.T) {
 	srv, _ := setup(t)
-	r := run(t, "video", "clone", "--url", "https://www.tiktok.com/@x/video/1", "--mode", "remake_niche",
+	r := run(t, "video", "clone", "--url", "https://www.tiktok.com/@x/video/1", "--mode", "generate_similar",
 		"--topic", "home coffee", "--language", "english", "--idempotency-key", "c1")
 	if r.exit() != 0 {
 		t.Fatal(r.stderr)
@@ -187,4 +191,14 @@ func TestCatalogues(t *testing.T) {
 	if r.exit() != 0 || !strings.Contains(r.stdout, "street_interview") {
 		t.Fatalf("presets: %s", r.stdout)
 	}
+}
+
+// The plan-chat turn answers the new plan flat; the human view prints its scenes.
+func TestPlanChatHumanPrintsTheNewPlan(t *testing.T) {
+	setup(t)
+	r := run(t, "--human", "plan", "chat", tid, "make it funnier")
+	if r.exit() != 0 {
+		t.Fatal(r.stderr)
+	}
+	mustContain(t, r.stdout, "1. (5s) Ever wondered why your cat swipes your mug off the table?")
 }

@@ -31,12 +31,12 @@ func TestEnumsGenMatchesSchema(t *testing.T) {
 func TestEnumsCarryTheEngineVocabularies(t *testing.T) {
 	cases := map[string][]string{
 		"create.input_kind":         {"idea", "script", "voiceover_script", "script_with_scenes", "url"},
-		"create.options.media_type": {"ai_video", "ai_image_video", "brainrot", "stock"},
+		"create.options.media_type": {"ai_video", "ai_image_video", "brainrot", "stock", "avatar"},
 		"create.options.audio_mode": {"narration", "dialogue", "silent"},
 		"create.options.aspect":     {"vertical", "horizontal", "square"},
 		"create.options.quality":    {"quick", "balanced", "cinematic", "auto"},
 		"create.uploads.kind":       {"person", "place", "product", "style", "other"},
-		"clone.mode":                {"generate_similar", "recreate_script", "remix", "remake_niche", "avatar_reaction", "face_swap"},
+		"clone.mode":                {"remix", "generate_similar", "recreate_script"},
 	}
 	for key, want := range cases {
 		got := Enum(key)
@@ -49,12 +49,12 @@ func TestEnumsCarryTheEngineVocabularies(t *testing.T) {
 			}
 		}
 	}
-	for _, key := range []string{"create.preset", "plan_edit.tool", "video.phase"} {
+	for _, key := range []string{"create.preset", "plan_edit.tool", "studio_image.aspect", "studio_clip.aspect", "studio_hooks.platform"} {
 		if len(Enum(key)) == 0 {
 			t.Fatalf("%s has no values", key)
 		}
 	}
-	if !CheckEnum("create.options.media_type", "stock") || CheckEnum("create.options.media_type", "avatar") {
+	if !CheckEnum("create.options.media_type", "stock") || CheckEnum("create.options.media_type", "hologram") {
 		t.Fatal("CheckEnum disagrees with the schema")
 	}
 	if !CheckEnum("no.such.key", "anything") {

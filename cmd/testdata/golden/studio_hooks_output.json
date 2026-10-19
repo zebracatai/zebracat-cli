@@ -1,14 +1,27 @@
 {
+  "allowance": {
+    "day": {
+      "limit": 60,
+      "used": 5
+    },
+    "hour": {
+      "limit": 20,
+      "used": 2
+    }
+  },
   "hooks": [
     {
-      "line": "Still tired after 8 hours?",
-      "on_screen": "STILL TIRED?",
-      "type": "question"
-    },
-    {
-      "line": "Your bedroom is ruining your sleep.",
-      "on_screen": "Fix this tonight",
-      "type": "bold_claim"
+      "hooked_script": "What if your mornings ran themselves?\n\n\u003cyour script, unchanged\u003e",
+      "id": "a1b2c3d4e5f6",
+      "line": "What if your mornings ran themselves?",
+      "on_screen": "Mornings on autopilot",
+      "speaker_label": "",
+      "type": "question",
+      "why": "Opens a loop the script closes."
     }
-  ]
+  ],
+  "language_certain": true,
+  "language_supported": true,
+  "script_assets": [],
+  "script_language": "english"
 }

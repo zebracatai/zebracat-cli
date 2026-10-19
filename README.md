@@ -133,7 +133,7 @@ zebracat video create --script script.txt --audio dialogue --aspect horizontal
 zebracat video create --url https://example.com/post --wait          # from a web page
 zebracat video create --brief "coffee on the street" --preset street_interview \
   --upload https://…/me.png:person --upload https://…/cafe.jpg:place
-zebracat video clone --url https://www.tiktok.com/@x/video/1 --mode remake_niche --topic "home coffee" --wait
+zebracat video clone --url https://www.tiktok.com/@x/video/1 --mode generate_similar --topic "home coffee" --wait
 zebracat video translate --url https://…/in.mp4 --to spanish --render --wait
 ```
 
@@ -145,7 +145,10 @@ zebracat studio hooks --script script.txt                             # free
 zebracat studio voice --text script.txt --voice <id> -o vo.mp3        # paid (voice credits)
 zebracat studio image "a neon city at dusk" --aspect vertical --count 2
 zebracat studio clip "a cat surfing a wave" --seconds 5 --dry-run     # paid per started 5 s
+zebracat swap --video https://…/clip.mp4 --character https://…/face.jpg --consent --dry-run   # character swap, paid per second
 ```
+
+`--aspect` on Studio images and clips takes `9:16|16:9|1:1` (or `vertical|horizontal|square`).
 
 ### Phases
 
@@ -163,10 +166,11 @@ v1 task ids (older videos) keep their v1 `status`.
 
 ### Money
 
-- `--dry-run` (on `video create`, `video generate`, `video clone`, `studio voice`,
-  `studio clip`) answers the quote and spends nothing.
-- `video generate` on a terminal shows the quote and asks; scripts and agents are
-  never asked and must pass `--yes`.
+- `--dry-run` (on `video create`, `video generate`, `studio voice`, `studio image`,
+  `studio clip`, `swap`) answers the quote and spends nothing.
+- `video generate` and `swap` on a terminal show the quote and ask; scripts and agents
+  are never asked and must pass `--yes`. `swap` also needs `--consent`: you state you
+  have the right to use the face.
 - Every paid POST sends an `Idempotency-Key` (a fresh UUID per run, printed as
   `idempotency_key`); re-run with `--idempotency-key <that key>` and the server
   answers the first result instead of spending twice.
@@ -179,6 +183,7 @@ zebracat video       create | list | get | status | quote | generate | answer | 
                      download | clone | translate | prompt-styles | languages
 zebracat plan        show | edit | chat | undo
 zebracat studio      script | hooks | voice | image | clip | job
+zebracat swap        --video <url> --character <image-url> --consent  # character swap
 zebracat models      list                       # qualities, models, credits per 5 s
 zebracat presets     list                       # street interview, podcast, UGC ad, …
 zebracat script      <idea>                     # alias of `studio script` when the server has Studio

@@ -13,6 +13,7 @@ on the backend). It does no generation itself: every command is a thin HTTP call
 | `cmd/video_create.go` | `video create` (Director v2 `POST /videos`; legacy flag mapping; `--audio-file` → v1 `/video/audio`) |
 | `cmd/plan.go` | `plan show/edit/chat/undo`, `video quote/generate/answer/clone` |
 | `cmd/studio.go` | `studio script/hooks/voice/image/clip/job`, `models list`, `presets list` |
+| `cmd/swap.go` | `swap`: `POST /character-swap/analyze`, then `POST /character-swap` (consent, quoted credits, confirm) |
 | `cmd/common.go` | idempotency keys, `postIdempotent` (429 + Retry-After under `--wait`), file/stdin args, the Generate confirmation, the injectable clock |
 | `cmd/assets.go` | voices, avatars, styles, music, templates, characters, brand kits, languages |
 | `cmd/account.go`, `cmd/auth.go`, `cmd/webhook.go`, `cmd/generate.go`, `cmd/misc.go` | account/pricing, API-key login/logout, webhooks, `script`/`image` (Studio aliases when the server has the routes), config + version/update |
@@ -20,7 +21,7 @@ on the backend). It does no generation itself: every command is a thin HTTP call
 | `internal/client/` | HTTP client: auth resolution (flag > env > stored key > OAuth token), one 401 refresh retry, typed API errors (`apiError`: type/code/retryable/hint/request_id/Retry-After); `enums_gen.go` + `enums.go` (allowed flag values); `capabilities.go` (`HasPath`: the server's OpenAPI paths, cached a day) |
 | `internal/openapi/` | `openapi.json` (checked-in copy of the public API schema), enum extraction and example lookup; `enumgen/` writes `internal/client/enums_gen.go` (`go generate`) |
 | `internal/videos/` | the v2 task lifecycle shared by the commands and the TUI: `Fetch` (v2 `GET /videos/{id}`, v1 `/video/status` fallback), `StopsWait`, `Wait` (injectable clock, Retry-After), `QuoteLine`, `SummaryLines`, `Beats`, `EditorURL` |
-| `internal/apitest/` | tests only: an httptest server answering with the schema's examples; queue answers per route, read back calls |
+| `internal/apitest/` | tests only: an httptest server answering with the schema's examples, else `fixtures.json` (routes the schema documents without examples), else a canned typed error; queue answers per route, read back calls |
 | `internal/config/` | `~/.zebracat/` settings + credentials, env overrides |
 | `internal/clierr/` | error type and exit codes (0 ok, 1 API, 2 usage, 3 auth, 4 timeout) |
 | `internal/ui/` | JSON/human output, colours, spinner, tables |

@@ -107,16 +107,14 @@ func planCard(task, quote map[string]any) string {
 
 // questionCard shows the question a plan stopped on.
 func questionCard(task map[string]any) string {
-	q, _ := task["question"].(map[string]any)
+	qid, text, opts := videos.Question(task)
 	var b strings.Builder
-	b.WriteString(stTitle.Render("? ") + fmt.Sprint(q["text"]) + "\n")
-	if opts, ok := q["options"].([]any); ok {
-		for _, o := range opts {
-			b.WriteString(stMuted.Render("   • ") + fmt.Sprint(o) + "\n")
-		}
+	b.WriteString(stTitle.Render("? ") + text + "\n")
+	for _, o := range opts {
+		b.WriteString(stMuted.Render("   • ") + o + "\n")
 	}
 	b.WriteString(stMuted.Render("  Answer with: ") +
-		stKey.Render(fmt.Sprintf("zebracat video answer %v --question %v --answer \"…\"", task["task_id"], q["id"])))
+		stKey.Render(fmt.Sprintf("zebracat video answer %v --question %s --answer \"…\"", task["task_id"], qid)))
 	return b.String()
 }
 

@@ -39,7 +39,31 @@ const studioBase = videos.Base + "/studio"
 var studioJobPaths = map[string]string{
 	"script": "scripts", "scripts": "scripts",
 	"voice": "voices", "voices": "voices",
-	"image": "media", "images": "media", "clip": "media", "clips": "media", "media": "media",
+	"image": "media", "images": "media", "clip": "media", "clips": "media", "video": "media", "media": "media",
+	"swap": "swap",
+}
+
+// studioJobPath is a job's route; swap jobs live under /character-swap.
+func studioJobPath(tool, jobID string) string {
+	if studioJobPaths[tool] == "swap" {
+		return swapBase + "/" + url.PathEscape(jobID)
+	}
+	return studioBase + "/" + studioJobPaths[tool] + "/" + url.PathEscape(jobID)
+}
+
+// studioAspects are the friendly spellings of the Studio media aspect ratios.
+var studioAspects = map[string]string{"vertical": "9:16", "horizontal": "16:9", "square": "1:1"}
+
+// studioAspect checks an --aspect value against the schema's enum for key,
+// accepting vertical|horizontal|square for the ratio the server takes.
+func studioAspect(key, v string) (string, error) {
+	if client.CheckEnum(key, v) {
+		return v, nil
+	}
+	if r, ok := studioAspects[v]; ok && client.CheckEnum(key, r) {
+		return r, nil
+	}
+	return "", enumUsage("--aspect", v, key)
 }
 
 var studioJobDone = map[string]bool{
@@ -103,6 +127,9 @@ var studioHooksCmd = &cobra.Command{
 		}
 		body := map[string]any{"script": text}
 		if stPlatform != "" {
+			if !client.CheckEnum("studio_hooks.platform", stPlatform) {
+				return enumUsage("--platform", stPlatform, "studio_hooks.platform")
+			}
 			body["platform"] = stPlatform
 		}
 		if stLanguage != "" {
@@ -183,27 +210,31 @@ var studioImageCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		out, err := studioImage(c, strings.Join(args, " "), stModel, stAspect, stCount, stWait)
+		out, err := studioImage(c, strings.Join(args, " "), stAspect, stCount, stWait)
 		if err != nil {
 			return err
+		}
+		if dry, _ := out["dry_run"].(bool); dry {
+			return emit(out, func() { printDryRunHuman(out) })
 		}
 		return emit(out, func() { printStudioJobHuman(out) })
 	},
 }
 
-func studioImage(c *client.Client, prompt, model, aspect string, count int, wait bool) (map[string]any, error) {
+func studioImage(c *client.Client, prompt, aspect string, count int, wait bool) (map[string]any, error) {
 	body := map[string]any{"prompt": strings.TrimSpace(prompt)}
-	if model != "" {
-		body["model"] = model
-	}
 	if aspect != "" {
-		if !client.CheckEnum("studio_image.aspect", aspect) {
-			return nil, enumUsage("--aspect", aspect, "studio_image.aspect")
+		a, err := studioAspect("studio_image.aspect", aspect)
+		if err != nil {
+			return nil, err
 		}
-		body["aspect"] = aspect
+		body["aspect"] = a
 	}
 	if count > 0 {
 		body["count"] = count
+	}
+	if stDryRun {
+		body["dry_run"] = true
 	}
 	return startStudioJob(c, "images", body, wait)
 }
@@ -221,7 +252,11 @@ var studioClipCmd = &cobra.Command{
 			body["model"] = stModel
 		}
 		if stAspect != "" {
-			body["aspect"] = stAspect
+			a, err := studioAspect("studio_clip.aspect", stAspect)
+			if err != nil {
+				return err
+			}
+			body["aspect"] = a
 		}
 		if stImage != "" {
 			if err := checkURL("--image", stImage); err != nil {
@@ -248,19 +283,18 @@ var studioClipCmd = &cobra.Command{
 }
 
 var studioJobCmd = &cobra.Command{
-	Use:   "job <script|voice|image|clip> <job_id>",
+	Use:   "job <script|voice|image|clip|swap> <job_id>",
 	Short: "Read a Studio job (optionally --wait)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		route, ok := studioJobPaths[args[0]]
-		if !ok {
-			return clierr.Usage("unknown tool %q (script|voice|image|clip)", args[0])
+		if _, ok := studioJobPaths[args[0]]; !ok {
+			return clierr.Usage("unknown tool %q (script|voice|image|clip|swap)", args[0])
 		}
 		c, err := newClient()
 		if err != nil {
 			return err
 		}
-		path := studioBase + "/" + route + "/" + url.PathEscape(args[1])
+		path := studioJobPath(args[0], args[1])
 		var out map[string]any
 		if stWait {
 			out, err = waitStudioJob(c, path, stTimeout)
@@ -298,8 +332,7 @@ func startStudioJob(c *client.Client, tool string, body map[string]any, wait boo
 		self, _ = l["self"].(string)
 	}
 	if self == "" {
-		route := studioJobPaths[tool]
-		self = studioBase + "/" + route + "/" + url.PathEscape(jobID)
+		self = studioJobPath(tool, jobID)
 	}
 	final, err := waitStudioJob(c, self, stTimeout)
 	if final != nil {
@@ -340,7 +373,7 @@ func waitStudioJob(c *client.Client, path string, timeout time.Duration) (map[st
 
 func printStudioJobHuman(out map[string]any) {
 	pairs := [][2]string{}
-	for _, k := range []string{"job_id", "tool", "status"} {
+	for _, k := range []string{"job_id", "tool", "kind", "status"} {
 		if v, ok := out[k]; ok {
 			pairs = append(pairs, [2]string{k, fmt.Sprint(v)})
 		}
@@ -354,6 +387,9 @@ func printStudioJobHuman(out map[string]any) {
 	if a, _ := res["audio_url"].(string); a != "" {
 		ui.Link("♪ Audio:", a)
 	}
+	if u, _ := res["url"].(string); u != "" {
+		ui.Link("▣", u)
+	}
 	for _, u := range asList(res["urls"]) {
 		ui.Link("▣", fmt.Sprint(u))
 	}
@@ -361,7 +397,11 @@ func printStudioJobHuman(out map[string]any) {
 		ui.Info("Quote: %s", videos.QuoteLine(q))
 	}
 	if s, _ := out["status"].(string); !studioJobDone[s] && out["job_id"] != nil {
-		ui.Info("Follow it: zebracat studio job %v %v --wait", out["tool"], out["job_id"])
+		tool := out["tool"]
+		if tool == nil {
+			tool = out["kind"]
+		}
+		ui.Info("Follow it: zebracat studio job %v %v --wait", tool, out["job_id"])
 	}
 }
 
@@ -387,7 +427,7 @@ func init() {
 	studioScriptCmd.Flags().BoolVar(&stWait, "wait", false, "Block until the script is written")
 
 	studioHooksCmd.Flags().StringVar(&stScript, "script", "", "Your script: a file, or - for stdin (required)")
-	studioHooksCmd.Flags().StringVar(&stPlatform, "platform", "", "Platform (default tiktok)")
+	studioHooksCmd.Flags().StringVar(&stPlatform, "platform", "", "Platform: "+client.EnumHelp("studio_hooks.platform")+" (default tiktok)")
 	studioHooksCmd.Flags().StringVar(&stLanguage, "language", "", "Language")
 
 	vf := studioVoiceCmd.Flags()
@@ -399,15 +439,15 @@ func init() {
 	vf.StringVarP(&stOut, "output", "o", "", "Save the audio to this file (implies --wait)")
 
 	imf := studioImageCmd.Flags()
-	imf.StringVar(&stModel, "model", "", "Image model (see the Studio media catalogue)")
-	imf.StringVar(&stAspect, "aspect", "", "Aspect: "+client.EnumHelp("studio_image.aspect"))
+	imf.StringVar(&stAspect, "aspect", "", "Aspect: "+client.EnumHelp("studio_image.aspect")+" (or vertical|horizontal|square)")
 	imf.IntVar(&stCount, "count", 0, "How many images")
+	imf.BoolVar(&stDryRun, "dry-run", false, "Validate and quote only; nothing is generated")
 	imf.BoolVar(&stWait, "wait", false, "Block until the images are ready")
 
 	clf := studioClipCmd.Flags()
 	clf.IntVar(&stSeconds, "seconds", 0, "Clip length in seconds (required)")
 	clf.StringVar(&stModel, "model", "", "Video model (see zebracat models list)")
-	clf.StringVar(&stAspect, "aspect", "", "Aspect")
+	clf.StringVar(&stAspect, "aspect", "", "Aspect: "+client.EnumHelp("studio_clip.aspect")+" (or vertical|horizontal|square)")
 	clf.StringVar(&stImage, "image", "", "Start from this image URL")
 	clf.BoolVar(&stDryRun, "dry-run", false, "Answer the quote; spend nothing")
 	clf.BoolVar(&stWait, "wait", false, "Block until the clip is ready")

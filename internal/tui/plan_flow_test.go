@@ -69,7 +69,7 @@ func TestWizardPlanThenGenerate(t *testing.T) {
 	if m.gen == nil || m.busy {
 		t.Fatal("a ready plan asks Generate?")
 	}
-	if card := planCard(ready.task, ready.quote); !strings.Contains(card, "96 credits ($4.80)") || !strings.Contains(card, "A 20 s narrated") {
+	if card := planCard(ready.task, ready.quote); !strings.Contains(card, "96 credits ($4.80)") || !strings.Contains(card, "Why cats knock things off tables — 4 scenes, 20 s · ai_video · narration · english") {
 		t.Fatalf("plan card:\n%s", card)
 	}
 	_ = printCmd

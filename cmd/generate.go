@@ -100,7 +100,7 @@ otherwise the classic image generator.`,
 				note("--style, --width and --height are not Studio image options; use `zebracat studio image --aspect`")
 			}
 			stTimeout = 3 * time.Minute
-			out, err := studioImage(c, strings.Join(args, " "), "", "", imgCount, true)
+			out, err := studioImage(c, strings.Join(args, " "), "", imgCount, true)
 			if err != nil {
 				return err
 			}

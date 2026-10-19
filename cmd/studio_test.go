@@ -12,7 +12,8 @@ import (
 
 func TestStudioScriptWaitsOnTheSelfLink(t *testing.T) {
 	srv, clk := setup(t)
-	srv.On("GET", "/studio/scripts/{job_id}", apitest.Answer{Example: "running"}, apitest.Answer{Example: "done"})
+	srv.On("GET", "/studio/scripts/{job_id}",
+		apitest.Answer{Status: "200", Raw: `{"job_id":"8f0c","status":"writing","next_poll_ms":500}`}, apitest.Answer{Example: "TheJob"})
 	r := run(t, "studio", "script", "3 tips for better sleep", "--seconds", "30", "--language", "english", "--wait", "--idempotency-key", "s1")
 	if r.exit() != 0 {
 		t.Fatal(r.stderr)
@@ -34,6 +35,9 @@ func TestStudioHooksReadsTheScriptFromStdin(t *testing.T) {
 		t.Fatalf("exit %d body %v", r.exit(), c.Body)
 	}
 	golden(t, "studio_hooks_output", r.JSON(t))
+	if r := run(t, "studio", "hooks", "--script", "-", "--platform", "myspace"); r.exit() != 2 {
+		t.Fatalf("bad platform exit %d", r.exit())
+	}
 	if r := run(t, "studio", "hooks"); r.exit() != 2 {
 		t.Fatalf("missing --script exit %d", r.exit())
 	}
@@ -50,6 +54,7 @@ func TestStudioVoiceDryRunAndDownload(t *testing.T) {
 		t.Fatalf("dry run: exit %d body %v", r.exit(), c.Body)
 	}
 
+	srv.On("POST", "/studio/voices", apitest.Answer{}) // the 202, not the dry run
 	srv.Handle("/files/vo.mp3", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ID3audio")) })
 	srv.On("GET", "/studio/voices/{job_id}", apitest.Answer{Status: "200",
 		Raw: `{"job_id":"vo_77aa","status":"completed","tool":"voice","result":{"audio_url":"` + srv.URL + `/files/vo.mp3"}}`})
@@ -74,25 +79,30 @@ func TestStudioPaidCallsOnAnEmptyBalance(t *testing.T) {
 		t.Fatalf("missing --seconds exit %d", r.exit())
 	}
 	srv.On("POST", "/studio/clips", apitest.Answer{}) // back to the schema's default answer
-	r = run(t, "studio", "clip", "a cat surfing", "--seconds", "5", "--dry-run", "--image", "https://x.com/a.png")
+	r = run(t, "studio", "clip", "a cat surfing", "--seconds", "5", "--dry-run", "--image", "https://x.com/a.png", "--aspect", "horizontal")
 	c, _ := srv.Last("POST", "/studio/clips")
-	if r.exit() != 0 || c.Body["dry_run"] != true || c.Body["image_url"] != "https://x.com/a.png" {
+	if r.exit() != 0 || c.Body["dry_run"] != true || c.Body["image_url"] != "https://x.com/a.png" || c.Body["aspect"] != "16:9" {
 		t.Fatalf("clip dry run %v", c.Body)
 	}
 }
 
 func TestStudioImageAndJob(t *testing.T) {
 	srv, _ := setup(t)
-	r := run(t, "studio", "image", "a neon city", "--aspect", "vertical", "--count", "2", "--model", "flux")
+	r := run(t, "studio", "image", "a neon city", "--aspect", "vertical", "--count", "2")
 	c, _ := srv.Last("POST", "/studio/images")
-	if r.exit() != 0 || c.Body["count"] != float64(2) || c.Body["aspect"] != "vertical" || c.Body["model"] != "flux" {
-		t.Fatalf("image body %v", c.Body)
+	if r.exit() != 0 || c.Body["count"] != float64(2) || c.Body["aspect"] != "9:16" {
+		t.Fatalf("image body %v (%s)", c.Body, r.stderr)
+	}
+	r = run(t, "studio", "image", "a neon city", "--aspect", "1:1", "--dry-run")
+	c, _ = srv.Last("POST", "/studio/images")
+	if r.exit() != 0 || c.Body["aspect"] != "1:1" || c.Body["dry_run"] != true || r.JSON(t)["dry_run"] != true {
+		t.Fatalf("image dry run %v (%s)", c.Body, r.stderr)
 	}
 	if r := run(t, "studio", "image", "x", "--aspect", "diagonal"); r.exit() != 2 {
 		t.Fatalf("bad aspect exit %d", r.exit())
 	}
 	r = run(t, "studio", "job", "image", "med_1a2b")
-	if r.exit() != 0 || r.JSON(t)["status"] != "completed" {
+	if r.exit() != 0 || r.JSON(t)["status"] != "done" {
 		t.Fatalf("job: %s", r.stdout)
 	}
 	if c, _ := srv.Last("GET", "/studio/media/med_1a2b"); c.Path == "" {
@@ -122,7 +132,7 @@ func openapiWith(srv *apitest.Server, paths ...string) {
 func TestScriptAliasUsesStudioWhenTheServerHasIt(t *testing.T) {
 	srv, _ := setup(t)
 	openapiWith(srv, "/api/v1/public/studio/scripts", "/api/v1/public/studio/images")
-	srv.On("GET", "/studio/scripts/{job_id}", apitest.Answer{Example: "done"})
+	srv.On("GET", "/studio/scripts/{job_id}", apitest.Answer{Example: "TheJob"})
 	r := run(t, "script", "better sleep", "--duration", "30")
 	if r.exit() != 0 {
 		t.Fatal(r.stderr)
@@ -131,7 +141,7 @@ func TestScriptAliasUsesStudioWhenTheServerHasIt(t *testing.T) {
 	if c.Body["idea"] != "better sleep" || c.Body["seconds"] != float64(30) {
 		t.Fatalf("studio body %v", c.Body)
 	}
-	if !strings.HasPrefix(r.JSON(t)["script"].(string), "Tip one") {
+	if !strings.HasPrefix(r.JSON(t)["script"].(string), "Mornings are hard") {
 		t.Fatalf("the alias must keep a script key: %s", r.stdout)
 	}
 	r = run(t, "image", "a neon city", "--n", "2")
