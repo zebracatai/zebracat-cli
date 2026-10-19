@@ -44,7 +44,7 @@ func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		var ce *clierr.Error
 		if errors.As(err, &ce) {
-			ui.PrintError(ce.Code, ce.Message, ce.Hint)
+			ui.PrintErrorEnvelope(ce.Envelope())
 			os.Exit(ce.Exit)
 		}
 		ui.PrintError("error", err.Error(), "")

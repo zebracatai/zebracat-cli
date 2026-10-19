@@ -22,28 +22,27 @@ type wizStep struct {
 
 var wizSteps = []wizStep{
 	{key: "idea", prompt: "What should your video be about?"},
-	{key: "video_type", prompt: "What kind of video?", choices: []wizChoice{
+	{key: "media_type", prompt: "What kind of video?", choices: []wizChoice{
 		{"🎬  AI Video — cinematic AI-generated footage", "ai_video"},
-		{"🖼  Moving AI Images — animated still scenes", "moving_ai_images"},
-		{"🧑  Avatar — a presenter delivers your script", "ai_avatar"},
-		{"📹  Stock footage — real-world clips", "stock_footage"},
+		{"🖼  Moving AI Images — animated still scenes", "ai_image_video"},
+		{"📹  Stock footage — real-world clips", "stock"},
 		{"🧠  Brainrot — fast, punchy, viral style", "brainrot"},
 	}},
-	{key: "duration", prompt: "How long should it be?", choices: []wizChoice{
+	{key: "seconds", prompt: "How long should it be?", choices: []wizChoice{
 		{"15 seconds — quick hook", "15"},
 		{"30 seconds — standard short", "30"},
 		{"60 seconds — full short", "60"},
 		{"2 minutes", "120"},
 		{"3 minutes", "180"},
 	}},
-	{key: "aspect_ratio", prompt: "Which format?", choices: []wizChoice{
+	{key: "aspect", prompt: "Which format?", choices: []wizChoice{
 		{"📱  Vertical · 9:16 — TikTok, Reels, Shorts", "vertical"},
 		{"⬛  Square · 1:1 — feed posts", "square"},
 		{"🖥  Horizontal · 16:9 — YouTube", "horizontal"},
 	}},
-	{key: "should_render", prompt: "Render the final video now?", choices: []wizChoice{
-		{"✨  Yes — render the MP4 now", "yes"},
-		{"📝  No — save an editable draft", "no"},
+	{key: "should_render", prompt: "When it's generated…", choices: []wizChoice{
+		{"✨  Export the MP4", "yes"},
+		{"📝  Keep an editable project only", "no"},
 	}},
 }
 
@@ -117,18 +116,29 @@ func (m *model) wizAdvance(textVal string) (tea.Model, tea.Cmd) {
 		return m, echo
 	}
 
-	// All answered — build the request and submit.
+	// All answered — ask Director v2 for the plan only; Generate comes after the
+	// user has seen the plan and its quote.
 	v := m.wiz.vals
 	m.wiz = nil
 	m.busy = true
-	body := map[string]any{
-		"prompt":        v["idea"],
-		"video_type":    v["video_type"],
-		"duration":      atoiOr(v["duration"], 30),
-		"aspect_ratio":  v["aspect_ratio"],
-		"should_render": v["should_render"] == "yes",
+	return m, tea.Batch(echo, tea.Println(stOK.Render("✓ ")+stMuted.Render("Planning your video…")), m.createCmd(wizBody(v)))
+}
+
+// wizBody is the POST /videos body for the wizard's answers: a plan only.
+func wizBody(v map[string]string) map[string]any {
+	opts := map[string]any{"seconds": atoiOr(v["seconds"], 30)}
+	for _, k := range []string{"media_type", "aspect"} {
+		if v[k] != "" {
+			opts[k] = v[k]
+		}
 	}
-	return m, tea.Batch(echo, tea.Println(stOK.Render("✓ ")+stMuted.Render("Building your video…")), m.createCmd(body))
+	return map[string]any{
+		"brief":         v["idea"],
+		"input_kind":    "idea",
+		"options":       opts,
+		"auto_generate": false,
+		"should_render": v["should_render"] != "no",
+	}
 }
 
 func atoiOr(s string, def int) int {

@@ -1,0 +1,7 @@
+{
+  "code": "invalid_choice",
+  "message": "media_type must be one of ai_video, ai_image_video, brainrot, stock.",
+  "hint": "Pick a value from allowed_values.",
+  "type": "invalid_request",
+  "request_id": "req_01HZX3K9QW"
+}

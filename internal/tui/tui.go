@@ -21,18 +21,25 @@ import (
 	"github.com/zebracatai/zebracat-cli/internal/client"
 	"github.com/zebracatai/zebracat-cli/internal/update"
 	"github.com/zebracatai/zebracat-cli/internal/version"
+	"github.com/zebracatai/zebracat-cli/internal/videos"
 )
 
 // ---- messages -------------------------------------------------------------
 type apiMsg struct {
-	kind string // "create" | "generic"
-	out  any
-	err  error
+	kind   string // "create" | "generate" | "generic"
+	out    any
+	err    error
+	taskID string
 }
 type pollMsg struct {
-	taskID string
-	out    map[string]any
-	err    error
+	taskID    string
+	out       map[string]any
+	err       error
+	untilDone bool // keep polling past plan_ready (after Generate)
+}
+type planReadyMsg struct { // a plan is ready: its task view and the Generate quote
+	task  map[string]any
+	quote map[string]any
 }
 type acctMsg struct{ a *account }
 type projectsMsg struct {
@@ -62,6 +69,7 @@ type model struct {
 	width   int
 	matches []string
 	wiz     *wizard
+	gen     *genPrompt // the "Generate?" question on a ready plan
 	acct    *account
 	greeted bool
 	askKey  bool   // waiting for the user to paste an API key
@@ -115,6 +123,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.gen != nil && !m.busy {
+			return m.genKey(msg)
+		}
 		// During a choice step, the arrow keys drive the menu (keyboard select).
 		if m.wiz != nil && !m.busy && len(m.wiz.cur().choices) > 0 {
 			switch {
@@ -211,39 +222,57 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			return m, tea.Println(stErr.Render("✗ ") + msg.err.Error())
 		}
-		if msg.kind == "create" {
-			out, _ := msg.out.(map[string]any)
+		out, _ := msg.out.(map[string]any)
+		switch msg.kind {
+		case "create":
 			taskID, _ := out["task_id"].(string)
 			if taskID == "" {
 				return m, tea.Println(render("Result", msg.out))
 			}
 			m.busy = true
 			return m, tea.Batch(
-				tea.Println(stOK.Render("✓ Submitted. ")+stMuted.Render("Generating your video…")),
-				m.pollCmd(taskID),
+				tea.Println(stOK.Render("✓ Submitted. ")+stMuted.Render("Writing your plan… (about a minute)")),
+				m.pollCmd(taskID, false),
+			)
+		case "generate":
+			m.busy = true
+			return m, tea.Batch(
+				tea.Println(stOK.Render("✓ Generating. ")+stMuted.Render("Making your video… (a few minutes)")),
+				m.pollCmd(msg.taskID, true),
 			)
 		}
 		return m, tea.Println(msg.title())
+
+	case planReadyMsg:
+		m.busy = false
+		m.gen = newGenPrompt(msg.task, msg.quote)
+		return m, tea.Println(planCard(msg.task, msg.quote))
 
 	case pollMsg:
 		if msg.err != nil {
 			m.busy = false
 			return m, tea.Println(stErr.Render("✗ ") + msg.err.Error())
 		}
-		status, _ := msg.out["status"].(string)
-		if isTerminal(status) {
-			m.busy = false
-			if status == "completed" {
+		if videos.StopsWait(msg.out, msg.untilDone) {
+			switch videos.PhaseOrStatus(msg.out) {
+			case "plan_ready":
+				return m, m.quoteCmd(msg.out)
+			case "needs_input":
+				m.busy = false
+				return m, tea.Println(questionCard(msg.out))
+			case "completed":
+				m.busy = false
 				return m, tea.Println(stOK.Render("✓ Done! ") + stKey.Render(bestLink(msg.out)))
 			}
-			emsg, _ := msg.out["error"].(string)
+			m.busy = false
+			status := videos.PhaseOrStatus(msg.out)
 			line := stErr.Render("✗ Video " + status)
-			if emsg != "" {
+			if emsg := errText(msg.out); emsg != "" {
 				line += stMuted.Render(" — " + emsg)
 			}
 			return m, tea.Println(line)
 		}
-		return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return m.poll(msg.taskID) })
+		return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return m.poll(msg.taskID, msg.untilDone) })
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd

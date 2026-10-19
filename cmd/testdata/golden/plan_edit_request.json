@@ -1,0 +1,7 @@
+{
+  "args": {
+    "seconds": 15
+  },
+  "base_rev": 3,
+  "tool": "set_duration"
+}

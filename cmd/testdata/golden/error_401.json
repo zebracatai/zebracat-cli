@@ -1,0 +1,7 @@
+{
+  "code": "invalid_api_key",
+  "message": "Invalid API key.",
+  "hint": "Create a key at https://studio.zebracat.ai/api-keys.",
+  "type": "authentication",
+  "request_id": "req_01HZX3K9QW"
+}

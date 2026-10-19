@@ -1,0 +1,11 @@
+{
+  "idempotency_key": "s1",
+  "job_id": "scr_81c2",
+  "result": {
+    "narration_text": "Tip one: keep a schedule. Tip two: dim the lights. Tip three: no screens in bed.",
+    "plain_text": "Tip one: keep a schedule. ...",
+    "title": "Sleep better tonight"
+  },
+  "status": "completed",
+  "tool": "script"
+}

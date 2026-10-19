@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/zebracatai/zebracat-cli/internal/dash"
+	"github.com/zebracatai/zebracat-cli/internal/videos"
 )
 
 func splash() string {
@@ -37,6 +38,9 @@ func (m *model) authLine() string {
 func (m *model) View() string {
 	if m.wiz != nil {
 		return m.wizView()
+	}
+	if m.gen != nil && !m.busy {
+		return m.genView()
 	}
 	var b strings.Builder
 	// autocomplete hint line
@@ -175,13 +179,7 @@ func render(title string, data any) string {
 	return stMuted.Render(title+":") + "\n" + string(b)
 }
 
-func isTerminal(s string) bool {
-	switch s {
-	case "completed", "failed", "render_failed", "avatar_render_failed", "cancelled":
-		return true
-	}
-	return false
-}
+func isTerminal(s string) bool { return videos.IsTerminal(map[string]any{"status": s}) }
 
 // bestLink turns a status payload into a human link: the rendered MP4 if there
 // is one, else the studio project page (never the raw video.json).

@@ -1,0 +1,45 @@
+{
+  "dry_run": true,
+  "idempotency_key": "k",
+  "quote": {
+    "available": 0,
+    "basis": "plan",
+    "breakdown": [
+      {
+        "credits": 24,
+        "n": 1,
+        "scene_units": 1,
+        "seconds": 5
+      },
+      {
+        "credits": 24,
+        "n": 2,
+        "scene_units": 1,
+        "seconds": 5
+      },
+      {
+        "credits": 24,
+        "n": 3,
+        "scene_units": 1,
+        "seconds": 5
+      },
+      {
+        "credits": 24,
+        "n": 4,
+        "scene_units": 1,
+        "seconds": 5
+      }
+    ],
+    "credit_part": "AIVF",
+    "credits": 96,
+    "pool": "api_dollar",
+    "sufficient": false,
+    "usd": "4.80",
+    "why": "4 AI-video scenes of 5 s at balanced quality."
+  },
+  "valid": true,
+  "would_create": {
+    "rev": 3,
+    "should_render": true
+  }
+}

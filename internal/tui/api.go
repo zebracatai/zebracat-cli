@@ -10,6 +10,7 @@ import (
 
 	"github.com/zebracatai/zebracat-cli/internal/update"
 	"github.com/zebracatai/zebracat-cli/internal/version"
+	"github.com/zebracatai/zebracat-cli/internal/videos"
 )
 
 // ---- commands -------------------------------------------------------------
@@ -29,27 +30,58 @@ func (m *model) apiCmd(method, path string, body any) tea.Cmd {
 	}
 }
 
+// createCmd posts the wizard's video as a Director v2 plan (auto_generate=false):
+// the user sees the plan and its quote before anything is spent.
 func (m *model) createCmd(body map[string]any) tea.Cmd {
 	cl := m.cl
+	key := newKey()
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		var out map[string]any
-		_, err := cl.Do(ctx, "POST", "/api/v1/public/video/agentic", body, &out)
+		_, err := cl.DoWith(ctx, "POST", videos.Base+"/videos", body, map[string]string{"Idempotency-Key": key}, &out)
 		return apiMsg{kind: "create", out: out, err: err}
 	}
 }
 
-func (m *model) pollCmd(taskID string) tea.Cmd {
-	return func() tea.Msg { return m.poll(taskID) }
+// generateCmd presses Generate on a plan.
+func (m *model) generateCmd(taskID string, shouldRender bool) tea.Cmd {
+	cl := m.cl
+	key := newKey()
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		var out map[string]any
+		_, err := cl.DoWith(ctx, "POST", videos.Path(taskID, "generate"), map[string]any{"should_render": shouldRender},
+			map[string]string{"Idempotency-Key": key}, &out)
+		return apiMsg{kind: "generate", out: out, err: err, taskID: taskID}
+	}
 }
 
-func (m *model) poll(taskID string) tea.Msg {
+// quoteCmd reads what Generate will charge for a ready plan.
+func (m *model) quoteCmd(task map[string]any) tea.Cmd {
+	cl := m.cl
+	return func() tea.Msg {
+		id, _ := task["task_id"].(string)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		var q map[string]any
+		if _, err := cl.Do(ctx, "GET", videos.Path(id, "quote"), nil, &q); err != nil {
+			q, _ = task["quote"].(map[string]any) // the task view carries one too
+		}
+		return planReadyMsg{task: task, quote: q}
+	}
+}
+
+func (m *model) pollCmd(taskID string, untilDone bool) tea.Cmd {
+	return func() tea.Msg { return m.poll(taskID, untilDone) }
+}
+
+func (m *model) poll(taskID string, untilDone bool) tea.Msg {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	var out map[string]any
-	_, err := m.cl.Do(ctx, "GET", "/api/v1/public/video/status?task_id="+taskID, nil, &out)
-	return pollMsg{taskID: taskID, out: out, err: err}
+	out, err := videos.Fetch(ctx, m.cl, taskID)
+	return pollMsg{taskID: taskID, out: out, err: err, untilDone: untilDone}
 }
 
 // accountCmd fetches GET /account in the background to populate the header.

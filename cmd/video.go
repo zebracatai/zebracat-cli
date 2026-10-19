@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -15,153 +16,22 @@ import (
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/dash"
 	"github.com/zebracatai/zebracat-cli/internal/ui"
+	"github.com/zebracatai/zebracat-cli/internal/videos"
 )
 
 var (
-	vFrom        string
-	vPrompt      string
-	vScript      string
-	vURL         string
-	vAudioURL    string
-	vType        string
-	vDuration    int
-	vLanguage    string
-	vVoice       string
-	vStyle       int
-	vAspect      string
-	vMood        string
-	vPromptStyle string
-	vRender      bool
-	vWait        bool
-	vTimeout     time.Duration
-	vLimit       int
-	vStatus      string
-	vTo          string
-	vNoCaption   bool
-	vOut         string
+	vWait      bool
+	vTimeout   time.Duration
+	vLimit     int
+	vStatus    string
+	vURL       string
+	vTo        string
+	vNoCaption bool
+	vRender    bool
+	vOut       string
 )
 
-var videoCmd = &cobra.Command{Use: "video", Short: "Create, track and download videos"}
-
-var videoCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a video (agentic by default — the AI picks the best settings)",
-	Long: `Create a video from an idea, script, blog URL, or audio file.
-
-Examples:
-  zebracat video create --prompt "30s explainer on compound interest" --wait
-  zebracat video create --from idea --prompt "top 3 productivity tips" --type ai_video --duration 30
-  zebracat video create --from blog --url https://example.com/post --render --wait
-  zebracat video create --from script --script "Line one. Line two." --voice 21m00Tcm4TlvDq8ikWAM`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := newClient()
-		if err != nil {
-			return err
-		}
-		path, payload, err := buildCreate()
-		if err != nil {
-			return err
-		}
-		ctx, cancel := ctxTimeout(2 * time.Minute)
-		defer cancel()
-
-		var created map[string]any
-		if _, err := c.Do(ctx, "POST", path, payload, &created); err != nil {
-			return err
-		}
-		taskID, _ := created["task_id"].(string)
-		if !vWait || taskID == "" {
-			return emit(created, func() { submittedHuman(created, taskID) })
-		}
-		final, err := pollStatus(c, taskID, vTimeout)
-		if err != nil {
-			return err
-		}
-		return emit(final, func() { printStatusHuman(final) })
-	},
-}
-
-func buildCreate() (string, map[string]any, error) {
-	text := strings.TrimSpace(vPrompt)
-	common := map[string]any{}
-	if vLanguage != "" {
-		common["language"] = vLanguage
-	}
-	if vDuration != 0 {
-		common["duration"] = vDuration
-	}
-	if vVoice != "" {
-		common["voice_id"] = vVoice
-	}
-	if vAspect != "" {
-		common["aspect_ratio"] = vAspect
-	}
-	if vMood != "" {
-		common["mood"] = vMood
-	}
-	if vStyle != 0 {
-		common["style_id"] = vStyle
-	}
-	if vPromptStyle != "" {
-		common["prompt_style"] = vPromptStyle
-	}
-	common["should_render"] = vRender
-
-	switch vFrom {
-	case "agentic", "":
-		if text == "" {
-			return "", nil, clierr.Usage("--prompt is required")
-		}
-		p := map[string]any{"prompt": text, "should_render": vRender}
-		for _, k := range []string{"duration", "language", "mood", "aspect_ratio", "voice_id"} {
-			if v, ok := common[k]; ok {
-				p[k] = v
-			}
-		}
-		if vType != "" {
-			p["video_type"] = vType
-		}
-		return "/api/v1/public/video/agentic", p, nil
-	case "idea":
-		if text == "" {
-			return "", nil, clierr.Usage("--prompt (the idea) is required")
-		}
-		common["idea"] = text
-		return "/api/v1/public/video/idea", common, nil
-	case "script":
-		s := vScript
-		if s == "" {
-			s = text
-		}
-		if s == "" {
-			return "", nil, clierr.Usage("--script or --prompt is required")
-		}
-		common["script"] = s
-		return "/api/v1/public/video/script", common, nil
-	case "blog":
-		u := vURL
-		if u == "" {
-			u = text
-		}
-		if u == "" {
-			return "", nil, clierr.Usage("--url is required")
-		}
-		common["url"] = u
-		return "/api/v1/public/video/blog", common, nil
-	case "audio":
-		a := vAudioURL
-		if a == "" {
-			a = text
-		}
-		if a == "" {
-			return "", nil, clierr.Usage("--audio-url is required")
-		}
-		common["audio_url"] = a
-		return "/api/v1/public/video/audio", common, nil
-	default:
-		return "", nil, clierr.Usage("unknown --from %q (use idea|script|blog|audio|agentic)", vFrom)
-	}
-}
+var videoCmd = &cobra.Command{Use: "video", Short: "Create, plan, generate, track and download videos"}
 
 var videoListCmd = &cobra.Command{
 	Use:   "list",
@@ -196,7 +66,7 @@ var videoGetCmd = &cobra.Command{
 		}
 		ctx, cancel := ctxTimeout(60 * time.Second)
 		defer cancel()
-		out, err := fetchStatus(c, ctx, args[0])
+		out, err := videos.Fetch(ctx, c, args[0])
 		if err != nil {
 			return err
 		}
@@ -206,15 +76,18 @@ var videoGetCmd = &cobra.Command{
 
 var videoStatusCmd = &cobra.Command{
 	Use:   "status <task_id>",
-	Short: "Get just the status of a video (optionally --wait for it to finish)",
-	Args:  cobra.ExactArgs(1),
+	Short: "Get a video's phase/status (optionally --wait)",
+	Long: `Get a video's phase and status. With --wait, block until it needs you
+(plan_ready, needs_input) or is finished (completed, failed, cancelled).
+Director v2 tasks report a phase; v1 task ids keep the v1 status.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := newClient()
 		if err != nil {
 			return err
 		}
 		if vWait {
-			out, err := pollStatus(c, args[0], vTimeout)
+			out, err := waitTask(c, args[0], vTimeout, false)
 			if err != nil {
 				return err
 			}
@@ -222,7 +95,7 @@ var videoStatusCmd = &cobra.Command{
 		}
 		ctx, cancel := ctxTimeout(60 * time.Second)
 		defer cancel()
-		out, err := fetchStatus(c, ctx, args[0])
+		out, err := videos.Fetch(ctx, c, args[0])
 		if err != nil {
 			return err
 		}
@@ -232,7 +105,7 @@ var videoStatusCmd = &cobra.Command{
 
 var videoCancelCmd = &cobra.Command{
 	Use:   "cancel <task_id>",
-	Short: "Cancel a queued video",
+	Short: "Cancel a video before it generates",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := newClient()
@@ -242,7 +115,13 @@ var videoCancelCmd = &cobra.Command{
 		ctx, cancel := ctxTimeout(60 * time.Second)
 		defer cancel()
 		var out map[string]any
-		if _, err := c.Do(ctx, "POST", "/api/v1/public/video/"+args[0]+"/cancel", nil, &out); err != nil {
+		_, err = c.Do(ctx, "POST", videos.Path(args[0], "cancel"), nil, &out)
+		var ce *clierr.Error
+		if errors.As(err, &ce) && ce.Status == 404 { // a v1 task id
+			out = nil
+			_, err = c.Do(ctx, "POST", "/api/v1/public/video/"+url.PathEscape(args[0])+"/cancel", nil, &out)
+		}
+		if err != nil {
 			return err
 		}
 		return emit(out, func() { ui.Success("Cancelled %s", args[0]) })
@@ -260,20 +139,20 @@ var videoDownloadCmd = &cobra.Command{
 		}
 		ctx, cancel := ctxTimeout(5 * time.Minute)
 		defer cancel()
-		st, err := fetchStatus(c, ctx, args[0])
+		st, err := videos.Fetch(ctx, c, args[0])
 		if err != nil {
 			return err
 		}
 		mp4 := renderedMP4(st)
 		if mp4 == "" {
 			// Not a rendered file yet (e.g. an editable draft) — send them to studio.
-			if s := studioURL(st); s != "" {
-				return emit(map[string]any{"task_id": args[0], "studio_url": s, "status": st["status"]}, func() {
-					ui.Info("No rendered MP4 (status: %v) — open it in the studio instead:", st["status"])
+			if s := videos.EditorURL(st); s != "" {
+				return emit(map[string]any{"task_id": args[0], "studio_url": s, "status": st["status"], "phase": st["phase"]}, func() {
+					ui.Info("No rendered MP4 (%s) — open it in the studio instead:", videos.PhaseOrStatus(st))
 					ui.Link("✎", s)
 				})
 			}
-			return clierr.API("video is not ready (status: %v)", st["status"])
+			return clierr.API("video is not ready (%s)", videos.PhaseOrStatus(st))
 		}
 		if vOut == "" {
 			return emit(map[string]any{"task_id": args[0], "video_url": mp4}, func() {
@@ -315,7 +194,7 @@ var videoTranslateCmd = &cobra.Command{
 		if !vWait || taskID == "" {
 			return emit(created, func() { submittedHuman(created, taskID) })
 		}
-		final, err := pollStatus(c, taskID, vTimeout)
+		final, err := waitTask(c, taskID, vTimeout, true)
 		if err != nil {
 			return err
 		}
@@ -325,78 +204,82 @@ var videoTranslateCmd = &cobra.Command{
 
 // --- helpers ---------------------------------------------------------------
 
-var terminalStatuses = map[string]bool{
-	"completed": true, "failed": true, "render_failed": true,
-	"avatar_render_failed": true, "cancelled": true,
-}
-
-func fetchStatus(c *client.Client, ctx context.Context, taskID string) (map[string]any, error) {
-	var out map[string]any
-	if _, err := c.Do(ctx, "GET", "/api/v1/public/video/status?task_id="+taskID, nil, &out); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// pollStatus blocks until the task reaches a terminal status or timeout elapses.
-func pollStatus(c *client.Client, taskID string, timeout time.Duration) (map[string]any, error) {
-	deadline := time.Now().Add(timeout)
-	sp := ui.StartSpinner("Rendering… (this can take a few minutes)")
+// waitTask polls a task with a spinner on a terminal; untilDone skips plan_ready.
+func waitTask(c *client.Client, taskID string, timeout time.Duration, untilDone bool) (map[string]any, error) {
+	label := "Working… (a plan takes about a minute; a video a few)"
+	sp := ui.StartSpinner(label)
 	defer sp.Stop()
-	for {
-		ctx, cancel := ctxTimeout(60 * time.Second)
-		out, err := fetchStatus(c, ctx, taskID)
-		cancel()
-		if err != nil {
-			return nil, err
-		}
-		if st, _ := out["status"].(string); terminalStatuses[st] {
-			return out, nil
-		}
-		if time.Now().After(deadline) {
-			return out, clierr.Timeout("timed out after %s; last status: %v (task still running — poll later with `zebracat video status %s`)", timeout, out["status"], taskID)
-		}
-		time.Sleep(5 * time.Second)
+	out, err := videos.Wait(c, taskID, videos.WaitOptions{Timeout: timeout, UntilDone: untilDone, Clock: clock, Interval: pollInterval})
+	if err != nil && out != nil {
+		// A timeout still prints the last state on stdout for scripts.
+		_ = emit(out, func() {})
 	}
+	return out, err
 }
 
 func printStatusHuman(m map[string]any) {
-	pairs := [][2]string{
-		{"task_id", fmt.Sprint(m["task_id"])},
-		{"status", fmt.Sprint(m["status"])},
-		{"type", fmt.Sprint(m["video_type"])},
+	pairs := [][2]string{{"task_id", fmt.Sprint(m["task_id"])}}
+	if p := videos.Phase(m); p != "" {
+		pairs = append(pairs, [2]string{"phase", phaseLabel(p)})
 	}
-	if e, ok := m["error"].(string); ok && e != "" {
-		pairs = append(pairs, [2]string{"error", e})
+	pairs = append(pairs, [2]string{"status", fmt.Sprint(m["status"])})
+	if t, ok := m["video_type"]; ok {
+		pairs = append(pairs, [2]string{"type", fmt.Sprint(t)})
+	}
+	switch e := m["error"].(type) {
+	case string:
+		if e != "" {
+			pairs = append(pairs, [2]string{"error", e})
+		}
+	case map[string]any:
+		pairs = append(pairs, [2]string{"error", fmt.Sprintf("%v (%v)", e["message"], e["code"])})
 	}
 	ui.KV(pairs)
+	if q, ok := m["question"].(map[string]any); ok {
+		ui.Heading("Question")
+		fmt.Printf("  %v\n", q["text"])
+		if opts, ok := q["options"].([]any); ok {
+			for _, o := range opts {
+				fmt.Printf("    • %v\n", o)
+			}
+		}
+		ui.Info("Answer with: zebracat video answer %v --question %v --answer \"…\"", m["task_id"], q["id"])
+	}
+	if lines := videos.SummaryLines(m); len(lines) > 0 && videos.Phase(m) == "plan_ready" {
+		ui.Heading("Plan")
+		for _, l := range lines {
+			fmt.Println("  " + l)
+		}
+	}
+	if q, ok := m["quote"].(map[string]any); ok {
+		ui.Info("Quote: %s", videos.QuoteLine(q))
+	}
+	if videos.Phase(m) == "plan_ready" {
+		ui.Info("Next: zebracat plan show %v · zebracat video generate %v", m["task_id"], m["task_id"])
+	}
 	if mp4 := renderedMP4(m); mp4 != "" {
 		ui.Link("▶ Video:", mp4)
 	}
-	if s := studioURL(m); s != "" {
+	if s := videos.EditorURL(m); s != "" {
 		ui.Link("✎ Open in studio:", s)
 	}
 }
 
-// projectID extracts the numeric project id as a clean string.
-func projectID(m map[string]any) string {
-	switch v := m["project_id"].(type) {
-	case float64:
-		return fmt.Sprintf("%d", int64(v))
-	case string:
-		return v
-	case int:
-		return fmt.Sprintf("%d", v)
+// phaseLabel is a friendly phase name for people.
+func phaseLabel(p string) string {
+	switch p {
+	case "planning":
+		return "planning — writing the plan"
+	case "needs_input":
+		return "needs_input — the plan has a question for you"
+	case "plan_ready":
+		return "plan_ready — review, then generate"
+	case "generating":
+		return "generating — making the clips"
+	case "rendering":
+		return "rendering — exporting the MP4"
 	}
-	return ""
-}
-
-// studioURL is the human "open / watch / edit" link for a project.
-func studioURL(m map[string]any) string {
-	if pid := projectID(m); pid != "" {
-		return "https://studio.zebracat.ai/storyboard/" + pid
-	}
-	return ""
+	return p
 }
 
 // renderedMP4 returns the result URL only when it's an actual playable file
@@ -431,7 +314,7 @@ func toLangCode(s string) string {
 // submittedHuman prints the friendly "submitted" lines with a studio link.
 func submittedHuman(created map[string]any, taskID string) {
 	ui.Success("Submitted. task_id=%s", taskID)
-	if s := studioURL(created); s != "" {
+	if s := videos.EditorURL(created); s != "" {
 		ui.Link("✎ Track in studio:", s)
 	}
 }
@@ -507,28 +390,10 @@ func downloadFile(url, dest string) error {
 }
 
 func init() {
-	f := videoCreateCmd.Flags()
-	f.StringVar(&vFrom, "from", "agentic", "Input type: idea|script|blog|audio|agentic")
-	f.StringVar(&vPrompt, "prompt", "", "The idea / text input (universal)")
-	f.StringVar(&vScript, "script", "", "Full voice-over script (for --from script)")
-	f.StringVar(&vURL, "url", "", "Blog/article URL (for --from blog)")
-	f.StringVar(&vAudioURL, "audio-url", "", "Audio file URL (for --from audio)")
-	f.StringVar(&vType, "type", "", "Video type: ai_video|moving_ai_images|ai_avatar|stock_footage|brainrot")
-	f.IntVar(&vDuration, "duration", 0, "Duration in seconds: 15|30|60|120|180")
-	f.StringVar(&vLanguage, "language", "", "Voice-over language (e.g. english)")
-	f.StringVar(&vVoice, "voice", "", "Voice ID (see `zebracat voice list`)")
-	f.IntVar(&vStyle, "style", 0, "Visual style ID (see `zebracat style list`)")
-	f.StringVar(&vAspect, "aspect", "", "Aspect ratio: vertical|square|horizontal")
-	f.StringVar(&vMood, "mood", "", "Mood (e.g. energetic, inspiring)")
-	f.StringVar(&vPromptStyle, "prompt-style", "", "Narration style (see `zebracat video prompt-styles`)")
-	f.BoolVar(&vRender, "render", false, "Render a final MP4 (otherwise saved as an editable project)")
-	f.BoolVar(&vWait, "wait", false, "Block until the video finishes")
-	f.DurationVar(&vTimeout, "timeout", 30*time.Minute, "Max time to wait with --wait")
-
 	videoListCmd.Flags().IntVar(&vLimit, "limit", 20, "Max rows")
 	videoListCmd.Flags().StringVar(&vStatus, "status", "", "Filter by status")
 
-	videoStatusCmd.Flags().BoolVar(&vWait, "wait", false, "Block until the video finishes")
+	videoStatusCmd.Flags().BoolVar(&vWait, "wait", false, "Block until plan_ready, needs_input or finished")
 	videoStatusCmd.Flags().DurationVar(&vTimeout, "timeout", 30*time.Minute, "Max time to wait with --wait")
 
 	videoDownloadCmd.Flags().StringVarP(&vOut, "output", "o", "", "Save to this file instead of printing the URL")
