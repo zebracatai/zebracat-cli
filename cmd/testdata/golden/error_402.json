@@ -1,0 +1,7 @@
+{
+  "code": "insufficient_funds",
+  "message": "Your API balance is $0.00; this video needs $4.80.",
+  "hint": "Top up your API balance at https://studio.zebracat.ai/api-keys, then run Generate again.",
+  "type": "insufficient_funds",
+  "request_id": "req_01HZX3K9QW"
+}

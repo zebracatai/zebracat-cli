@@ -1,0 +1,30 @@
+{
+  "qualities": [
+    {
+      "credits_per_5s": 12,
+      "models": [
+        "grok-imagine"
+      ],
+      "quality": "quick"
+    },
+    {
+      "credits_per_5s": 24,
+      "models": [
+        "kling-2.5-turbo"
+      ],
+      "quality": "balanced"
+    },
+    {
+      "credits_per_5s": 60,
+      "models": [
+        "veo-3.1"
+      ],
+      "quality": "cinematic"
+    },
+    {
+      "credits_per_5s": null,
+      "models": [],
+      "quality": "auto"
+    }
+  ]
+}

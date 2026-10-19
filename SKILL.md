@@ -1,9 +1,10 @@
 ---
 name: zebracat-cli
-version: 0.1.0
+version: 0.2.0
 description: |
   Make AI videos from the terminal with the Zebracat CLI. Use when the user wants to
-  generate, translate, list, or download Zebracat videos, or manage voices/avatars/
+  generate, plan, edit, price, translate, clone, list or download Zebracat videos, write
+  scripts/hooks/voice-overs/images/clips with Zebracat Studio, or manage voices/avatars/
   account from a shell or an agent. Wraps `zebracat` (JSON out, stable exit codes).
 argument-hint: "[idea or topic]"
 allowed-tools: Bash, Read, Write
@@ -22,49 +23,78 @@ metadata:
 ## Preflight
 
 1. Is the CLI installed? `zebracat version` (exit 0 = yes). If not:
-   `curl -fsSL https://static.zebracat.ai/cli/install.sh | bash`
-2. Are we authenticated? `zebracat auth status`.
-   - CI / non-interactive: ensure `ZEBRACAT_API_KEY` is set (pay-as-you-go).
-   - Interactive user: `zebracat auth login` (browser; spends plan credits).
-   Stop and ask the user to authenticate if neither is available.
+   `curl -fsSL https://raw.githubusercontent.com/zebracatai/zebracat-cli/main/install.sh | bash`
+2. Are we authenticated? `zebracat auth status`. The CLI uses an API key: ensure
+   `ZEBRACAT_API_KEY` is set (paid from the API dollar balance). Otherwise stop and ask
+   the user for a key (studio.zebracat.ai → API Keys).
 
-## Create a video
-
-Default to **agentic** mode (the AI chooses type/style/voice). Add specifics only when the
-user gives them.
+## Make a video: one line
 
 ```bash
-zebracat video create --prompt "<the user's idea>" --render --wait --timeout 30m
+zebracat video create "<the user's idea>" --wait --timeout 45m
 ```
 
-Useful flags: `--from idea|script|blog|audio|agentic`, `--type ai_video|moving_ai_images|ai_avatar|stock_footage|brainrot`,
-`--duration 15|30|60|120|180`, `--aspect vertical|square|horizontal`, `--language`, `--voice <id>`, `--style <id>`.
+Director v2 writes a plan, generates it and renders the MP4. With `--wait` the JSON has
+`phase: "completed"` and `video_url`. If it stops at `phase: "needs_input"`, read
+`.question` and answer (below).
 
-Parse the JSON: on success you get `{ "task_id": ..., "status": ... }`. With `--wait` you get
-the final status incl. `video_url` when `status == "completed"`.
-
-## Track, download, translate
+## Make a video: plan first (preferred when money matters or the brief is vague)
 
 ```bash
-zebracat video list
-zebracat video status <task_id> --wait
-zebracat video download <task_id> -o out.mp4
+id=$(zebracat video create --brief "<idea>" --plan-only --wait | jq -r .task_id)   # stops at plan_ready
+zebracat plan show "$id"                       # show the user .screenplay / summary_lines
+zebracat video quote "$id"                     # .credits, .usd, .why — tell the user the price
+# change it if the user asks:
+zebracat plan chat "$id" "<the user's words>"  # free, 20/hour
+zebracat plan edit "$id" --tool set_duration --args '{"seconds":15}'
+# only after the user says yes:
+zebracat video generate "$id" --yes --wait
+zebracat video download "$id" -o out.mp4
+```
+
+- `--dry-run` on `video create` / `video generate` returns the quote and spends nothing.
+- `video generate` without `--yes` refuses in scripts (exit 2, `confirmation_required`):
+  never pass `--yes` before the user agreed to the quote.
+- Plan questions: `zebracat video status "$id"` shows `.question.id`; answer with
+  `zebracat video answer "$id" --question <id> --answer "<text>"`, then wait again.
+
+## Flags that matter
+
+- What the brief is: `--input idea|script|vo-script|script-scenes|url`; `--script <file>`,
+  `--url <page>`, `--file <brief-file>` set it for you.
+- Look and sound: `--media-type ai_video|ai_image_video|brainrot|stock`,
+  `--audio narration|dialogue|silent`, `--aspect vertical|horizontal|square`,
+  `--quality quick|balanced|cinematic|auto`, `--seconds N`, `--language`.
+- Assets: `--voice <id>`, `--style <id>`, `--preset <slug>` (`zebracat presets list`),
+  `--upload <url>[:person|place|product|style|other]` (repeatable), `--brand <id>`.
+- `--no-render` keeps an editable project; `--idempotency-key <k>` makes a retry safe
+  (the default key is printed as `idempotency_key`).
+
+Only pass what the user said; Director v2 decides the rest from the brief.
+
+## Other jobs
+
+```bash
+zebracat video status <task_id> --wait        # .phase
+zebracat video clone --url <video> --mode remix|remake_niche|… [--topic] --wait
 zebracat video translate --url <mp4-url> --to spanish --render --wait
-```
-
-## Discover assets (before creating, if the user is picky)
-
-```bash
-zebracat voice list --language english
-zebracat avatar list
-zebracat style list
-zebracat account show          # plan + credit balances
+zebracat studio script "<idea>" --seconds 30 --wait      # .result.narration_text
+zebracat studio hooks --script script.txt                # .hooks[].line
+zebracat studio voice --text script.txt --voice <id> --dry-run   # paid: quote first
+zebracat studio image "<prompt>" --aspect vertical --count 2 --wait
+zebracat studio clip "<prompt>" --seconds 5 --dry-run           # paid: quote first
+zebracat models list ; zebracat presets list ; zebracat voice list --language english
+zebracat account show                                    # balances
 ```
 
 ## Rules
 
-- Parse stdout as JSON; **don't** add `--human`.
-- Check exit codes: `3` → tell the user to authenticate; `2` → fix the arguments; `4` →
-  the job is still running, poll later with `zebracat video status`.
-- Announce the video type you chose and confirm before spending credits if the request is vague.
-- Log finished videos to `zebracat-video-log.jsonl` (one JSON line: task_id, status, video_url, topic).
+- Parse stdout as JSON; **don't** add `--human`. Errors are JSON on stderr:
+  `{"error":{code,message,hint,type,retryable,request_id}}`.
+- Exit codes: `2` → fix the arguments (or `confirmation_required`: ask the user);
+  `3` → tell the user to set a valid API key; `1` with `type: insufficient_funds` → show
+  the `hint` verbatim (it says where to top up); `1` with `retryable: true` → wait and
+  retry; `4` → the job is still running, poll later with `zebracat video status`.
+- Tell the user the quote before any paid step (`video generate`, `video clone`,
+  `studio voice`, `studio clip`); script, hooks, images, plans and plan edits are free.
+- Log finished videos to `zebracat-video-log.jsonl` (one JSON line: task_id, phase, video_url, topic).

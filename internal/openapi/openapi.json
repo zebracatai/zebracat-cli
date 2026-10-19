@@ -1,0 +1,3065 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Zebracat Public API",
+    "version": "1.0.0",
+    "description": "Contract copy for the zebracat CLI (ZEB-638 PLAN \u00a71 fixed names). Refresh it from the live server with `make openapi` once the backend serves OpenAPI 3.1."
+  },
+  "servers": [
+    {
+      "url": "https://api.zebracat.ai"
+    }
+  ],
+  "paths": {
+    "/api/v1/public/videos": {
+      "post": {
+        "operationId": "videos_create",
+        "summary": "Create a video (Director v2)",
+        "responses": {
+          "202": {
+            "description": "Accepted: the plan is being written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoAccepted"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "pending",
+                      "phase": "planning",
+                      "project_id": null,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "dry_run: the estimate quote; nothing is created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DryRun"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "dry_run": true,
+                      "valid": true,
+                      "quote": {
+                        "pool": "api_dollar",
+                        "credits": 120,
+                        "credit_part": "AIVF",
+                        "usd": "6.00",
+                        "basis": "estimate",
+                        "breakdown": [
+                          {
+                            "item": "ai_video",
+                            "seconds": 30,
+                            "credits": 120
+                          }
+                        ],
+                        "available": 0,
+                        "sufficient": false,
+                        "why": "An estimate from 30 s of balanced AI video; the plan's own quote replaces it."
+                      },
+                      "would_create": {
+                        "brief": "Why cats knock things off tables",
+                        "input_kind": "idea",
+                        "auto_generate": false,
+                        "options": {
+                          "seconds": 20
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "media_type must be one of ai_video, ai_image_video, brainrot, stock.",
+                      "code": "invalid_choice",
+                      "type": "invalid_request",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Pick a value from allowed_values.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#invalid_choice",
+                      "field": "options.media_type",
+                      "allowed_values": [
+                        "ai_video",
+                        "ai_image_video",
+                        "brainrot",
+                        "stock"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bad key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "Invalid API key.",
+                      "code": "invalid_api_key",
+                      "type": "authentication",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Create a key at https://studio.zebracat.ai/api-keys.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#invalid_api_key"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Not enough funds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "Your API balance is $0.00; this video needs $4.80.",
+                      "code": "insufficient_funds",
+                      "type": "insufficient_funds",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Top up your API balance at https://studio.zebracat.ai/api-keys, then run Generate again.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#insufficient_funds",
+                      "balance": "0.00",
+                      "required_usd": "4.80"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "You already have 3 plans being written.",
+                      "code": "too_many_runs",
+                      "type": "rate_limited",
+                      "retryable": true,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Wait for one to finish, or cancel one with POST /videos/{task_id}/cancel.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#too_many_runs"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVideo"
+              },
+              "examples": {
+                "one_call": {
+                  "value": {
+                    "brief": "Why cats knock things off tables",
+                    "options": {
+                      "seconds": 20
+                    }
+                  }
+                },
+                "plan_only": {
+                  "value": {
+                    "brief": "Why cats knock things off tables",
+                    "auto_generate": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/videos/{task_id}": {
+      "get": {
+        "operationId": "videos_retrieve",
+        "summary": "A video's task, phase and links",
+        "responses": {
+          "200": {
+            "description": "The task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoTask"
+                },
+                "examples": {
+                  "planning": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "pending",
+                      "phase": "planning",
+                      "engine": "director_v2",
+                      "project_id": null,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+                      }
+                    }
+                  },
+                  "needs_input": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "pending",
+                      "phase": "needs_input",
+                      "engine": "director_v2",
+                      "project_id": 48213,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                        "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+                        "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+                        "editor": "https://studio.zebracat.ai/storyboard/48213"
+                      },
+                      "question": {
+                        "id": "q_audio",
+                        "text": "Should the video have a voice-over or people talking?",
+                        "options": [
+                          "Voice-over",
+                          "People talking"
+                        ]
+                      }
+                    }
+                  },
+                  "plan_ready": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "pending",
+                      "phase": "plan_ready",
+                      "engine": "director_v2",
+                      "project_id": 48213,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                        "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+                        "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+                        "editor": "https://studio.zebracat.ai/storyboard/48213"
+                      },
+                      "plan_summary": [
+                        "A 20 s narrated AI video, vertical, in English.",
+                        "4 scenes, one voice."
+                      ],
+                      "quote": {
+                        "pool": "api_dollar",
+                        "credits": 96,
+                        "credit_part": "AIVF",
+                        "usd": "4.80",
+                        "basis": "plan",
+                        "breakdown": [
+                          {
+                            "n": 1,
+                            "seconds": 5,
+                            "scene_units": 1,
+                            "credits": 24
+                          },
+                          {
+                            "n": 2,
+                            "seconds": 5,
+                            "scene_units": 1,
+                            "credits": 24
+                          },
+                          {
+                            "n": 3,
+                            "seconds": 5,
+                            "scene_units": 1,
+                            "credits": 24
+                          },
+                          {
+                            "n": 4,
+                            "seconds": 5,
+                            "scene_units": 1,
+                            "credits": 24
+                          }
+                        ],
+                        "available": 0,
+                        "sufficient": false,
+                        "why": "4 AI-video scenes of 5 s at balanced quality."
+                      },
+                      "editor_url": "https://studio.zebracat.ai/storyboard/48213"
+                    }
+                  },
+                  "generating": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "processing",
+                      "phase": "generating",
+                      "engine": "director_v2",
+                      "project_id": 48213,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                        "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+                        "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+                        "editor": "https://studio.zebracat.ai/storyboard/48213"
+                      },
+                      "editor_url": "https://studio.zebracat.ai/storyboard/48213"
+                    }
+                  },
+                  "completed": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "completed",
+                      "phase": "completed",
+                      "engine": "director_v2",
+                      "project_id": 48213,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                        "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+                        "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+                        "editor": "https://studio.zebracat.ai/storyboard/48213"
+                      },
+                      "video_url": "https://cdn.zebracat.ai/videos/48213/final.mp4",
+                      "editor_url": "https://studio.zebracat.ai/storyboard/48213"
+                    }
+                  },
+                  "failed": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "failed",
+                      "phase": "failed",
+                      "engine": "director_v2",
+                      "project_id": 48213,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                        "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+                        "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+                        "editor": "https://studio.zebracat.ai/storyboard/48213"
+                      },
+                      "error": {
+                        "code": "director_v2_too_long",
+                        "message": "The plan runs longer than this account allows."
+                      }
+                    }
+                  },
+                  "cancelled": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "cancelled",
+                      "phase": "cancelled",
+                      "engine": "director_v2",
+                      "project_id": 48213,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                        "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+                        "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+                        "editor": "https://studio.zebracat.ai/storyboard/48213"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "No video with this task_id.",
+                      "code": "not_found",
+                      "type": "not_found",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#not_found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Slow down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "Request was throttled.",
+                      "code": "throttled",
+                      "type": "rate_limited",
+                      "retryable": true,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Wait for Retry-After seconds.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#throttled"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/videos/{task_id}/plan": {
+      "get": {
+        "operationId": "videos_plan_retrieve",
+        "summary": "The plan (screenplay) as the dashboard card reads it",
+        "responses": {
+          "200": {
+            "description": "The plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plan"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "project_id": 48213,
+                      "rev": 3,
+                      "screenplay": {
+                        "version": 2,
+                        "title": "Why cats knock things off tables",
+                        "media_type": "ai_video",
+                        "aspect": "vertical",
+                        "language": "english",
+                        "audio": {
+                          "mode": "narration"
+                        },
+                        "beats": [
+                          {
+                            "n": 1,
+                            "seconds": 5,
+                            "narration": "Ever wondered why your cat swipes your mug off the table?"
+                          },
+                          {
+                            "n": 2,
+                            "seconds": 5,
+                            "narration": "It starts with instinct: cats test what moves."
+                          },
+                          {
+                            "n": 3,
+                            "seconds": 5,
+                            "narration": "Then comes attention. A falling cup always gets you running."
+                          },
+                          {
+                            "n": 4,
+                            "seconds": 5,
+                            "narration": "So next time, play with them first. Your mug will thank you."
+                          }
+                        ]
+                      },
+                      "render": {
+                        "quality": "balanced"
+                      },
+                      "summary_lines": [
+                        "A 20 s narrated AI video, vertical, in English.",
+                        "4 scenes, one voice."
+                      ],
+                      "versions": [
+                        {
+                          "rev": 1
+                        },
+                        {
+                          "rev": 2
+                        },
+                        {
+                          "rev": 3
+                        }
+                      ],
+                      "can_undo": true,
+                      "asks": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "No video with this task_id.",
+                      "code": "not_found",
+                      "type": "not_found",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#not_found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/videos/{task_id}/plan/edit": {
+      "post": {
+        "operationId": "videos_plan_edit",
+        "summary": "Apply one structured edit to the plan",
+        "responses": {
+          "200": {
+            "description": "The new plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plan"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "project_id": 48213,
+                      "rev": 4,
+                      "screenplay": {
+                        "version": 2,
+                        "title": "Why cats knock things off tables",
+                        "media_type": "ai_video",
+                        "aspect": "vertical",
+                        "language": "english",
+                        "audio": {
+                          "mode": "narration"
+                        },
+                        "beats": [
+                          {
+                            "n": 1,
+                            "seconds": 5,
+                            "narration": "Ever wondered why your cat swipes your mug off the table?"
+                          },
+                          {
+                            "n": 2,
+                            "seconds": 5,
+                            "narration": "It starts with instinct: cats test what moves."
+                          },
+                          {
+                            "n": 3,
+                            "seconds": 5,
+                            "narration": "Then comes attention. A falling cup always gets you running."
+                          },
+                          {
+                            "n": 4,
+                            "seconds": 5,
+                            "narration": "So next time, play with them first. Your mug will thank you."
+                          }
+                        ]
+                      },
+                      "render": {
+                        "quality": "balanced"
+                      },
+                      "summary_lines": [
+                        "A 20 s narrated AI video, vertical, in English.",
+                        "4 scenes, one voice."
+                      ],
+                      "versions": [
+                        {
+                          "rev": 1
+                        },
+                        {
+                          "rev": 2
+                        },
+                        {
+                          "rev": 3
+                        }
+                      ],
+                      "can_undo": true,
+                      "asks": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid tool",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "media_type must be one of ai_video, ai_image_video, brainrot, stock.",
+                      "code": "invalid_choice",
+                      "type": "invalid_request",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Pick a value from allowed_values.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#invalid_choice",
+                      "field": "options.media_type",
+                      "allowed_values": [
+                        "ai_video",
+                        "ai_image_video",
+                        "brainrot",
+                        "stock"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale base_rev",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "The plan changed since rev 2.",
+                      "code": "stale_rev",
+                      "type": "conflict",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Re-read the plan and pass its rev as base_rev.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#stale_rev"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanEdit"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "tool": "set_duration",
+                    "args": {
+                      "seconds": 15
+                    },
+                    "base_rev": 3
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/videos/{task_id}/plan/undo": {
+      "post": {
+        "operationId": "videos_plan_undo",
+        "summary": "Undo the last plan change",
+        "responses": {
+          "200": {
+            "description": "The plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plan"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "project_id": 48213,
+                      "rev": 5,
+                      "screenplay": {
+                        "version": 2,
+                        "title": "Why cats knock things off tables",
+                        "media_type": "ai_video",
+                        "aspect": "vertical",
+                        "language": "english",
+                        "audio": {
+                          "mode": "narration"
+                        },
+                        "beats": [
+                          {
+                            "n": 1,
+                            "seconds": 5,
+                            "narration": "Ever wondered why your cat swipes your mug off the table?"
+                          },
+                          {
+                            "n": 2,
+                            "seconds": 5,
+                            "narration": "It starts with instinct: cats test what moves."
+                          },
+                          {
+                            "n": 3,
+                            "seconds": 5,
+                            "narration": "Then comes attention. A falling cup always gets you running."
+                          },
+                          {
+                            "n": 4,
+                            "seconds": 5,
+                            "narration": "So next time, play with them first. Your mug will thank you."
+                          }
+                        ]
+                      },
+                      "render": {
+                        "quality": "balanced"
+                      },
+                      "summary_lines": [
+                        "A 20 s narrated AI video, vertical, in English.",
+                        "4 scenes, one voice."
+                      ],
+                      "versions": [
+                        {
+                          "rev": 1
+                        },
+                        {
+                          "rev": 2
+                        },
+                        {
+                          "rev": 3
+                        }
+                      ],
+                      "can_undo": true,
+                      "asks": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale base_rev",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "The plan changed since rev 2.",
+                      "code": "stale_rev",
+                      "type": "conflict",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Re-read the plan and pass its rev as base_rev.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#stale_rev"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanUndo"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "base_rev": 4
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/videos/{task_id}/plan/chat": {
+      "post": {
+        "operationId": "videos_plan_chat",
+        "summary": "Change the plan in plain words",
+        "responses": {
+          "200": {
+            "description": "The agent's turn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanChatTurn"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "reply": "Done: tightened to 15 s and punched up the jokes.",
+                      "plan": {
+                        "project_id": 48213,
+                        "rev": 4,
+                        "screenplay": {
+                          "version": 2,
+                          "title": "Why cats knock things off tables",
+                          "media_type": "ai_video",
+                          "aspect": "vertical",
+                          "language": "english",
+                          "audio": {
+                            "mode": "narration"
+                          },
+                          "beats": [
+                            {
+                              "n": 1,
+                              "seconds": 5,
+                              "narration": "Ever wondered why your cat swipes your mug off the table?"
+                            },
+                            {
+                              "n": 2,
+                              "seconds": 5,
+                              "narration": "It starts with instinct: cats test what moves."
+                            },
+                            {
+                              "n": 3,
+                              "seconds": 5,
+                              "narration": "Then comes attention. A falling cup always gets you running."
+                            },
+                            {
+                              "n": 4,
+                              "seconds": 5,
+                              "narration": "So next time, play with them first. Your mug will thank you."
+                            }
+                          ]
+                        },
+                        "render": {
+                          "quality": "balanced"
+                        },
+                        "summary_lines": [
+                          "A 20 s narrated AI video, vertical, in English.",
+                          "4 scenes, one voice."
+                        ],
+                        "versions": [
+                          {
+                            "rev": 1
+                          },
+                          {
+                            "rev": 2
+                          },
+                          {
+                            "rev": 3
+                          }
+                        ],
+                        "can_undo": true,
+                        "asks": null
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Plan-chat allowance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "Plan-chat allowance used up.",
+                      "code": "studio_allowance",
+                      "type": "rate_limited",
+                      "retryable": true,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Try again in an hour.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#studio_allowance",
+                      "retry_after_s": 3600
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanChat"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "message": "Make it funnier and 15 seconds"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/videos/{task_id}/quote": {
+      "get": {
+        "operationId": "videos_quote",
+        "summary": "What Generate will charge for the current plan",
+        "responses": {
+          "200": {
+            "description": "The quote",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "pool": "api_dollar",
+                      "credits": 96,
+                      "credit_part": "AIVF",
+                      "usd": "4.80",
+                      "basis": "plan",
+                      "breakdown": [
+                        {
+                          "n": 1,
+                          "seconds": 5,
+                          "scene_units": 1,
+                          "credits": 24
+                        },
+                        {
+                          "n": 2,
+                          "seconds": 5,
+                          "scene_units": 1,
+                          "credits": 24
+                        },
+                        {
+                          "n": 3,
+                          "seconds": 5,
+                          "scene_units": 1,
+                          "credits": 24
+                        },
+                        {
+                          "n": 4,
+                          "seconds": 5,
+                          "scene_units": 1,
+                          "credits": 24
+                        }
+                      ],
+                      "available": 0,
+                      "sufficient": false,
+                      "why": "4 AI-video scenes of 5 s at balanced quality."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/videos/{task_id}/generate": {
+      "post": {
+        "operationId": "videos_generate",
+        "summary": "Generate the video from the plan (paid)",
+        "responses": {
+          "202": {
+            "description": "Generating",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoTask"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "processing",
+                      "phase": "generating",
+                      "engine": "director_v2",
+                      "project_id": 48213,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                        "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+                        "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+                        "editor": "https://studio.zebracat.ai/storyboard/48213"
+                      },
+                      "editor_url": "https://studio.zebracat.ai/storyboard/48213"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "dry_run: the plan quote",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DryRun"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "dry_run": true,
+                      "valid": true,
+                      "quote": {
+                        "pool": "api_dollar",
+                        "credits": 96,
+                        "credit_part": "AIVF",
+                        "usd": "4.80",
+                        "basis": "plan",
+                        "breakdown": [
+                          {
+                            "n": 1,
+                            "seconds": 5,
+                            "scene_units": 1,
+                            "credits": 24
+                          },
+                          {
+                            "n": 2,
+                            "seconds": 5,
+                            "scene_units": 1,
+                            "credits": 24
+                          },
+                          {
+                            "n": 3,
+                            "seconds": 5,
+                            "scene_units": 1,
+                            "credits": 24
+                          },
+                          {
+                            "n": 4,
+                            "seconds": 5,
+                            "scene_units": 1,
+                            "credits": 24
+                          }
+                        ],
+                        "available": 0,
+                        "sufficient": false,
+                        "why": "4 AI-video scenes of 5 s at balanced quality."
+                      },
+                      "would_create": {
+                        "rev": 3,
+                        "should_render": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Not enough funds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "Your API balance is $0.00; this video needs $4.80.",
+                      "code": "insufficient_funds",
+                      "type": "insufficient_funds",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Top up your API balance at https://studio.zebracat.ai/api-keys, then run Generate again.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#insufficient_funds",
+                      "balance": "0.00",
+                      "required_usd": "4.80"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "The plan changed since rev 2.",
+                      "code": "stale_rev",
+                      "type": "conflict",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Re-read the plan and pass its rev as base_rev.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#stale_rev"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Generate"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "should_render": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/videos/{task_id}/answer": {
+      "post": {
+        "operationId": "videos_answer",
+        "summary": "Answer the plan's question",
+        "responses": {
+          "200": {
+            "description": "The task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoTask"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "pending",
+                      "phase": "planning",
+                      "engine": "director_v2",
+                      "project_id": null,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Answer"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "question_id": "q_audio",
+                    "answer": "Voice-over"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/videos/{task_id}/cancel": {
+      "post": {
+        "operationId": "videos_cancel",
+        "summary": "Cancel a plan before Generate",
+        "responses": {
+          "200": {
+            "description": "The task",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoTask"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "cancelled",
+                      "phase": "cancelled",
+                      "engine": "director_v2",
+                      "project_id": 48213,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                        "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+                        "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+                        "editor": "https://studio.zebracat.ai/storyboard/48213"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already generating",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "This video is already generating.",
+                      "code": "already_generating",
+                      "type": "conflict",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#already_generating"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/video/presets": {
+      "get": {
+        "operationId": "video_presets_list",
+        "summary": "Video presets (the /tools pages and preset doors)",
+        "responses": {
+          "200": {
+            "description": "Presets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preset"
+                },
+                "examples": {
+                  "default": {
+                    "value": [
+                      {
+                        "preset": "street_interview",
+                        "door": "preset",
+                        "defaults": {
+                          "media_type": "ai_video",
+                          "audio_mode": "dialogue"
+                        },
+                        "picks_shown": [
+                          "aspect",
+                          "language",
+                          "seconds"
+                        ]
+                      },
+                      {
+                        "preset": "ugc_ad",
+                        "door": "preset",
+                        "defaults": {
+                          "media_type": "ai_video",
+                          "audio_mode": "dialogue"
+                        },
+                        "picks_shown": [
+                          "aspect",
+                          "language",
+                          "seconds"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/video/models": {
+      "get": {
+        "operationId": "video_models_list",
+        "summary": "Qualities, the models behind them and credits per 5 s",
+        "responses": {
+          "200": {
+            "description": "Models",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Models"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "qualities": [
+                        {
+                          "quality": "quick",
+                          "models": [
+                            "grok-imagine"
+                          ],
+                          "credits_per_5s": 12
+                        },
+                        {
+                          "quality": "balanced",
+                          "models": [
+                            "kling-2.5-turbo"
+                          ],
+                          "credits_per_5s": 24
+                        },
+                        {
+                          "quality": "cinematic",
+                          "models": [
+                            "veo-3.1"
+                          ],
+                          "credits_per_5s": 60
+                        },
+                        {
+                          "quality": "auto",
+                          "models": [],
+                          "credits_per_5s": null
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/video/clone": {
+      "post": {
+        "operationId": "video_clone_create",
+        "summary": "Clone a reference video (v2 plan, then auto-Generate)",
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoAccepted"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+                      "status": "pending",
+                      "phase": "planning",
+                      "project_id": null,
+                      "run_id": "run_5f2a91c0d3",
+                      "links": {
+                        "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Not enough funds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "Your API balance is $0.00; this video needs $4.80.",
+                      "code": "insufficient_funds",
+                      "type": "insufficient_funds",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Top up your API balance at https://studio.zebracat.ai/api-keys, then run Generate again.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#insufficient_funds",
+                      "balance": "0.00",
+                      "required_usd": "4.80"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "This mode needs a topic.",
+                      "code": "clone_topic_required",
+                      "type": "invalid_request",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Pass --topic.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#clone_topic_required"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneVideo"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "video_url": "https://www.tiktok.com/@zebracat/video/7412",
+                    "mode": "remix",
+                    "topic": "home coffee"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/studio/scripts": {
+      "post": {
+        "operationId": "studio_scripts_create",
+        "summary": "Write a script (Studio)",
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioJob"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "job_id": "scr_81c2",
+                      "status": "pending",
+                      "tool": "script",
+                      "links": {
+                        "self": "/api/v1/public/studio/scripts/scr_81c2"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Allowance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "Daily script allowance used.",
+                      "code": "studio_allowance",
+                      "type": "rate_limited",
+                      "retryable": true,
+                      "request_id": "req_01HZX3K9QW",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#studio_allowance",
+                      "retry_after_s": 600
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudioScript"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "idea": "3 tips for better sleep",
+                    "seconds": 30
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/studio/scripts/{job_id}": {
+      "get": {
+        "operationId": "studio_scripts_retrieve",
+        "summary": "A script job",
+        "responses": {
+          "200": {
+            "description": "The job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioJob"
+                },
+                "examples": {
+                  "done": {
+                    "value": {
+                      "job_id": "scr_81c2",
+                      "status": "completed",
+                      "tool": "script",
+                      "result": {
+                        "title": "Sleep better tonight",
+                        "plain_text": "Tip one: keep a schedule. ...",
+                        "narration_text": "Tip one: keep a schedule. Tip two: dim the lights. Tip three: no screens in bed."
+                      }
+                    }
+                  },
+                  "running": {
+                    "value": {
+                      "job_id": "scr_81c2",
+                      "status": "processing",
+                      "tool": "script"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/studio/hooks": {
+      "post": {
+        "operationId": "studio_hooks_create",
+        "summary": "Hooks for your script (Studio)",
+        "responses": {
+          "200": {
+            "description": "Hooks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioHooksResult"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "hooks": [
+                        {
+                          "type": "question",
+                          "line": "Still tired after 8 hours?",
+                          "on_screen": "STILL TIRED?"
+                        },
+                        {
+                          "type": "bold_claim",
+                          "line": "Your bedroom is ruining your sleep.",
+                          "on_screen": "Fix this tonight"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudioHooks"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "script": "Tip one: keep a schedule.",
+                    "platform": "tiktok"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/studio/voices": {
+      "post": {
+        "operationId": "studio_voices_create",
+        "summary": "Generate a voice-over (Studio, paid)",
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioJob"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "job_id": "vo_77aa",
+                      "status": "pending",
+                      "tool": "voice",
+                      "links": {
+                        "self": "/api/v1/public/studio/voices/vo_77aa"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "dry_run: the quote",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DryRun"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "dry_run": true,
+                      "valid": true,
+                      "quote": {
+                        "pool": "api_dollar",
+                        "credits": 2,
+                        "credit_part": "VCC",
+                        "usd": "0.10",
+                        "basis": "estimate",
+                        "breakdown": [],
+                        "available": 0,
+                        "sufficient": false,
+                        "why": "12 words at the editor's voice rate."
+                      },
+                      "would_create": {
+                        "voice_id": "21m00Tcm4TlvDq8ikWAM"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Not enough funds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "Your API balance is $0.00; this video needs $4.80.",
+                      "code": "insufficient_funds",
+                      "type": "insufficient_funds",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Top up your API balance at https://studio.zebracat.ai/api-keys, then run Generate again.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#insufficient_funds",
+                      "balance": "0.00",
+                      "required_usd": "4.80"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudioVoice"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "script": "Hello there.",
+                    "voice_id": "21m00Tcm4TlvDq8ikWAM"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/studio/voices/{job_id}": {
+      "get": {
+        "operationId": "studio_voices_retrieve",
+        "summary": "A voice-over job",
+        "responses": {
+          "200": {
+            "description": "The job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioJob"
+                },
+                "examples": {
+                  "done": {
+                    "value": {
+                      "job_id": "vo_77aa",
+                      "status": "completed",
+                      "tool": "voice",
+                      "result": {
+                        "audio_url": "https://cdn.zebracat.ai/vo/vo_77aa.mp3",
+                        "asset_id": 9912
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/public/studio/images": {
+      "post": {
+        "operationId": "studio_images_create",
+        "summary": "Generate images (Studio, 0 credits)",
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioJob"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "job_id": "med_1a2b",
+                      "status": "pending",
+                      "tool": "image",
+                      "links": {
+                        "self": "/api/v1/public/studio/media/med_1a2b"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudioImage"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "prompt": "a neon city at dusk",
+                    "aspect": "vertical",
+                    "count": 2
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/studio/clips": {
+      "post": {
+        "operationId": "studio_clips_create",
+        "summary": "Generate a video clip (Studio, paid)",
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioJob"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "job_id": "med_3c4d",
+                      "status": "pending",
+                      "tool": "clip",
+                      "links": {
+                        "self": "/api/v1/public/studio/media/med_3c4d"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "dry_run: the quote",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DryRun"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "dry_run": true,
+                      "valid": true,
+                      "quote": {
+                        "pool": "api_dollar",
+                        "credits": 24,
+                        "credit_part": "AIVF",
+                        "usd": "1.20",
+                        "basis": "estimate",
+                        "breakdown": [
+                          {
+                            "seconds": 5,
+                            "credits": 24
+                          }
+                        ],
+                        "available": 0,
+                        "sufficient": false,
+                        "why": "One started 5 s at the model's rate."
+                      },
+                      "would_create": {
+                        "seconds": 5
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Not enough funds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "default": {
+                    "value": {
+                      "error": "Your API balance is $0.00; this video needs $4.80.",
+                      "code": "insufficient_funds",
+                      "type": "insufficient_funds",
+                      "retryable": false,
+                      "request_id": "req_01HZX3K9QW",
+                      "hint": "Top up your API balance at https://studio.zebracat.ai/api-keys, then run Generate again.",
+                      "docs_url": "https://api.zebracat.ai/docs/guides/errors#insufficient_funds",
+                      "balance": "0.00",
+                      "required_usd": "4.80"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudioClip"
+              },
+              "examples": {
+                "default": {
+                  "value": {
+                    "prompt": "a cat surfing a wave",
+                    "seconds": 5
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/studio/media/{job_id}": {
+      "get": {
+        "operationId": "studio_media_retrieve",
+        "summary": "An image or clip job",
+        "responses": {
+          "200": {
+            "description": "The job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudioJob"
+                },
+                "examples": {
+                  "done": {
+                    "value": {
+                      "job_id": "med_1a2b",
+                      "status": "completed",
+                      "tool": "image",
+                      "result": {
+                        "urls": [
+                          "https://cdn.zebracat.ai/m/1.png",
+                          "https://cdn.zebracat.ai/m/2.png"
+                        ],
+                        "asset_ids": [
+                          501,
+                          502
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Quote": {
+        "type": "object",
+        "properties": {
+          "pool": {
+            "type": "string",
+            "enum": [
+              "api_dollar",
+              "account"
+            ]
+          },
+          "credits": {
+            "type": "number"
+          },
+          "credit_part": {
+            "type": "string"
+          },
+          "usd": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "estimate",
+              "plan"
+            ]
+          },
+          "breakdown": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "available": {
+            "type": "number"
+          },
+          "sufficient": {
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pool",
+          "credits",
+          "basis"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "authentication",
+              "permission",
+              "insufficient_funds",
+              "not_found",
+              "conflict",
+              "rate_limited",
+              "engine",
+              "unavailable"
+            ]
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "allowed_values": {
+            "type": "array",
+            "items": {}
+          },
+          "hint": {
+            "type": "string"
+          },
+          "docs_url": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Upload": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "place",
+              "product",
+              "style",
+              "other"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "kind"
+        ]
+      },
+      "VideoOptions": {
+        "type": "object",
+        "properties": {
+          "media_type": {
+            "type": "string",
+            "enum": [
+              "ai_video",
+              "ai_image_video",
+              "brainrot",
+              "stock"
+            ]
+          },
+          "audio_mode": {
+            "type": "string",
+            "enum": [
+              "narration",
+              "dialogue",
+              "silent"
+            ]
+          },
+          "aspect": {
+            "type": "string",
+            "enum": [
+              "vertical",
+              "horizontal",
+              "square"
+            ]
+          },
+          "language": {
+            "type": "string"
+          },
+          "seconds": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 300
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "quick",
+              "balanced",
+              "cinematic",
+              "auto"
+            ]
+          }
+        }
+      },
+      "CreateVideo": {
+        "type": "object",
+        "properties": {
+          "brief": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20000
+          },
+          "input_kind": {
+            "type": "string",
+            "enum": [
+              "idea",
+              "script",
+              "voiceover_script",
+              "script_with_scenes",
+              "url"
+            ],
+            "default": "idea"
+          },
+          "preset": {
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "street_interview",
+                  "video_podcast",
+                  "ugc_ad",
+                  "ai_movie",
+                  "ai_debate",
+                  "fruit_drama",
+                  "pov_video",
+                  "product_showcase",
+                  "travel_video",
+                  "prompt-to-video",
+                  "ai-cartoon-video-generator",
+                  "ai-anime-video-generator",
+                  "ghibli-ai",
+                  "italian-brainrot-generator",
+                  "ai-animal-video-generator",
+                  "ai-cat-video-generator",
+                  "brainrot-video-generator",
+                  "subway-surfers-video-generator",
+                  "minecraft-parkour-generator"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "$ref": "#/components/schemas/VideoOptions"
+          },
+          "voice_id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "style_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "background_video": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uploads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Upload"
+            },
+            "maxItems": 15
+          },
+          "brand_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_generate": {
+            "type": "boolean",
+            "default": true
+          },
+          "should_render": {
+            "type": "boolean",
+            "default": true
+          },
+          "dry_run": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "brief"
+        ]
+      },
+      "VideoAccepted": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "rendering",
+              "completed",
+              "failed",
+              "render_failed",
+              "cancelled"
+            ]
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "planning",
+              "needs_input",
+              "plan_ready",
+              "generating",
+              "rendering",
+              "completed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "project_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "links": {
+            "type": "object"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "idempotent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "task_id",
+          "status",
+          "phase"
+        ]
+      },
+      "DryRun": {
+        "type": "object",
+        "properties": {
+          "dry_run": {
+            "type": "boolean"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "quote": {
+            "$ref": "#/components/schemas/Quote"
+          },
+          "would_create": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "dry_run",
+          "quote"
+        ]
+      },
+      "VideoTask": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "rendering",
+              "completed",
+              "failed",
+              "render_failed",
+              "cancelled"
+            ]
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "planning",
+              "needs_input",
+              "plan_ready",
+              "generating",
+              "rendering",
+              "completed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "engine": {
+            "type": "string"
+          },
+          "project_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question": {
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_summary": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quote": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Quote"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "video_url": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "editor_url": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "links": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "task_id",
+          "status",
+          "phase"
+        ]
+      },
+      "Plan": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "integer"
+          },
+          "rev": {
+            "type": "integer"
+          },
+          "screenplay": {
+            "type": "object"
+          },
+          "summary_lines": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_undo": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "project_id",
+          "rev"
+        ]
+      },
+      "PlanEdit": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "type": "string",
+            "enum": [
+              "set_audio_mode",
+              "rewrite_line",
+              "reassign_speaker",
+              "add_scene",
+              "remove_scene",
+              "move_scene",
+              "set_duration",
+              "set_language",
+              "set_model",
+              "set_quality",
+              "replace_reference",
+              "set_visual",
+              "set_voice",
+              "set_music",
+              "set_style",
+              "set_aspect",
+              "attach_upload",
+              "set_captions",
+              "remove_asset",
+              "remove_cast"
+            ]
+          },
+          "args": {
+            "type": "object"
+          },
+          "base_rev": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tool",
+          "args"
+        ]
+      },
+      "PlanUndo": {
+        "type": "object",
+        "properties": {
+          "base_rev": {
+            "type": "integer"
+          },
+          "to_rev": {
+            "type": "integer"
+          }
+        }
+      },
+      "PlanChat": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "PlanChatTurn": {
+        "type": "object",
+        "properties": {
+          "reply": {
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/Plan"
+          }
+        },
+        "required": [
+          "reply"
+        ]
+      },
+      "Generate": {
+        "type": "object",
+        "properties": {
+          "rev": {
+            "type": "integer"
+          },
+          "should_render": {
+            "type": "boolean",
+            "default": true
+          },
+          "dry_run": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "Answer": {
+        "type": "object",
+        "properties": {
+          "question_id": {
+            "type": "string"
+          },
+          "answer": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "question_id",
+          "answer"
+        ]
+      },
+      "Preset": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "street_interview",
+              "video_podcast",
+              "ugc_ad",
+              "ai_movie",
+              "ai_debate",
+              "fruit_drama",
+              "pov_video",
+              "product_showcase",
+              "travel_video",
+              "prompt-to-video",
+              "ai-cartoon-video-generator",
+              "ai-anime-video-generator",
+              "ghibli-ai",
+              "italian-brainrot-generator",
+              "ai-animal-video-generator",
+              "ai-cat-video-generator",
+              "brainrot-video-generator",
+              "subway-surfers-video-generator",
+              "minecraft-parkour-generator"
+            ]
+          },
+          "door": {
+            "type": "string"
+          },
+          "defaults": {
+            "type": "object"
+          },
+          "picks_shown": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "preset"
+        ]
+      },
+      "Models": {
+        "type": "object",
+        "properties": {
+          "qualities": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "qualities"
+        ]
+      },
+      "CloneVideo": {
+        "type": "object",
+        "properties": {
+          "video_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "generate_similar",
+              "recreate_script",
+              "remix",
+              "remake_niche",
+              "avatar_reaction",
+              "face_swap"
+            ],
+            "default": "remix"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "should_render": {
+            "type": "boolean"
+          },
+          "dry_run": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "video_url"
+        ]
+      },
+      "StudioJob": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "links": {
+            "type": "object"
+          },
+          "quote": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Quote"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "job_id",
+          "status"
+        ]
+      },
+      "StudioScript": {
+        "type": "object",
+        "properties": {
+          "idea": {
+            "type": "string"
+          },
+          "seconds": {
+            "type": "integer"
+          },
+          "language": {
+            "type": "string"
+          },
+          "tone": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "idea"
+        ]
+      },
+      "StudioHooks": {
+        "type": "object",
+        "properties": {
+          "script": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "tone": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "script"
+        ]
+      },
+      "StudioHooksResult": {
+        "type": "object",
+        "properties": {
+          "hooks": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "hooked_scripts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "hooks"
+        ]
+      },
+      "StudioVoice": {
+        "type": "object",
+        "properties": {
+          "script": {
+            "type": "string"
+          },
+          "voice_id": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "dry_run": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "script",
+          "voice_id"
+        ]
+      },
+      "StudioImage": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "aspect": {
+            "type": "string",
+            "enum": [
+              "vertical",
+              "horizontal",
+              "square"
+            ]
+          },
+          "count": {
+            "type": "integer"
+          },
+          "reference_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      },
+      "StudioClip": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "seconds": {
+            "type": "integer"
+          },
+          "aspect": {
+            "type": "string",
+            "enum": [
+              "vertical",
+              "horizontal",
+              "square"
+            ]
+          },
+          "image_url": {
+            "type": "string"
+          },
+          "dry_run": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "prompt",
+          "seconds"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "api_key": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-KEY"
+      }
+    }
+  },
+  "security": [
+    {
+      "api_key": []
+    }
+  ]
+}

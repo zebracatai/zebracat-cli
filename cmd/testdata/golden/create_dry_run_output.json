@@ -1,0 +1,30 @@
+{
+  "dry_run": true,
+  "idempotency_key": "k",
+  "quote": {
+    "available": 0,
+    "basis": "estimate",
+    "breakdown": [
+      {
+        "credits": 120,
+        "item": "ai_video",
+        "seconds": 30
+      }
+    ],
+    "credit_part": "AIVF",
+    "credits": 120,
+    "pool": "api_dollar",
+    "sufficient": false,
+    "usd": "6.00",
+    "why": "An estimate from 30 s of balanced AI video; the plan's own quote replaces it."
+  },
+  "valid": true,
+  "would_create": {
+    "auto_generate": false,
+    "brief": "Why cats knock things off tables",
+    "input_kind": "idea",
+    "options": {
+      "seconds": 20
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "auto_generate": true,
+  "brief": "why cats knock things off tables",
+  "input_kind": "idea",
+  "options": {
+    "seconds": 20
+  },
+  "should_render": true
+}

@@ -81,7 +81,7 @@ func TestWizardFlow(t *testing.T) {
 }
 
 func TestWizardChoiceRecordsValue(t *testing.T) {
-	m := &model{in: textinput.New(), wiz: newWizard(1, "x")} // step 1 = video_type (choices)
+	m := &model{in: textinput.New(), wiz: newWizard(1, "x")} // step 1 = media_type (choices)
 	if len(m.wiz.cur().choices) == 0 {
 		t.Fatal("step 1 should be a choice step")
 	}
@@ -91,8 +91,8 @@ func TestWizardChoiceRecordsValue(t *testing.T) {
 	if m.wiz == nil || m.wiz.step != 2 {
 		t.Fatalf("expected to advance to step 2, got %+v", m.wiz)
 	}
-	if m.wiz.vals["video_type"] != want {
-		t.Fatalf("expected video_type=%q, got %q", want, m.wiz.vals["video_type"])
+	if m.wiz.vals["media_type"] != want {
+		t.Fatalf("expected media_type=%q, got %q", want, m.wiz.vals["media_type"])
 	}
 }
 

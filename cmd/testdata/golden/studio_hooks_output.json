@@ -1,0 +1,14 @@
+{
+  "hooks": [
+    {
+      "line": "Still tired after 8 hours?",
+      "on_screen": "STILL TIRED?",
+      "type": "question"
+    },
+    {
+      "line": "Your bedroom is ruining your sleep.",
+      "on_screen": "Fix this tonight",
+      "type": "bold_claim"
+    }
+  ]
+}

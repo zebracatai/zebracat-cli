@@ -73,6 +73,12 @@ func PrintJSON(v any) error {
 }
 
 // PrintError writes the structured error envelope to stderr.
+// PrintErrorEnvelope writes a ready-made envelope (see clierr.Error.Envelope) to stderr.
+func PrintErrorEnvelope(env any) {
+	b, _ := json.MarshalIndent(env, "", "  ")
+	fmt.Fprintln(os.Stderr, string(b))
+}
+
 func PrintError(code, message, hint string) {
 	env := map[string]any{"error": map[string]string{"code": code, "message": message}}
 	if hint != "" {

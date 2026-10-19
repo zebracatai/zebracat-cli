@@ -1,0 +1,33 @@
+{
+  "auto_generate": false,
+  "background_video": "minecraft_parkour_1",
+  "brand_id": 9,
+  "brief": "a street interview about coffee",
+  "input_kind": "idea",
+  "options": {
+    "aspect": "horizontal",
+    "audio_mode": "dialogue",
+    "language": "spanish",
+    "media_type": "ai_video",
+    "quality": "cinematic",
+    "seconds": 45
+  },
+  "preset": "street_interview",
+  "should_render": false,
+  "style_id": 77,
+  "uploads": [
+    {
+      "kind": "person",
+      "url": "https://cdn.example.com/me.png"
+    },
+    {
+      "kind": "place",
+      "url": "https://cdn.example.com/cafe.jpg"
+    },
+    {
+      "kind": "other",
+      "url": "https://cdn.example.com/logo.png"
+    }
+  ],
+  "voice_id": "v_123"
+}

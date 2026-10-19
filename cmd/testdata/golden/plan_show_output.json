@@ -1,0 +1,56 @@
+{
+  "asks": null,
+  "can_undo": true,
+  "project_id": 48213,
+  "render": {
+    "quality": "balanced"
+  },
+  "rev": 3,
+  "screenplay": {
+    "aspect": "vertical",
+    "audio": {
+      "mode": "narration"
+    },
+    "beats": [
+      {
+        "n": 1,
+        "narration": "Ever wondered why your cat swipes your mug off the table?",
+        "seconds": 5
+      },
+      {
+        "n": 2,
+        "narration": "It starts with instinct: cats test what moves.",
+        "seconds": 5
+      },
+      {
+        "n": 3,
+        "narration": "Then comes attention. A falling cup always gets you running.",
+        "seconds": 5
+      },
+      {
+        "n": 4,
+        "narration": "So next time, play with them first. Your mug will thank you.",
+        "seconds": 5
+      }
+    ],
+    "language": "english",
+    "media_type": "ai_video",
+    "title": "Why cats knock things off tables",
+    "version": 2
+  },
+  "summary_lines": [
+    "A 20 s narrated AI video, vertical, in English.",
+    "4 scenes, one voice."
+  ],
+  "versions": [
+    {
+      "rev": 1
+    },
+    {
+      "rev": 2
+    },
+    {
+      "rev": 3
+    }
+  ]
+}

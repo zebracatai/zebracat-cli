@@ -1,0 +1,11 @@
+{
+  "idempotency_key": "\u003cuuid\u003e",
+  "links": {
+    "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+  },
+  "phase": "planning",
+  "project_id": null,
+  "run_id": "run_5f2a91c0d3",
+  "status": "pending",
+  "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+}

@@ -1,0 +1,8 @@
+{
+  "code": "too_many_runs",
+  "message": "You already have 3 plans being written.",
+  "hint": "Wait for one to finish, or cancel one with POST /videos/{task_id}/cancel.",
+  "type": "rate_limited",
+  "retryable": true,
+  "request_id": "req_01HZX3K9QW"
+}

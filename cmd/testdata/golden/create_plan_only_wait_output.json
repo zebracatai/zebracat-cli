@@ -1,0 +1,56 @@
+{
+  "editor_url": "https://studio.zebracat.ai/storyboard/48213",
+  "engine": "director_v2",
+  "idempotency_key": "k",
+  "links": {
+    "editor": "https://studio.zebracat.ai/storyboard/48213",
+    "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+    "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+    "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+  },
+  "phase": "plan_ready",
+  "plan_summary": [
+    "A 20 s narrated AI video, vertical, in English.",
+    "4 scenes, one voice."
+  ],
+  "project_id": 48213,
+  "quote": {
+    "available": 0,
+    "basis": "plan",
+    "breakdown": [
+      {
+        "credits": 24,
+        "n": 1,
+        "scene_units": 1,
+        "seconds": 5
+      },
+      {
+        "credits": 24,
+        "n": 2,
+        "scene_units": 1,
+        "seconds": 5
+      },
+      {
+        "credits": 24,
+        "n": 3,
+        "scene_units": 1,
+        "seconds": 5
+      },
+      {
+        "credits": 24,
+        "n": 4,
+        "scene_units": 1,
+        "seconds": 5
+      }
+    ],
+    "credit_part": "AIVF",
+    "credits": 96,
+    "pool": "api_dollar",
+    "sufficient": false,
+    "usd": "4.80",
+    "why": "4 AI-video scenes of 5 s at balanced quality."
+  },
+  "run_id": "run_5f2a91c0d3",
+  "status": "pending",
+  "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+}

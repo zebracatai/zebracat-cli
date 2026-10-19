@@ -1,6 +1,9 @@
 package clierr
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestExitCodes(t *testing.T) {
 	cases := []struct {
@@ -22,6 +25,30 @@ func TestExitCodes(t *testing.T) {
 		}
 		if c.err.Error() == "" {
 			t.Errorf("empty message")
+		}
+	}
+}
+
+func TestEnvelopeShape(t *testing.T) {
+	e := &Error{Exit: CodeAPI, Code: "insufficient_funds", Message: "m", Hint: "h", Type: "insufficient_funds", RequestID: "r"}
+	b, _ := json.Marshal(e.Envelope())
+	want := `{"error":{"code":"insufficient_funds","message":"m","hint":"h","type":"insufficient_funds","request_id":"r"}}`
+	if string(b) != want {
+		t.Fatalf("envelope = %s", b)
+	}
+	b, _ = json.Marshal(Usage("x").Envelope())
+	if string(b) != `{"error":{"code":"usage_error","message":"x"}}` {
+		t.Fatalf("plain envelope = %s", b)
+	}
+}
+
+func TestExitForType(t *testing.T) {
+	for typ, want := range map[string]int{
+		"invalid_request": CodeUsage, "authentication": CodeAuth, "permission": CodeAuth,
+		"insufficient_funds": CodeAPI, "rate_limited": CodeAPI, "engine": CodeAPI, "not_found": CodeAPI,
+	} {
+		if got := ExitForType(typ); got != want {
+			t.Fatalf("%s → %d, want %d", typ, got, want)
 		}
 	}
 }
