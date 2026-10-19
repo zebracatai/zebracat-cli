@@ -2,6 +2,7 @@ package client
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -35,5 +36,15 @@ func TestRetryAfterFromHeaderOrBody(t *testing.T) {
 	e = apiError(429, []byte(`{"error":"allowance","code":"studio_allowance","type":"rate_limited","retryable":true,"retry_after_s":600}`), http.Header{})
 	if e.RetryAfter != 10*time.Minute {
 		t.Fatalf("body: %+v", e)
+	}
+}
+
+func TestHTMLNotFoundNamesAMissingEndpoint(t *testing.T) {
+	e := apiError(404, []byte("<!DOCTYPE html><title>Page not found</title>"), http.Header{})
+	if e.Exit != 1 || e.Status != 404 || !strings.Contains(e.Message, "no such endpoint") {
+		t.Fatalf("%+v", e)
+	}
+	if e := apiError(502, []byte("<html>bad gateway</html>"), http.Header{}); !strings.Contains(e.Message, "check your base URL") {
+		t.Fatalf("%+v", e)
 	}
 }

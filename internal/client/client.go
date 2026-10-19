@@ -209,8 +209,12 @@ func apiError(status int, raw []byte, header http.Header) *clierr.Error {
 	msg := strings.TrimSpace(string(raw))
 	if strings.HasPrefix(msg, "<") {
 		// A proxy/CDN returned HTML (e.g. an nginx 404) instead of JSON — almost
-		// always a wrong base URL or a gateway that isn't routing to the API.
+		// always a wrong base URL or a gateway that isn't routing to the API, or a
+		// server that does not have this endpoint yet.
 		msg = "the server returned a non-JSON response — check your base URL (ZEBRACAT_BASE_URL / --base-url)"
+		if status == http.StatusNotFound {
+			msg = "this server has no such endpoint: it is not deployed there yet, or the base URL is wrong (ZEBRACAT_BASE_URL / --base-url)"
+		}
 	}
 	str := func(k string) string { s, _ := generic[k].(string); return s }
 	if json.Unmarshal(raw, &generic) == nil {
