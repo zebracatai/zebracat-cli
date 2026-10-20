@@ -235,15 +235,13 @@ func printStatusHuman(m map[string]any) {
 		pairs = append(pairs, [2]string{"error", fmt.Sprintf("%v (%v)", e["message"], e["code"])})
 	}
 	ui.KV(pairs)
-	if q, ok := m["question"].(map[string]any); ok {
+	if qid, text, opts := videos.Question(m); qid != "" {
 		ui.Heading("Question")
-		fmt.Printf("  %v\n", q["text"])
-		if opts, ok := q["options"].([]any); ok {
-			for _, o := range opts {
-				fmt.Printf("    • %v\n", o)
-			}
+		fmt.Printf("  %s\n", text)
+		for _, o := range opts {
+			fmt.Printf("    • %s\n", o)
 		}
-		ui.Info("Answer with: zebracat video answer %v --question %v --answer \"…\"", m["task_id"], q["id"])
+		ui.Info("Answer with: zebracat video answer %v --question %s --answer \"…\"", m["task_id"], qid)
 	}
 	if lines := videos.SummaryLines(m); len(lines) > 0 && videos.Phase(m) == "plan_ready" {
 		ui.Heading("Plan")

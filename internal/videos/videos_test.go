@@ -48,3 +48,24 @@ func TestEditorURL(t *testing.T) {
 		t.Fatal(u)
 	}
 }
+
+func TestSummaryLinesReadsTheTaskSummaryObject(t *testing.T) {
+	got := SummaryLines(map[string]any{"plan_summary": map[string]any{
+		"title": "Easier mornings", "beats": float64(4), "seconds": float64(20),
+		"media_type": "ai_video", "audio_mode": "narration", "language": "english"}})
+	if len(got) != 1 || got[0] != "Easier mornings — 4 scenes, 20 s · ai_video · narration · english" {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestQuestionReadsTheRunShape(t *testing.T) {
+	id, text, opts := Question(map[string]any{"question": map[string]any{
+		"id": "q1", "question": "Voice-over or people talking?",
+		"options": []any{map[string]any{"label": "Voice-over", "value": "narration"}, "People talking"}}})
+	if id != "q1" || text != "Voice-over or people talking?" || len(opts) != 2 || opts[0] != "Voice-over" || opts[1] != "People talking" {
+		t.Fatalf("%q %q %q", id, text, opts)
+	}
+	if id, _, _ := Question(map[string]any{}); id != "" {
+		t.Fatal("no question → empty id")
+	}
+}

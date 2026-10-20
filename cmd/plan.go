@@ -37,7 +37,6 @@ var (
 	clTopic    string
 	clLanguage string
 	clNoRender bool
-	clDryRun   bool
 	clWait     bool
 	clIdemKey  string
 	clTimeout  time.Duration
@@ -161,8 +160,9 @@ var planChatCmd = &cobra.Command{
 				ui.Heading("Zebracat")
 				fmt.Println("  " + r)
 			}
-			if p, ok := out["plan"].(map[string]any); ok {
-				printPlanHuman(p)
+			// The turn answers the new plan flat ({reply, rev, summary_lines, screenplay, …}).
+			if _, ok := out["screenplay"].(map[string]any); ok {
+				printPlanHuman(out)
 			}
 		})
 	},
@@ -321,7 +321,7 @@ measures it, writes a plan in the chosen mode and generates it.
 
 Modes: ` + client.EnumHelp("clone.mode") + `
 
-  zebracat video clone --url https://www.tiktok.com/@x/video/1 --mode remake_niche --topic "home coffee" --wait`,
+  zebracat video clone --url https://www.tiktok.com/@x/video/1 --mode generate_similar --topic "home coffee" --wait`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := checkURL("--url", clURL); err != nil {
 			return err
@@ -339,9 +339,6 @@ Modes: ` + client.EnumHelp("clone.mode") + `
 		if clLanguage != "" {
 			body["language"] = clLanguage
 		}
-		if clDryRun {
-			body["dry_run"] = true
-		}
 		c, err := newClient()
 		if err != nil {
 			return err
@@ -358,9 +355,6 @@ Modes: ` + client.EnumHelp("clone.mode") + `
 			out = map[string]any{}
 		}
 		out["idempotency_key"] = key
-		if dry, _ := out["dry_run"].(bool); dry {
-			return emit(out, func() { printDryRunHuman(out) })
-		}
 		taskID, _ := out["task_id"].(string)
 		if !clWait || taskID == "" {
 			return emit(out, func() { printCreatedHuman(out, taskID) })
@@ -396,10 +390,9 @@ func init() {
 	cf := videoCloneCmd.Flags()
 	cf.StringVar(&clURL, "url", "", "The reference video's URL (required)")
 	cf.StringVar(&clMode, "mode", "", "Clone mode: "+client.EnumHelp("clone.mode")+" (default remix)")
-	cf.StringVar(&clTopic, "topic", "", "Your topic (needed by remake_niche)")
+	cf.StringVar(&clTopic, "topic", "", "Your topic for the new video")
 	cf.StringVar(&clLanguage, "language", "", "Language of the new video")
 	cf.BoolVar(&clNoRender, "no-render", false, "Keep an editable project; don't export the MP4")
-	cf.BoolVar(&clDryRun, "dry-run", false, "Validate and quote only")
 	cf.BoolVar(&clWait, "wait", false, "Block until the video is finished")
 	cf.StringVar(&clIdemKey, "idempotency-key", "", "Idempotency-Key header (default: a new UUID, printed in the output)")
 	cf.DurationVar(&clTimeout, "timeout", 30*time.Minute, "Max time to wait with --wait")

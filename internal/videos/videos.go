@@ -232,11 +232,14 @@ func num(v any) string {
 	return fmt.Sprint(v)
 }
 
-// SummaryLines is the short plan summary: the task's plan_summary, or a plan
-// view's summary_lines, or a line built from its screenplay.
+// SummaryLines is the short plan summary: the task's plan_summary (an object of
+// title, seconds, beats, media_type, audio_mode, language), a plan view's
+// summary_lines, or a line built from its screenplay.
 func SummaryLines(m map[string]any) []string {
 	for _, k := range []string{"plan_summary", "summary_lines"} {
 		switch v := m[k].(type) {
+		case map[string]any:
+			return []string{summaryObject(v)}
 		case string:
 			if v != "" {
 				return []string{v}
@@ -271,6 +274,53 @@ func SummaryLines(m map[string]any) []string {
 	}
 	parts = append(parts, fmt.Sprintf("%d scenes, %s s", len(beats), num(secs)))
 	return []string{strings.Join(parts, " — ")}
+}
+
+// summaryObject renders the task view's plan_summary object as one line:
+// "Easier mornings — 4 scenes, 20 s · ai_video · narration · english".
+func summaryObject(v map[string]any) string {
+	line := fmt.Sprintf("%s scenes, %s s", num(v["beats"]), num(v["seconds"]))
+	if t, _ := v["title"].(string); t != "" {
+		line = t + " — " + line
+	}
+	for _, k := range []string{"media_type", "audio_mode", "language"} {
+		if s, _ := v[k].(string); s != "" {
+			line += " · " + s
+		}
+	}
+	return line
+}
+
+// Question is a needs_input question's wording and its offered answers.
+// The run sends the wording as "question" (older shapes: "text"); an option
+// is a string or an object with a label.
+func Question(m map[string]any) (id, text string, options []string) {
+	q, _ := m["question"].(map[string]any)
+	if q == nil {
+		return "", "", nil
+	}
+	id = fmt.Sprint(q["id"])
+	for _, k := range []string{"question", "text"} {
+		if s, _ := q[k].(string); s != "" {
+			text = s
+			break
+		}
+	}
+	opts, _ := q["options"].([]any)
+	for _, o := range opts {
+		switch v := o.(type) {
+		case string:
+			options = append(options, v)
+		case map[string]any:
+			for _, k := range []string{"label", "value", "id"} {
+				if s, _ := v[k].(string); s != "" {
+					options = append(options, s)
+					break
+				}
+			}
+		}
+	}
+	return id, text, options
 }
 
 // Beats returns "n. (Ns) words" lines for a plan view's screenplay.

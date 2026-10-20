@@ -17,7 +17,8 @@ billing. Module: `github.com/zebracatai/zebracat-cli`.
 - **Exit codes**: `0` ok · `1` API/network · `2` usage · `3` auth · `4` timeout. Branch on these.
   A typed API error maps by `type`: `invalid_request` → 2, `authentication`/`permission` → 3,
   everything else (`insufficient_funds`, `rate_limited`, `conflict`, `not_found`, `engine`,
-  `unavailable`) → 1. `video generate` without `--yes` off a terminal → 2 `confirmation_required`.
+  `unavailable`) → 1. `video generate`/`swap` without `--yes` off a terminal → 2 `confirmation_required`; `swap`
+  without `--consent` → 2 `consent_required`.
 - **Auth**: API key only — `ZEBRACAT_API_KEY` (env) or `zebracat auth login` (paste a key).
 - **Long jobs**: pass `--wait`, or submit and poll `zebracat video status <task_id>` (`.phase`).
   A wait stops at `plan_ready` (plan-only), `needs_input`, or `completed`/`failed`/`cancelled`.
@@ -34,7 +35,7 @@ zebracat video download "$id" -o out.mp4
 ```
 
 Commands: `video create|list|get|status|quote|generate|answer|cancel|download|clone|translate`,
-`plan show|edit|chat|undo`, `studio script|hooks|voice|image|clip|job`, `models list`,
+`plan show|edit|chat|undo`, `studio script|hooks|voice|image|clip|job`, `swap`, `models list`,
 `presets list`, plus `script`/`image` (Studio aliases when the server's OpenAPI lists
 `/studio/*`, cached a day in `~/.zebracat/capabilities.json`), voices, avatars, styles,
 music, templates, characters, brands, account, webhooks, config, update.
@@ -73,6 +74,9 @@ make openapi    # refresh openapi.json from $(API)/docs/openapi.json, then gener
 - Flag enums (media types, audio modes, presets, clone modes, edit tools…) come from
   `internal/openapi/openapi.json` through `go generate`; never type them by hand.
   `TestEnumsGenMatchesSchema` fails when the generated file is stale.
+- `internal/openapi/openapi.json` is the DEV server's own schema (`make openapi API=https://bc-dev.zebracat.ai`).
+  Routes it documents without examples answer from `internal/apitest/fixtures.json` (written to the
+  backend's real shapes); error statuses without examples answer a canned typed error.
 - Tests run against `internal/apitest` (the schema's examples), with golden JSON in
   `cmd/testdata/golden` (`go test ./cmd -update` rewrites them) and a fake clock: no
   test sleeps or touches the network.

@@ -1,30 +1,43 @@
 {
   "qualities": [
     {
-      "credits_per_5s": 12,
+      "available": true,
       "models": [
-        "grok-imagine"
+        {
+          "credits_per_5s": 12,
+          "model": "grok-imagine",
+          "speaking": false
+        }
       ],
       "quality": "quick"
     },
     {
-      "credits_per_5s": 24,
+      "available": true,
       "models": [
-        "kling-2.5-turbo"
+        {
+          "credits_per_5s": 24,
+          "model": "kling-2.5-turbo",
+          "speaking": false
+        }
       ],
       "quality": "balanced"
     },
     {
-      "credits_per_5s": 60,
+      "available": false,
       "models": [
-        "veo-3.1"
+        {
+          "credits_per_5s": 60,
+          "model": "veo-3.1",
+          "speaking": true
+        }
       ],
       "quality": "cinematic"
     },
     {
-      "credits_per_5s": null,
+      "available": true,
       "models": [],
       "quality": "auto"
     }
-  ]
+  ],
+  "scene_seconds": 5
 }

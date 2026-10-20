@@ -1,0 +1,723 @@
+{
+  "POST /api/v1/public/videos": {
+    "202": {
+      "default": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "pending",
+        "phase": "planning",
+        "project_id": null,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+        }
+      }
+    },
+    "200": {
+      "default": {
+        "dry_run": true,
+        "valid": true,
+        "quote": {
+          "pool": "api_dollar",
+          "credits": 120,
+          "credit_part": "AIVF",
+          "usd": "6.00",
+          "basis": "estimate",
+          "breakdown": [
+            {
+              "item": "ai_video",
+              "seconds": 30,
+              "credits": 120
+            }
+          ],
+          "available": 0,
+          "sufficient": false,
+          "why": "An estimate from 30 s of balanced AI video; the plan's own quote replaces it."
+        },
+        "would_create": {
+          "brief": "Why cats knock things off tables",
+          "input_kind": "idea",
+          "auto_generate": false,
+          "options": {
+            "seconds": 20
+          }
+        }
+      }
+    }
+  },
+  "GET /api/v1/public/videos/{task_id}": {
+    "200": {
+      "planning": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "pending",
+        "phase": "planning",
+        "engine": "director_v2",
+        "project_id": null,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+          "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+          "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+          "editor": null
+        },
+        "video_type": "idea",
+        "created_at": "2026-10-19T12:00:00+00:00",
+        "updated_at": "2026-10-19T12:01:00+00:00"
+      },
+      "needs_input": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "pending",
+        "phase": "needs_input",
+        "engine": "director_v2",
+        "project_id": 48213,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+          "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+          "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+          "editor": "https://studio.zebracat.ai/storyboard/48213"
+        },
+        "question": {
+          "id": "q_audio",
+          "question": "Should the video have a voice-over or people talking?",
+          "type": "choice",
+          "options": [
+            {
+              "label": "Voice-over",
+              "value": "narration"
+            },
+            {
+              "label": "People talking",
+              "value": "dialogue"
+            }
+          ],
+          "allowCustom": true
+        },
+        "video_type": "idea",
+        "created_at": "2026-10-19T12:00:00+00:00",
+        "updated_at": "2026-10-19T12:01:00+00:00"
+      },
+      "plan_ready": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "pending",
+        "phase": "plan_ready",
+        "engine": "director_v2",
+        "project_id": 48213,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+          "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+          "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+          "editor": "https://studio.zebracat.ai/storyboard/48213"
+        },
+        "plan_summary": {
+          "rev": 3,
+          "title": "Why cats knock things off tables",
+          "media_type": "ai_video",
+          "audio_mode": "narration",
+          "seconds": 20,
+          "beats": 4,
+          "language": "english"
+        },
+        "quote": {
+          "pool": "api_dollar",
+          "credits": 96,
+          "credit_part": "AIVF",
+          "usd": "4.80",
+          "basis": "plan",
+          "breakdown": [
+            {
+              "n": 1,
+              "seconds": 5,
+              "scene_units": 1,
+              "credits": 24
+            },
+            {
+              "n": 2,
+              "seconds": 5,
+              "scene_units": 1,
+              "credits": 24
+            },
+            {
+              "n": 3,
+              "seconds": 5,
+              "scene_units": 1,
+              "credits": 24
+            },
+            {
+              "n": 4,
+              "seconds": 5,
+              "scene_units": 1,
+              "credits": 24
+            }
+          ],
+          "available": 0,
+          "sufficient": false,
+          "why": "4 AI-video scenes of 5 s at balanced quality.",
+          "plan": {
+            "rev": 3,
+            "media_type": "ai_video",
+            "audio_mode": "narration",
+            "seconds": 20,
+            "quality": "balanced"
+          }
+        },
+        "editor_url": "https://studio.zebracat.ai/storyboard/48213",
+        "video_type": "idea",
+        "created_at": "2026-10-19T12:00:00+00:00",
+        "updated_at": "2026-10-19T12:01:00+00:00"
+      },
+      "generating": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "processing",
+        "phase": "generating",
+        "engine": "director_v2",
+        "project_id": 48213,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+          "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+          "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+          "editor": "https://studio.zebracat.ai/storyboard/48213"
+        },
+        "editor_url": "https://studio.zebracat.ai/storyboard/48213",
+        "video_type": "idea",
+        "created_at": "2026-10-19T12:00:00+00:00",
+        "updated_at": "2026-10-19T12:01:00+00:00",
+        "plan_summary": {
+          "rev": 3,
+          "title": "Why cats knock things off tables",
+          "media_type": "ai_video",
+          "audio_mode": "narration",
+          "seconds": 20,
+          "beats": 4,
+          "language": "english"
+        }
+      },
+      "completed": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "completed",
+        "phase": "completed",
+        "engine": "director_v2",
+        "project_id": 48213,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+          "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+          "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+          "editor": "https://studio.zebracat.ai/storyboard/48213"
+        },
+        "video_url": "https://cdn.zebracat.ai/videos/48213/final.mp4",
+        "editor_url": "https://studio.zebracat.ai/storyboard/48213",
+        "video_type": "idea",
+        "created_at": "2026-10-19T12:00:00+00:00",
+        "updated_at": "2026-10-19T12:01:00+00:00",
+        "plan_summary": {
+          "rev": 3,
+          "title": "Why cats knock things off tables",
+          "media_type": "ai_video",
+          "audio_mode": "narration",
+          "seconds": 20,
+          "beats": 4,
+          "language": "english"
+        }
+      },
+      "failed": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "failed",
+        "phase": "failed",
+        "engine": "director_v2",
+        "project_id": 48213,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+          "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+          "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+          "editor": "https://studio.zebracat.ai/storyboard/48213"
+        },
+        "error": {
+          "code": "director_v2_too_long",
+          "message": "The plan runs longer than this account allows."
+        },
+        "video_type": "idea",
+        "created_at": "2026-10-19T12:00:00+00:00",
+        "updated_at": "2026-10-19T12:01:00+00:00"
+      },
+      "cancelled": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "cancelled",
+        "phase": "cancelled",
+        "engine": "director_v2",
+        "project_id": 48213,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+          "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+          "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+          "editor": "https://studio.zebracat.ai/storyboard/48213"
+        },
+        "video_type": "idea",
+        "created_at": "2026-10-19T12:00:00+00:00",
+        "updated_at": "2026-10-19T12:01:00+00:00"
+      }
+    }
+  },
+  "GET /api/v1/public/videos/{task_id}/plan": {
+    "200": {
+      "default": {
+        "project_id": 48213,
+        "rev": 3,
+        "screenplay": {
+          "version": 2,
+          "title": "Why cats knock things off tables",
+          "media_type": "ai_video",
+          "aspect": "vertical",
+          "language": "english",
+          "audio": {
+            "mode": "narration"
+          },
+          "beats": [
+            {
+              "n": 1,
+              "seconds": 5,
+              "narration": "Ever wondered why your cat swipes your mug off the table?"
+            },
+            {
+              "n": 2,
+              "seconds": 5,
+              "narration": "It starts with instinct: cats test what moves."
+            },
+            {
+              "n": 3,
+              "seconds": 5,
+              "narration": "Then comes attention. A falling cup always gets you running."
+            },
+            {
+              "n": 4,
+              "seconds": 5,
+              "narration": "So next time, play with them first. Your mug will thank you."
+            }
+          ]
+        },
+        "render": {
+          "quality": "balanced"
+        },
+        "summary_lines": [
+          "A 20 s narrated AI video, vertical, in English.",
+          "4 scenes, one voice."
+        ],
+        "versions": [
+          {
+            "rev": 1
+          },
+          {
+            "rev": 2
+          },
+          {
+            "rev": 3
+          }
+        ],
+        "can_undo": true,
+        "asks": null
+      }
+    }
+  },
+  "POST /api/v1/public/videos/{task_id}/plan/edit": {
+    "200": {
+      "default": {
+        "project_id": 48213,
+        "rev": 4,
+        "screenplay": {
+          "version": 2,
+          "title": "Why cats knock things off tables",
+          "media_type": "ai_video",
+          "aspect": "vertical",
+          "language": "english",
+          "audio": {
+            "mode": "narration"
+          },
+          "beats": [
+            {
+              "n": 1,
+              "seconds": 5,
+              "narration": "Ever wondered why your cat swipes your mug off the table?"
+            },
+            {
+              "n": 2,
+              "seconds": 5,
+              "narration": "It starts with instinct: cats test what moves."
+            },
+            {
+              "n": 3,
+              "seconds": 5,
+              "narration": "Then comes attention. A falling cup always gets you running."
+            },
+            {
+              "n": 4,
+              "seconds": 5,
+              "narration": "So next time, play with them first. Your mug will thank you."
+            }
+          ]
+        },
+        "render": {
+          "quality": "balanced"
+        },
+        "summary_lines": [
+          "A 20 s narrated AI video, vertical, in English.",
+          "4 scenes, one voice."
+        ],
+        "versions": [
+          {
+            "rev": 1
+          },
+          {
+            "rev": 2
+          },
+          {
+            "rev": 3
+          }
+        ],
+        "can_undo": true,
+        "asks": null
+      }
+    }
+  },
+  "POST /api/v1/public/videos/{task_id}/plan/undo": {
+    "200": {
+      "default": {
+        "project_id": 48213,
+        "rev": 5,
+        "screenplay": {
+          "version": 2,
+          "title": "Why cats knock things off tables",
+          "media_type": "ai_video",
+          "aspect": "vertical",
+          "language": "english",
+          "audio": {
+            "mode": "narration"
+          },
+          "beats": [
+            {
+              "n": 1,
+              "seconds": 5,
+              "narration": "Ever wondered why your cat swipes your mug off the table?"
+            },
+            {
+              "n": 2,
+              "seconds": 5,
+              "narration": "It starts with instinct: cats test what moves."
+            },
+            {
+              "n": 3,
+              "seconds": 5,
+              "narration": "Then comes attention. A falling cup always gets you running."
+            },
+            {
+              "n": 4,
+              "seconds": 5,
+              "narration": "So next time, play with them first. Your mug will thank you."
+            }
+          ]
+        },
+        "render": {
+          "quality": "balanced"
+        },
+        "summary_lines": [
+          "A 20 s narrated AI video, vertical, in English.",
+          "4 scenes, one voice."
+        ],
+        "versions": [
+          {
+            "rev": 1
+          },
+          {
+            "rev": 2
+          },
+          {
+            "rev": 3
+          }
+        ],
+        "can_undo": true,
+        "asks": null
+      }
+    }
+  },
+  "POST /api/v1/public/videos/{task_id}/plan/chat": {
+    "200": {
+      "default": {
+        "reply": "Done: tightened to 15 s and punched up the jokes.",
+        "rev": 4,
+        "summary_lines": [
+          "A 20 s narrated AI video, vertical, in English.",
+          "4 scenes, one voice."
+        ],
+        "screenplay": {
+          "version": 2,
+          "title": "Why cats knock things off tables",
+          "media_type": "ai_video",
+          "aspect": "vertical",
+          "language": "english",
+          "audio": {
+            "mode": "narration"
+          },
+          "beats": [
+            {
+              "n": 1,
+              "seconds": 5,
+              "narration": "Ever wondered why your cat swipes your mug off the table?"
+            },
+            {
+              "n": 2,
+              "seconds": 5,
+              "narration": "It starts with instinct: cats test what moves."
+            },
+            {
+              "n": 3,
+              "seconds": 5,
+              "narration": "Then comes attention. A falling cup always gets you running."
+            },
+            {
+              "n": 4,
+              "seconds": 5,
+              "narration": "So next time, play with them first. Your mug will thank you."
+            }
+          ]
+        },
+        "render": {
+          "quality": "balanced"
+        },
+        "changed": true
+      }
+    }
+  },
+  "GET /api/v1/public/videos/{task_id}/quote": {
+    "200": {
+      "default": {
+        "pool": "api_dollar",
+        "credits": 96,
+        "credit_part": "AIVF",
+        "usd": "4.80",
+        "basis": "plan",
+        "breakdown": [
+          {
+            "n": 1,
+            "seconds": 5,
+            "scene_units": 1,
+            "credits": 24
+          },
+          {
+            "n": 2,
+            "seconds": 5,
+            "scene_units": 1,
+            "credits": 24
+          },
+          {
+            "n": 3,
+            "seconds": 5,
+            "scene_units": 1,
+            "credits": 24
+          },
+          {
+            "n": 4,
+            "seconds": 5,
+            "scene_units": 1,
+            "credits": 24
+          }
+        ],
+        "available": 0,
+        "sufficient": false,
+        "why": "4 AI-video scenes of 5 s at balanced quality."
+      }
+    }
+  },
+  "POST /api/v1/public/videos/{task_id}/generate": {
+    "202": {
+      "default": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "processing",
+        "phase": "generating",
+        "engine": "director_v2",
+        "project_id": 48213,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+          "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+          "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+          "editor": "https://studio.zebracat.ai/storyboard/48213"
+        },
+        "editor_url": "https://studio.zebracat.ai/storyboard/48213"
+      }
+    },
+    "200": {
+      "default": {
+        "dry_run": true,
+        "valid": true,
+        "quote": {
+          "pool": "api_dollar",
+          "credits": 96,
+          "credit_part": "AIVF",
+          "usd": "4.80",
+          "basis": "plan",
+          "breakdown": [
+            {
+              "n": 1,
+              "seconds": 5,
+              "scene_units": 1,
+              "credits": 24
+            },
+            {
+              "n": 2,
+              "seconds": 5,
+              "scene_units": 1,
+              "credits": 24
+            },
+            {
+              "n": 3,
+              "seconds": 5,
+              "scene_units": 1,
+              "credits": 24
+            },
+            {
+              "n": 4,
+              "seconds": 5,
+              "scene_units": 1,
+              "credits": 24
+            }
+          ],
+          "available": 0,
+          "sufficient": false,
+          "why": "4 AI-video scenes of 5 s at balanced quality."
+        },
+        "would_create": {
+          "rev": 3,
+          "should_render": true
+        }
+      }
+    }
+  },
+  "POST /api/v1/public/videos/{task_id}/answer": {
+    "200": {
+      "default": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "pending",
+        "phase": "planning",
+        "engine": "director_v2",
+        "project_id": null,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+        }
+      }
+    }
+  },
+  "POST /api/v1/public/videos/{task_id}/cancel": {
+    "200": {
+      "default": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "cancelled",
+        "phase": "cancelled",
+        "engine": "director_v2",
+        "project_id": 48213,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+          "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
+          "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
+          "editor": "https://studio.zebracat.ai/storyboard/48213"
+        }
+      }
+    }
+  },
+  "GET /api/v1/public/video/presets": {
+    "200": {
+      "default": [
+        {
+          "preset": "street_interview",
+          "door": "preset",
+          "defaults": {
+            "media_type": "ai_video",
+            "audio_mode": "dialogue"
+          },
+          "picks_shown": [
+            "aspect",
+            "language",
+            "seconds"
+          ]
+        },
+        {
+          "preset": "ugc_ad",
+          "door": "preset",
+          "defaults": {
+            "media_type": "ai_video",
+            "audio_mode": "dialogue"
+          },
+          "picks_shown": [
+            "aspect",
+            "language",
+            "seconds"
+          ]
+        }
+      ]
+    }
+  },
+  "GET /api/v1/public/video/models": {
+    "200": {
+      "default": {
+        "qualities": [
+          {
+            "quality": "quick",
+            "available": true,
+            "models": [
+              {
+                "model": "grok-imagine",
+                "speaking": false,
+                "credits_per_5s": 12
+              }
+            ]
+          },
+          {
+            "quality": "balanced",
+            "available": true,
+            "models": [
+              {
+                "model": "kling-2.5-turbo",
+                "speaking": false,
+                "credits_per_5s": 24
+              }
+            ]
+          },
+          {
+            "quality": "cinematic",
+            "available": false,
+            "models": [
+              {
+                "model": "veo-3.1",
+                "speaking": true,
+                "credits_per_5s": 60
+              }
+            ]
+          },
+          {
+            "quality": "auto",
+            "available": true,
+            "models": []
+          }
+        ],
+        "scene_seconds": 5
+      }
+    }
+  },
+  "POST /api/v1/public/video/clone": {
+    "202": {
+      "default": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "pending",
+        "phase": "planning",
+        "project_id": null,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+        }
+      }
+    }
+  }
+}

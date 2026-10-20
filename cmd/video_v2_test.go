@@ -177,7 +177,7 @@ func TestCreateAudioFileKeepsTheV1Endpoint(t *testing.T) {
 
 func TestCreateRejectsValuesOutsideTheSchema(t *testing.T) {
 	for _, args := range [][]string{
-		{"--brief", "x", "--media-type", "avatar"},
+		{"--brief", "x", "--media-type", "hologram"},
 		{"--brief", "x", "--audio", "music"},
 		{"--brief", "x", "--input", "blog"},
 		{"--brief", "x", "--preset", "nope"},
@@ -201,7 +201,7 @@ func TestErrorTypesMapToExitCodes(t *testing.T) {
 		exit              int
 		retryable         bool
 	}{
-		{"402", "insufficient_funds", "insufficient_funds", 1, false},
+		{"402", "insufficient_credits", "insufficient_funds", 1, false},
 		{"400", "invalid_choice", "invalid_request", 2, false},
 		{"401", "invalid_api_key", "authentication", 3, false},
 		{"429", "too_many_runs", "rate_limited", 1, true},
@@ -225,7 +225,7 @@ func TestInsufficientFundsKeepsTheHintVerbatim(t *testing.T) {
 	srv, _ := setup(t)
 	srv.On("POST", "/videos/{task_id}/generate", apitest.Answer{Status: "402"})
 	r := run(t, "video", "generate", "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01", "--yes")
-	if r.exit() != 1 || r.err.Hint != "Top up your API balance at https://studio.zebracat.ai/api-keys, then run Generate again." {
+	if r.exit() != 1 || r.err.Hint != "Top up your API balance at https://studio.zebracat.ai/api-keys, then try again." {
 		t.Fatalf("exit %d hint %q", r.exit(), r.err.Hint)
 	}
 }
