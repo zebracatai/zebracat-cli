@@ -83,7 +83,22 @@ var studioCmd = &cobra.Command{
   zebracat studio job script <job_id>
 
 Script, hooks and images cost no credits (daily allowances apply). Voices and
-clips are paid: --dry-run answers the quote and spends nothing.`,
+clips are paid: --dry-run answers the quote and spends nothing.
+
+A server without the Studio API (production, until Studio launches there) says
+so here instead of answering 404; ` + "`zebracat script`" + ` and ` + "`zebracat image`" + ` work on every server.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		maybeNotifyUpdate(cmd)
+		c, err := newClient()
+		if err != nil {
+			return err
+		}
+		if c.LacksPath(cmd.Context(), "/studio/scripts") {
+			return clierr.APIHint("use `zebracat script` or `zebracat image`: they work on every server",
+				"%s has no Studio API yet", c.BaseURL)
+		}
+		return nil
+	},
 }
 
 var studioScriptCmd = &cobra.Command{

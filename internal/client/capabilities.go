@@ -38,6 +38,19 @@ var capsFile = func() string {
 // once a day and is cached on disk. Any failure answers false, so callers fall
 // back to the endpoints every server has.
 func (c *Client) HasPath(ctx context.Context, suffix string) bool {
+	paths, ok := c.schemaPathList(ctx)
+	return ok && listsPath(paths, suffix)
+}
+
+// LacksPath reports whether the server's schema was read and lists no path
+// ending in suffix. A schema that could not be read answers false: unknown is
+// not absent, so callers go ahead and let the server answer.
+func (c *Client) LacksPath(ctx context.Context, suffix string) bool {
+	paths, ok := c.schemaPathList(ctx)
+	return ok && !listsPath(paths, suffix)
+}
+
+func (c *Client) schemaPathList(ctx context.Context) ([]string, bool) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -45,10 +58,14 @@ func (c *Client) HasPath(ctx context.Context, suffix string) bool {
 	if !ok {
 		var err error
 		if paths, err = c.fetchPaths(ctx); err != nil {
-			return false
+			return nil, false
 		}
 		c.savePaths(paths)
 	}
+	return paths, true
+}
+
+func listsPath(paths []string, suffix string) bool {
 	for _, p := range paths {
 		if strings.HasSuffix(p, suffix) {
 			return true

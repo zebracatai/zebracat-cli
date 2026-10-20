@@ -165,3 +165,18 @@ func TestScriptAliasKeepsTheOldEndpointOtherwise(t *testing.T) {
 		t.Fatalf("legacy body %v (%s)", c.Body, r.stderr)
 	}
 }
+
+func TestStudioSaysSoWhenTheServerHasNoStudioAPI(t *testing.T) {
+	srv, _ := setup(t)
+	openapiWith(srv, "/api/v1/public/videos", "/api/v1/public/character-swap")
+	r := run(t, "studio", "script", "3 tips for better sleep")
+	if r.exit() != 1 || r.err == nil || !strings.Contains(r.err.Message, "has no Studio API yet") {
+		t.Fatalf("exit %d err %v", r.exit(), r.err)
+	}
+	if n := srv.Count("POST", "/studio/scripts"); n != 0 {
+		t.Fatalf("POST /studio/scripts sent %d times on a server without Studio", n)
+	}
+	if r := run(t, "studio", "--help"); r.exit() != 0 {
+		t.Fatalf("help exit %d: %s", r.exit(), r.stderr)
+	}
+}
