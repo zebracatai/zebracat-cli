@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Zebracat CLI installer.
-#   curl -fsSL https://raw.githubusercontent.com/zebracatai/zebracat-cli/main/install.sh | bash
+#   curl -fsSL https://cli.zebracat.ai | bash
+#   (same file: https://raw.githubusercontent.com/zebracatai/zebracat-cli/main/install.sh)
 #
 # Installs the `zebracat` binary into ~/.local/bin. Binaries are pulled from the
 # project's GitHub Releases, so this script works unchanged from any host you put
-# it on (e.g. a branded https://get.zebracat.ai/install.sh on your own CDN).
+# it on; https://cli.zebracat.ai serves this file live from main.
 #
 # Env overrides:
 #   ZEBRACAT_BIN_DIR          install dir (default: ~/.local/bin)
@@ -36,7 +37,14 @@ command -v curl >/dev/null 2>&1 || err "curl is required"
 
 tag="${ZEBRACAT_INSTALL_VERSION:-}"
 if [ -z "$tag" ]; then
-  tag="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+  # GitHub redirects /releases/latest to /releases/tag/<tag>. Following that redirect
+  # needs no API call (no 60/h anonymous rate limit) and no early-exiting pipe, which
+  # under `set -o pipefail` killed the script with curl error 23.
+  latest="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest")" \
+    || err "could not reach GitHub to find the latest release"
+  case "$latest" in
+    */releases/tag/*) tag="${latest##*/}" ;;
+  esac
 fi
 [ -n "$tag" ] || err "could not determine the latest release (none published yet?)"
 
