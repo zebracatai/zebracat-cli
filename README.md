@@ -26,10 +26,10 @@ terminal, your CI pipeline, or an AI coding agent. JSON in, JSON out.
 
 ```bash
 # macOS / Linux / WSL — one line, no dependencies
-curl -fsSL https://raw.githubusercontent.com/zebracatai/zebracat-cli/main/install.sh | bash
+curl -fsSL https://cli.zebracat.ai | bash
 
 # pin a specific version
-curl -fsSL https://raw.githubusercontent.com/zebracatai/zebracat-cli/main/install.sh | ZEBRACAT_INSTALL_VERSION=v0.1.0 bash
+curl -fsSL https://cli.zebracat.ai | ZEBRACAT_INSTALL_VERSION=v0.1.0 bash
 
 # or with Go
 go install github.com/zebracatai/zebracat-cli@latest   # installs as `zebracat-cli`
@@ -37,9 +37,9 @@ go install github.com/zebracatai/zebracat-cli@latest   # installs as `zebracat-c
 # or grab a binary from the Releases page
 ```
 
-> The installer downloads binaries from GitHub Releases. To serve it from a branded
-> URL like `https://get.zebracat.ai/install.sh`, just host this same `install.sh` on
-> your own CDN — it works unchanged.
+> The installer downloads binaries from GitHub Releases. `https://cli.zebracat.ai`
+> (and `/install.sh`) serves this repo's `install.sh` live from `main`; the raw GitHub
+> URL `https://raw.githubusercontent.com/zebracatai/zebracat-cli/main/install.sh` works too.
 
 ## Interactive shell
 
