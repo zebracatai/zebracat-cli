@@ -117,7 +117,7 @@ func (m *model) assistant(text string) tea.Cmd {
 
 // note is a dimmed tool/progress line under a turn.
 func (m *model) note(text string) tea.Cmd {
-	return m.sayR(func() string { return m.hang(stMuted.Render("  ⎿ "), stMuted.Render(text)) })
+	return m.sayR(func() string { return m.hang(stProg.Render("  ⎿ "), stProg.Render(text)) })
 }
 
 // sayErr is a red line with what happened and one line with what to do.
@@ -199,18 +199,15 @@ func (m *model) welcomeView() string {
 	return m.fit(strings.Join(lines, "\n"))
 }
 
-// logoSize picks the logo for the window: 4 (34×20) on a big terminal, 2
-// (17×10) on a normal one, 1 (9×5) on a small one, 0 (the 1-row mark) on a tiny
-// one. It needs the columns for the logo and the rows for it plus the input.
+// logoSize picks the logo for the window: 2 (17×10, the cap) on a normal or
+// big terminal, 1 (9×5) on a small one, 0 (the 1-row mark) on a tiny one. It needs the columns for the logo and the rows for it plus the input.
 func (m *model) logoSize() int {
 	w, h := m.cols(), m.height
 	if h <= 0 {
 		h = 40 // unknown (tests): judge by width
 	}
 	switch {
-	case w >= 120 && h >= 45:
-		return 4
-	case w >= 70 && h >= 24:
+	case w >= 70 && h >= 24: // the largest: 17×10, even full screen
 		return 2
 	case w >= 40 && h >= 14:
 		return 1
@@ -360,9 +357,9 @@ func (m *model) menuView() string {
 		name := fmt.Sprintf("%-*s", nameW+3, c.name)
 		var line string
 		if i == m.sel {
-			line = stSel.Render("› "+name) + c.desc
+			line = stSel.Bold(true).Render("› "+name) + c.desc
 		} else {
-			line = "  " + stMuted.Render(name+c.desc)
+			line = "  " + stKey.Render(name) + stMuted.Render(c.desc)
 		}
 		lines = append(lines, ansi.Truncate(line, m.inputWidth(), "…"))
 	}
@@ -401,7 +398,24 @@ func (m *model) footer() string {
 	if m.offer != "" && m.stage == stageIdle {
 		hints = append([]string{"u update to " + m.offer}, hints...)
 	}
-	return stMuted.Render(fitItems(hints, w)) + "\n" + stMuted.Render(fitItems(m.statusItems(), w))
+	return stMuted.Render(fitItems(hints, w)) + "\n" + m.colourStatus(fitItems(m.statusItems(), w))
+}
+
+// colourStatus colours the status line's items: the plan in the accent, the
+// balances green, the rest dim. The items were fitted as plain text first.
+func (m *model) colourStatus(line string) string {
+	items := strings.Split(strings.TrimPrefix(line, "  "), " · ")
+	for i, it := range items {
+		switch {
+		case m.acct != nil && it == m.acct.plan:
+			items[i] = stLabel.Render(it)
+		case strings.HasSuffix(it, " API balance") || strings.HasSuffix(it, " credits"):
+			items[i] = stGood.Render(it)
+		default:
+			items[i] = stMuted.Render(it)
+		}
+	}
+	return "  " + strings.Join(items, stMuted.Render(" · "))
 }
 
 // statusItems are the status line's items, most important first: plan, the

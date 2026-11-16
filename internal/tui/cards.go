@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/zebracatai/zebracat-cli/internal/videos"
@@ -67,16 +68,32 @@ func planCard(j *job, width int) string {
 	wrap := func(s string) string { return ansi.Wrap(s, inner, "") }
 
 	var b strings.Builder
-	b.WriteString(wrap(stTitle.Render(clean(title))) + "\n")
-	if facts := planFacts(sp, j.task); facts != "" {
-		b.WriteString(wrap(stMuted.Render(clean(facts))) + "\n")
+	b.WriteString(wrap(stHead.Render(clean(title))) + "\n")
+	if facts := planFacts(sp, j.task); len(facts) > 0 {
+		// two rows: what it is (Type, Format, Length, Scenes), then how it sounds
+		var rows [2][]string
+		for _, f := range facts {
+			r := 0
+			if f[0] == "Audio" || f[0] == "Language" {
+				r = 1
+			}
+			rows[r] = append(rows[r], stLabel.Render(f[0])+" "+clean(f[1]))
+		}
+		for _, row := range rows {
+			if len(row) > 0 {
+				b.WriteString(wrap(strings.Join(row, stMuted.Render(" · "))) + "\n")
+			}
+		}
 	}
 	if beats := videos.Beats(src); len(beats) > 0 {
 		b.WriteString("\n")
 		for _, l := range beats {
 			l = clean(l)
-			if i := strings.Index(l, ") "); i > 0 && i < 12 { // "1. (5s) words": number and length dim
-				l = stMuted.Render(l[:i+1]) + l[i+1:]
+			// "1. (5s) words": the number in the accent, the length dim
+			if d := strings.Index(l, ". ("); d > 0 && d < 5 {
+				if e := strings.Index(l, ") "); e > d {
+					l = stHead.Render(l[:d+1]) + " " + stMuted.Render(l[d+2:e+1]) + l[e+1:]
+				}
 			}
 			b.WriteString(hangText(l, inner, 3) + "\n")
 		}
@@ -87,13 +104,13 @@ func planCard(j *job, width int) string {
 	}
 	b.WriteString("\n")
 	if v := voices(sp); v != "" {
-		b.WriteString(hangText(stMuted.Render("Voice  ")+clean(v), inner, 7) + "\n")
+		b.WriteString(hangText(stLabel.Render("Voice  ")+clean(v), inner, 7) + "\n")
 	}
 	if q := videos.QuoteLine(j.quote); q != "" {
-		b.WriteString(hangText(stMuted.Render("Price  ")+clean(q), inner, 7) + "\n")
+		b.WriteString(hangText(stLabel.Render("Price  ")+priceStyle(j.quote).Render(clean(q)), inner, 7) + "\n")
 	}
 	if j.editorURL != "" {
-		b.WriteString(hangText(stMuted.Render("Studio ")+stMuted.Render(clean(j.editorURL)), inner, 7) + "\n")
+		b.WriteString(hangText(stLabel.Render("Studio ")+stMuted.Render(clean(j.editorURL)), inner, 7) + "\n")
 	}
 	card := stBox.Width(w - 2).Render(strings.TrimRight(b.String(), "\n")) // Width excludes the border
 	hint := ansi.Wrap(stHint.Render("  Change it in plain words · ctrl+g to generate"), w, "")
@@ -115,9 +132,15 @@ func hangText(s string, width, indent int) string {
 	return lines[0] + "\n" + strings.Join(more, "\n")
 }
 
-// planFacts is "20 s · 4 scenes · vertical · ai video · english · narration".
-func planFacts(sp, task map[string]any) string {
-	var parts []string
+// planFacts are the plan's labelled facts: Type, Format, Length, Scenes, Audio,
+// Language (only the ones the plan has).
+func planFacts(sp, task map[string]any) [][2]string {
+	var out [][2]string
+	add := func(label, v string) {
+		if v != "" {
+			out = append(out, [2]string{label, strings.ReplaceAll(v, "_", " ")})
+		}
+	}
 	secs := 0.0
 	beats, _ := sp["beats"].([]any)
 	for _, b := range beats {
@@ -131,27 +154,33 @@ func planFacts(sp, task map[string]any) string {
 			secs, _ = s["seconds"].(float64)
 		}
 	}
+	str := func(k string) string { v, _ := sp[k].(string); return v }
+	add("Type", str("media_type"))
+	add("Format", str("aspect"))
 	if secs > 0 {
-		parts = append(parts, strconv.FormatFloat(secs, 'f', -1, 64)+" s")
+		add("Length", strconv.FormatFloat(secs, 'f', -1, 64)+" s")
 	}
 	if len(beats) > 0 {
-		if len(beats) == 1 {
-			parts = append(parts, "1 scene")
-		} else {
-			parts = append(parts, fmt.Sprintf("%d scenes", len(beats)))
-		}
-	}
-	for _, k := range []string{"aspect", "media_type", "language"} {
-		if s, _ := sp[k].(string); s != "" {
-			parts = append(parts, strings.ReplaceAll(s, "_", " "))
-		}
+		add("Scenes", strconv.Itoa(len(beats)))
 	}
 	if a, ok := sp["audio"].(map[string]any); ok {
-		if s, _ := a["mode"].(string); s != "" {
-			parts = append(parts, s)
-		}
+		v, _ := a["mode"].(string)
+		add("Audio", v)
 	}
-	return strings.Join(parts, " · ")
+	add("Language", str("language"))
+	return out
+}
+
+// priceStyle colours the price: green when the balance covers it, red when it
+// doesn't, yellow when the server didn't say.
+func priceStyle(q map[string]any) lipgloss.Style {
+	switch ok, known := q["sufficient"].(bool); {
+	case known && ok:
+		return stGood
+	case known && !ok:
+		return stErr
+	}
+	return stWarn
 }
 
 // voices lists the cast's voices: "Narrator (Rachel) · Sam".
@@ -180,7 +209,7 @@ func voices(sp map[string]any) string {
 // doneCard is the finished video: its link, the studio link and how to open it.
 func doneCard(j *job, elapsed time.Duration) string {
 	var b strings.Builder
-	b.WriteString(stKey.Render("● ") + "Your video is ready" + stMuted.Render(" · "+clock(elapsed)) + "\n")
+	b.WriteString(stGood.Render("✓ ") + "Your video is ready" + stMuted.Render(" · "+clock(elapsed)) + "\n")
 	if j.videoURL != "" {
 		b.WriteString(stMuted.Render("  Video  ") + stKey.Render(clean(j.videoURL)) + "\n")
 	}

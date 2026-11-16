@@ -47,7 +47,7 @@ func TestLogoSizesGolden(t *testing.T) {
 func TestWelcomeLogoFollowsTheWindow(t *testing.T) {
 	cases := []struct {
 		cols, rows, size int
-	}{{200, 60, 4}, {120, 40, 2}, {80, 24, 2}, {60, 20, 1}, {38, 12, 0}}
+	}{{200, 60, 2}, {120, 40, 2}, {80, 24, 2}, {60, 20, 1}, {38, 12, 0}}
 	for _, c := range cases {
 		m := sized(t, c.cols, c.rows)
 		if got := m.logoSize(); got != c.size {

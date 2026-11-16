@@ -111,7 +111,7 @@ func TestConversationPlanEditConfirm(t *testing.T) {
 		t.Fatalf("create body %v headers %v", post.Body, post.Header)
 	}
 	card := planCard(m.job, 80)
-	for _, want := range []string{"Why cats knock things off tables", "20 s · 4 scenes · vertical · ai video · english · narration",
+	for _, want := range []string{"Why cats knock things off tables", "Type ai video · Format vertical · Length 20 s · Scenes 4", "Audio narration · Language english",
 		"Ever wondered why your cat swipes", "96 credits ($4.80)", "ctrl+g"} {
 		if !strings.Contains(card, want) {
 			t.Fatalf("plan card misses %q:\n%s", want, card)

@@ -197,7 +197,8 @@ func Sized(s int) []string {
 }
 
 // Sizes, smallest first: the cells each takes, for picking one that fits.
-var Sizes = []int{1, 2, 4}
+// The 34×20 size (Sized(4)) is not offered: the owner found it far too big.
+var Sizes = []int{1, 2}
 
 // Dimensions of Sized(s): columns and rows.
 func Dimensions(s int) (cols, rows int) {
