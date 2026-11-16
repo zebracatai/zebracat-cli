@@ -8,7 +8,10 @@
 // and keeping it when most of it is inside the shield AND inside a stripe.
 package logo
 
-import "strings"
+import (
+	"math"
+	"strings"
+)
 
 // Color is the logo colour from logo.svg.
 const Color = "#6B3BF4"
@@ -142,9 +145,73 @@ func render(cols, rows int, sw, sh float64, solid bool) []string {
 	return out
 }
 
-// Big is the welcome-screen logo: 17 cells × 10 rows (the SVG's 37:47 at a 1:2.2 cell), each stripe one full cell
-// column and each gap one empty column (the stripe period is 2 cells).
-func Big() []string { return Striped(10) }
+// Sized draws the striped logo with each stripe s half-cells wide (and each gap
+// the same), so stripes stay whole columns at every size: s=1 is 9×5 cells
+// (half-block stripes), s=2 is 17×10, s=4 is 34×20. Rows follow the SVG's
+// 37:47 at a 1:2.2 terminal cell. The left half is mirrored onto the right at
+// sub-pixel level about the centre stripe, so the ears always match.
+func Sized(s int) []string {
+	if s < 1 {
+		s = 1
+	}
+	const ss = 6
+	sw := Period / float64(2*s) // viewBox units per sub-pixel column
+	wsub := 17 * s              // 9 stripes + 8 gaps, s sub-pixels each
+	rows := int(math.Round(Height / (4.4 * sw)))
+	hsub := rows * 2
+	sh := Height / float64(hsub)
+	grid := make([][]bool, hsub)
+	for y := range grid {
+		grid[y] = make([]bool, wsub+1)
+		for x := 0; x < wsub; x++ {
+			hit := 0
+			for a := 0; a < ss; a++ {
+				for d := 0; d < ss; d++ {
+					if Inside((float64(x)+(float64(a)+0.5)/ss)*sw, (float64(y)+(float64(d)+0.5)/ss)*sh, false) {
+						hit++
+					}
+				}
+			}
+			grid[y][x] = hit*2 > ss*ss
+		}
+		for x := 0; x < wsub/2; x++ {
+			grid[y][wsub-1-x] = grid[y][x]
+		}
+	}
+	cols := (wsub + 1) / 2
+	out := make([]string, rows)
+	for r := 0; r < rows; r++ {
+		var b strings.Builder
+		for c := 0; c < cols; c++ {
+			bits := 0
+			for q := 0; q < 4; q++ {
+				if grid[2*r+q/2][2*c+q%2] {
+					bits |= 1 << q
+				}
+			}
+			b.WriteString(quadrants[bits])
+		}
+		out[r] = strings.TrimRight(b.String(), " ")
+	}
+	return out
+}
+
+// Sizes, smallest first: the cells each takes, for picking one that fits.
+var Sizes = []int{1, 2, 4}
+
+// Dimensions of Sized(s): columns and rows.
+func Dimensions(s int) (cols, rows int) {
+	l := Sized(s)
+	for _, x := range l {
+		if n := len([]rune(x)); n > cols {
+			cols = n
+		}
+	}
+	return cols, len(l)
+}
+
+// Big is the 17×10 welcome logo.
+func Big() []string { return Sized(2) }
 
 // Small is the 2-cell, 1-row mark (ears and body of the same shield) used next
 // to the prompt and as the base of the working animation.

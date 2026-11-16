@@ -40,7 +40,15 @@ type pollMsg struct {
 	err       error
 	untilDone bool // keep polling past plan_ready (after Generate)
 }
-type acctMsg struct{ a *account }
+type acctMsg struct {
+	a     *account
+	quiet bool // a background refresh: update the footer, print nothing
+}
+type resizeMsg struct{ gen int } // a resize settled (debounced)
+
+// block is one printed piece of the conversation, kept so a resize can print
+// the visible part again at the new width (the welcome is re-rendered).
+type block struct{ render func() string }
 type projectsMsg struct {
 	out map[string]any
 	err error
@@ -79,7 +87,11 @@ type model struct {
 	key     textinput.Model // the API-key field (hidden)
 	sp      spinner.Model
 	width   int
-	busy    bool // a slash command's API call is running
+	height  int
+	blocks  []block // the conversation printed so far
+	printed int     // lines printed since the screen was last cleared
+	resizes int     // resize generation, to redraw once dragging stops
+	busy    bool    // a slash command's API call is running
 	stage   stage
 	job     *job
 	carry   string // the words of a brief the plan asked about, sent with the answer
@@ -213,12 +225,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
+		m.width, m.height = msg.Width, msg.Height
 		if !m.welcomed {
 			m.welcomed = true
-			return m, m.say(m.welcomeView())
+			return m, m.sayWelcome()
 		}
-		return m, nil
+		m.resizes++
+		gen := m.resizes
+		return m, tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg { return resizeMsg{gen} })
+
+	case resizeMsg:
+		if msg.gen != m.resizes {
+			return m, nil // still resizing
+		}
+		return m, m.redraw()
 
 	case firstMsg:
 		text := m.launch.First
@@ -232,6 +252,9 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case acctMsg:
 		m.busy = false
 		if msg.a == nil {
+			if msg.quiet {
+				return m, nil
+			}
 			if m.valid { // a key we just saved failed to authenticate
 				m.valid = false
 				return m, m.sayErr("That key didn't work.", "Check it and /login again.")
@@ -240,6 +263,9 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.valid = false
 		m.acct = msg.a
+		if msg.quiet {
+			return m, nil
+		}
 		return m, m.say(stOK.Render("✓ ") + "Signed in" + stMuted.Render(m.accountLine()))
 
 	case projectsMsg:
