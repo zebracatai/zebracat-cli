@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/zebracatai/zebracat-cli/internal/attach"
 	"github.com/zebracatai/zebracat-cli/internal/brief"
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/ui"
@@ -14,6 +15,7 @@ import (
 )
 
 var (
+	crImages   []string
 	crScript   string
 	crYes      bool
 	crNoRender bool
@@ -37,7 +39,10 @@ also generate it and wait for the finished video.
   zebracat create "a 30-second ad for my coffee brand"
   zebracat create https://www.tiktok.com/@someone/video/7300000000000000000
   zebracat create --script script.txt --json
-  zebracat create "why cats knock things over" --yes --json   # plan AND generate (spends credits)`,
+  zebracat create "why cats knock things over" --yes --json   # plan AND generate (spends credits)
+  zebracat create "a launch video for this mug" --image mug.png:product --json
+
+In the conversation, paste a picture with Ctrl+V or drag a picture file in.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		text := strings.TrimSpace(strings.Join(args, " "))
 		kind := brief.KindIdea
@@ -48,6 +53,11 @@ also generate it and wait for the finished video.
 			}
 			text, kind = s, brief.KindScript
 		}
+		imgs, err := openImages(crImages)
+		if err != nil {
+			return err
+		}
+		launchImages = imgs
 		if !crYes && shellAllowed() {
 			first := text
 			if kind == brief.KindScript {
@@ -58,17 +68,31 @@ also generate it and wait for the finished video.
 		if text == "" {
 			return clierr.Usage("say what the video is about: zebracat create \"<idea>\" (or --script <file>, or a link)")
 		}
-		return createPlan(text, kind)
+		return createPlan(text, kind, imgs)
 	},
 }
 
 // createPlan is the non-interactive create: a plan (and, with --yes, the video).
-func createPlan(text string, kind brief.Kind) error {
+func createPlan(text string, kind brief.Kind, imgs []attach.Image) error {
 	c, err := newClient()
 	if err != nil {
 		return err
 	}
 	body := brief.Body(text, kind, !crNoRender)
+	if len(imgs) > 0 { // uploaded first, the way the studio's /chat does
+		ctx, cancel := ctxTimeout(2 * time.Minute)
+		var urls []string
+		for _, im := range imgs {
+			u, err := attach.Upload(ctx, c, im)
+			if err != nil {
+				cancel()
+				return err
+			}
+			urls = append(urls, u)
+		}
+		cancel()
+		body["uploads"] = attach.Uploads(urls, imgs)
+	}
 	key := newIdempotencyKey()
 	var out map[string]any
 	if err := postIdempotent(c, videos.Base+"/videos", body, key, true, crTimeout, &out); err != nil {
@@ -119,6 +143,32 @@ func createPlan(text string, kind brief.Kind) error {
 	return emit(final, func() { printStatusHuman(final) })
 }
 
+// launchImages are the --image pictures the conversation starts with.
+var launchImages []attach.Image
+
+// openImages checks each --image path[:kind] (PNG, JPEG or WebP, up to 12 MB).
+func openImages(specs []string) ([]attach.Image, error) {
+	var out []attach.Image
+	for _, spec := range specs {
+		path, kind := spec, "other"
+		if i := strings.LastIndex(spec, ":"); i > 1 { // "photo.png:person" (a Windows "C:\" drive is not a kind)
+			k := spec[i+1:]
+			for _, known := range attach.Kinds {
+				if k == known {
+					path, kind = spec[:i], k
+				}
+			}
+		}
+		im, err := attach.Open(path)
+		if err != nil {
+			return nil, clierr.Usage("--image: %v", err)
+		}
+		im.Kind = kind
+		out = append(out, im)
+	}
+	return out, nil
+}
+
 // loginCmd is `zebracat login`: the same as `zebracat auth login`.
 var loginCmd = &cobra.Command{
 	Use:   "login",
@@ -129,6 +179,7 @@ var loginCmd = &cobra.Command{
 func init() {
 	f := createCmd.Flags()
 	f.StringVar(&crScript, "script", "", "Plan from a script file (\"-\" reads stdin)")
+	f.StringArrayVar(&crImages, "image", nil, "Attach a picture: <path>[:person|place|product|style|logo|other] (PNG/JPEG/WebP, ≤12 MB; repeatable)")
 	f.BoolVar(&crYes, "yes", false, "Don't ask: also generate the plan (spends credits) and wait for the video")
 	f.BoolVar(&crNoRender, "no-render", false, "Keep an editable project; don't export the MP4")
 	f.DurationVar(&crTimeout, "timeout", 30*time.Minute, "Max time to wait")

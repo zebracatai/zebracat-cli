@@ -5,6 +5,7 @@
 package apitest
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"io"
@@ -152,6 +153,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	h := s.extra[r.URL.Path]
 	s.mu.Unlock()
 	if h != nil {
+		r.Body = io.NopCloser(bytes.NewReader(raw)) // the handler reads it again (e.g. a multipart upload)
 		h(w, r)
 		return
 	}

@@ -303,9 +303,35 @@ func (m *model) liveView() string {
 	} else {
 		field = lipgloss.JoinHorizontal(lipgloss.Top, stPrompt.Render("› "), m.in.View())
 	}
-	b.WriteString(m.rule() + "\n" + field + "\n" + m.rule() + "\n")
+	b.WriteString(m.rule() + "\n")
+	if len(m.images) > 0 { // attached pictures, as chips above the text
+		b.WriteString(m.chipLines() + "\n")
+	}
+	b.WriteString(field + "\n" + m.rule() + "\n")
 	b.WriteString(m.footer())
 	return b.String()
+}
+
+// chipLines lays the picture chips out in rows, never splitting a chip, with a
+// hint on how to remove one when it fits.
+func (m *model) chipLines() string {
+	w := m.inputWidth()
+	items := make([]string, 0, len(m.images)+1)
+	for i, im := range m.images {
+		items = append(items, stKey.Render(im.Chip(i+1)))
+	}
+	items = append(items, stMuted.Render("backspace removes the last"))
+	var lines []string
+	line := " "
+	for _, it := range items {
+		if ansi.StringWidth(line)+1+ansi.StringWidth(it) > w && line != " " {
+			lines = append(lines, line)
+			line = " "
+		}
+		line += " " + it
+	}
+	lines = append(lines, line)
+	return strings.Join(lines, "\n")
 }
 
 // menuView is the `/` completion list: two aligned columns, at most menuRows

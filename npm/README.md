@@ -25,7 +25,7 @@ Output is JSON on stdout (add `--human` for tables). Pattern is `zebracat <noun>
 ## Notes
 
 - The npm package is a thin wrapper: the binary is fetched on install and re-fetched lazily on first run if install was run with `--ignore-scripts`.
-- The npm version tracks the CLI release of the same number (e.g. `@zebracat/cli@0.6.0` installs `v0.6.0`). Update with `npm install -g @zebracat/cli@latest`; `zebracat doctor` shows which copy runs if you also used the curl installer..
+- The npm version tracks the CLI release of the same number (e.g. `@zebracat/cli@0.6.1` installs `v0.6.1`). Update with `npm install -g @zebracat/cli@latest`; `zebracat doctor` shows which copy runs if you also used the curl installer..
 - Requires Node.js ≥ 18 and `tar` on your PATH (bundled on macOS, Linux, and Windows 10+).
 
 ## Links

@@ -14,7 +14,7 @@ import (
 // non-terminal paths never open it). After an in-app update it starts the new
 // binary in its place.
 var launchShell = func(c *client.Client, baseURL, first string) error {
-	res, err := tui.Run(c, baseURL, tui.Launch{First: first, JustUpdated: update.TakeUpdatedFrom()})
+	res, err := tui.Run(c, baseURL, tui.Launch{First: first, JustUpdated: update.TakeUpdatedFrom(), Images: launchImages})
 	if err != nil {
 		return err
 	}

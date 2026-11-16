@@ -1,6 +1,6 @@
 {
   "name": "@zebracat/cli",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Zebracat CLI — make AI videos by talking to your terminal: describe a video, paste a script or a link, change the plan in plain words, generate.",
   "bin": {
     "zebracat": "bin/zebracat.js"

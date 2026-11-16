@@ -92,6 +92,12 @@ func (c *Client) setAuth(req *http.Request) error {
 	return clierr.Auth("not authenticated")
 }
 
+// RawBody is a request body sent as is, with its own content type.
+type RawBody struct {
+	ContentType string
+	Data        []byte
+}
+
 // Do issues a request and decodes the JSON body into out (may be nil).
 // Returns the parsed body bytes and a *clierr.Error on failure.
 func (c *Client) Do(ctx context.Context, method, path string, body any, out any) ([]byte, error) {
@@ -126,7 +132,10 @@ func (c *Client) DoWith(ctx context.Context, method, path string, body any, head
 
 func (c *Client) doOnce(ctx context.Context, method, path string, body any, headers map[string]string) ([]byte, *http.Response, error) {
 	var reader io.Reader
-	if body != nil {
+	contentType := "application/json"
+	if raw, ok := body.(RawBody); ok { // a body sent as is (a multipart upload)
+		reader, contentType = bytes.NewReader(raw.Data), raw.ContentType
+	} else if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
 			return nil, nil, clierr.Usage("could not encode request body: %v", err)
@@ -139,7 +148,7 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body any, head
 		return nil, nil, clierr.Usage("bad request: %v", err)
 	}
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", contentType)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "zebracat-cli")
