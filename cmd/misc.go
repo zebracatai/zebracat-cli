@@ -86,7 +86,12 @@ var updateCmd = &cobra.Command{
 	Short: "Update the CLI to the latest release",
 	Long: `Download the latest release and replace this binary in place.
 
-Use --check to only report whether an update is available, without installing.`,
+Use --check to only report whether an update is available, without installing.
+An npm, Homebrew or "go install" copy is left to its package manager: the
+command prints the line to run instead.
+
+The launch check (once a day, 1.5 s at most, never blocking) is off with
+ZEBRACAT_NO_UPDATE_CHECK=1 and in CI.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, cancel := ctxTimeout(60 * time.Second)
 		defer cancel()
@@ -106,6 +111,16 @@ Use --check to only report whether an update is available, without installing.`,
 			return emit(out, func() {
 				ui.Warn("A newer version is available: %s (you have %s).", latest, current)
 				ui.Info("Install it with:  zebracat update")
+			})
+		}
+
+		if m := update.Method(); m != "binary" {
+			cmdline := update.UpgradeCommand()
+			out := map[string]any{"current": current, "latest": latest, "updated": false, "update_available": true,
+				"method": m, "command": cmdline}
+			return emit(out, func() {
+				ui.Warn("%s is available (you have %s). This copy was installed with %s.", latest, current, m)
+				ui.Info("Update it with:  %s", cmdline)
 			})
 		}
 

@@ -59,26 +59,39 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagBaseURL, "base-url", "", "Override the API base URL")
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "Suppress non-essential stderr output")
 	rootCmd.SetVersionTemplate(ui.Banner() + "zebracat {{.Version}}\n")
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) { maybeNotifyUpdate(cmd) }
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) { startUpdateCheck(cmd) }
+	rootCmd.PersistentPostRun = func(cmd *cobra.Command, args []string) { finishUpdateCheck() }
 }
 
-// maybeNotifyUpdate prints a one-line "update available" notice to stderr for
-// interactive commands. It's cached (≤1 network check/day) and never touches
-// stdout, so JSON output and pipelines stay clean.
-func maybeNotifyUpdate(cmd *cobra.Command) {
+// updateNotice waits for the launch update check (see startUpdateCheck).
+var updateNotice func() string
+
+// startUpdateCheck starts the launch update check in the background: GitHub's
+// /releases/latest redirect, cached a day under ~/.zebracat/update.json, with a
+// 1.5 s cap. It is off with ZEBRACAT_NO_UPDATE_CHECK=1, in CI, for --quiet,
+// when stderr is not a terminal, and for commands that shouldn't nag.
+func startUpdateCheck(cmd *cobra.Command) {
+	updateNotice = nil
 	switch cmd.Name() {
-	case "zebracat", "update", "version", "completion", "help", "__complete", "__completeNoDesc":
+	case "zebracat", "chat", "create", "update", "version", "completion", "help", "__complete", "__completeNoDesc":
 		return // the TUI shows its own notice; these commands shouldn't nag
 	}
 	if flagQuiet || !ui.IsTTY(os.Stderr) {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	latest := update.LatestCached(ctx)
-	if latest != "" && update.Newer("v"+version.Version, latest) {
-		fmt.Fprintf(os.Stderr, "↑ zebracat %s is available (you have v%s) — run `zebracat update`\n", latest, version.Version)
+	updateNotice = update.Check("v" + version.Version)
+}
+
+// finishUpdateCheck prints the notice (one line on stderr) once the command is
+// done. It never changes stdout or the exit code.
+func finishUpdateCheck() {
+	if updateNotice == nil {
+		return
 	}
+	if n := updateNotice(); n != "" {
+		fmt.Fprintln(os.Stderr, "↑ "+n)
+	}
+	updateNotice = nil
 }
 
 // settings loads on-disk settings honoring the --base-url override.

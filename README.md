@@ -41,40 +41,64 @@ go install github.com/zebracatai/zebracat-cli@latest   # installs as `zebracat-c
 > (and `/install.sh`) serves this repo's `install.sh` live from `main`; the raw GitHub
 > URL `https://raw.githubusercontent.com/zebracatai/zebracat-cli/main/install.sh` works too.
 
-## Interactive shell
+## Talk to it
 
-Just run `zebracat` (no arguments) to open the interactive shell — a branded,
-purple-themed REPL:
+Run `zebracat` (or `zebracat create "<idea>"`) and say what you want. It works like
+the studio's chat: Zebracat writes a **plan**, you change it **in plain words**, and
+nothing is spent until you press **Ctrl+G** and answer **y**.
 
 ```
-╭──────────────────────────────────────────────────╮
-│  ╺━┓ ┏━╸ ┣━┓ ┏━┓ ┏━┓ ┏━╸ ┏━┓ ╺┳╸                 │
-│   ┏┛ ┣━╸ ┣━┫ ┣┳┛ ┣━┫ ┃   ┣━┫  ┃                  │
-│  ┗━╸ ┗━╸ ┗━┛ ┻┗╸ ┻ ┻ ┗━╸ ┻ ┻  ╹                  │
-│                                                  │
-│  🦓  AI video generation, right in your terminal.│
-│                                                  │
-│  Type /help for commands  ·  /login to start     │
-╰──────────────────────────────────────────────────╯
-
-╭────────────────────────────────────────────────────╮
-│ 🦓 › a 30-second cinematic ad for my coffee brand    │
-╰────────────────────────────────────────────────────╯
-  ● you@example.com · Pro · 1,240 credits
+🦓 › a 20-second video on why cats knock things off tables
+  Planning your video… (free — nothing is charged until you generate)
+╭──────────────────────────────────────────────────────────────────────╮
+│  🎬 Why cats knock things off tables                                 │
+│  20 s · 4 scenes · vertical · ai video · english · narration         │
+│                                                                      │
+│  1. (5s) Ever wondered why your cat swipes your mug off the table?   │
+│  2. (5s) It starts with instinct: cats test what moves.              │
+│  3. (5s) Then comes attention. A falling cup always gets you running.│
+│  4. (5s) So next time, play with them first. Your mug will thank you.│
+│                                                                      │
+│  Price  96 credits ($4.80) from your API balance                     │
+│  Studio https://studio.zebracat.ai/storyboard/48213                  │
+╰──────────────────────────────────────────────────────────────────────╯
+🦓 › make it funnier and shorter
+🦓 Done: tightened to 15 s and punched up the jokes.
+   … the updated plan card …
+  Generate it for 96 credits ($4.80) from your API balance?  y / n
+  ⣾ Making the scenes · 1:12
+✓ Your video is ready · 3:40
+  Video  https://cdn.zebracat.ai/videos/48213/final.mp4
+  Ctrl+O or /open to watch it · type a new idea to make another
 ```
 
-- **Slash commands** with autocomplete: `/video`, `/status`, `/projects`, `/voices`,
-  `/styles`, `/account`, `/login`, `/update`, `/help`, `/quit` (type `/` and press Tab).
-- **Auth-aware**: signed out, it shows a `/login` nudge and gates anything that spends
-  credits; `/login` lets you paste your API key (stored locally, never shown).
-- **Just describe a video** in plain language, then pick type / length / format with
-  **↑/↓ + Enter** — a guided, keyboard-driven wizard. Zebracat writes the **plan**
-  first; you see its summary and the **quote**, then choose **Generate?** with ↑/↓.
-  Nothing is spent until you say yes.
+- **Type an idea, paste a script, or paste a link.** A TikTok / YouTube / Reel link is
+  read like the studio reads it: say "clone this" (or paste the link alone) to copy
+  it, or "like this but about matcha" to use it as inspiration. A lone web-page link
+  becomes a video about that page. `/script <file>` plans from a script file.
+- **The plan card** shows the scenes, length, look, voices and the exact price.
+- **Change it in plain words** ("make it funnier", "use a female voice", "drop scene 3").
+- **Questions** the plan asks are answered by typing (or the option's number).
+- **Ctrl+G** (or `/generate`) asks "Generate it for N credits?" — only **y** spends.
+- **Live progress**: stage, elapsed time (and % when the server reports it).
+- **Ctrl+C never cancels a paid video**: while one is being made, the first Ctrl+C
+  tells you it keeps going on our servers, the second leaves.
+- Slash commands (Tab completes): `/new`, `/generate`, `/plan`, `/open`, `/script`,
+  `/status`, `/projects`, `/voices`, `/styles`, `/account`, `/login`, `/update`, `/help`, `/quit`.
 - Output stays in your scrollback after you exit (no alt-screen).
 
-Prefer one-shot commands? Everything below also works non-interactively
-(`zebracat video create …`), which is what scripts and agents should use.
+**Scripts and agents never get a prompt.** Without a terminal (a pipe, CI) or with
+`--json`, `zebracat` alone exits 2 (`needs_terminal`), and `zebracat create` writes the
+plan and prints it with its quote as JSON:
+
+```bash
+zebracat create "why cats knock things off tables" --json   # plan + quote, never spends
+zebracat create "…" --yes --json                            # plan, generate, wait (spends)
+zebracat create --script script.txt --json
+zebracat create https://youtu.be/abc123 --json              # a link, like the studio
+```
+
+Every older command below keeps working unchanged.
 
 ## Authentication
 
@@ -83,7 +107,7 @@ pay-as-you-go from your API dollar balance). Create one at
 [studio.zebracat.ai → API Keys](https://studio.zebracat.ai).
 
 ```bash
-zebracat auth login            # paste your API key (stored at ~/.zebracat, 0600)
+zebracat login                 # paste your API key (stored at ~/.zebracat, 0600)
 export ZEBRACAT_API_KEY=sk-…   # …or just set the env var (CI/agents)
 zebracat auth status           # am I logged in?
 zebracat auth whoami           # account + balances
@@ -178,6 +202,8 @@ v1 task ids (older videos) keep their v1 `status`.
 ## Commands
 
 ```
+zebracat [create]    the conversation (plan → change → Ctrl+G); `create --json` for scripts
+zebracat login       same as `auth login`
 zebracat auth        login | logout | status | whoami
 zebracat video       create | list | get | status | quote | generate | answer | cancel
                      download | clone | translate | prompt-styles | languages
@@ -266,12 +292,22 @@ Override per-invocation with `--base-url`, `--api-key`, or the `ZEBRACAT_API_KEY
 ## Updating
 
 ```bash
-zebracat update           # download the latest release and replace this binary
+zebracat update           # download the latest release, check its checksum, replace this binary
 zebracat update --check   # just tell me if an update is available
 ```
 
-The CLI also checks once a day (cached, non-blocking) and prints a one-line notice
-to stderr when a newer version is out. In the interactive shell, run `/update`.
+On launch the CLI checks GitHub's latest release at most **once a day** (cached in
+`~/.zebracat/update.json`, 1.5 s at most, never blocking or failing a command) and
+prints one line on stderr when a newer version is out:
+
+```
+↑ Zebracat CLI v0.3.1 is available — run `zebracat update`
+```
+
+It is off with `ZEBRACAT_NO_UPDATE_CHECK=1`, in CI (`CI`, `GITHUB_ACTIONS`, …), with
+`--quiet`, and when stderr is not a terminal. npm, Homebrew and `go install` copies
+are told their own command (`npm install -g @zebracat/cli@latest`, …) instead of being
+replaced. In the conversation, run `/update`.
 
 ## Development
 

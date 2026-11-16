@@ -30,8 +30,8 @@ func (m *model) apiCmd(method, path string, body any) tea.Cmd {
 	}
 }
 
-// createCmd posts the wizard's video as a Director v2 plan (auto_generate=false):
-// the user sees the plan and its quote before anything is spent.
+// createCmd posts a message as a Director v2 plan (auto_generate=false): the
+// person sees the plan and its quote before anything is spent.
 func (m *model) createCmd(body map[string]any) tea.Cmd {
 	cl := m.cl
 	key := newKey()
@@ -40,11 +40,11 @@ func (m *model) createCmd(body map[string]any) tea.Cmd {
 		defer cancel()
 		var out map[string]any
 		_, err := cl.DoWith(ctx, "POST", videos.Base+"/videos", body, map[string]string{"Idempotency-Key": key}, &out)
-		return apiMsg{kind: "create", out: out, err: err}
+		return createdMsg{out: out, err: err}
 	}
 }
 
-// generateCmd presses Generate on a plan.
+// generateCmd presses Generate on a plan (only ever after the person's y).
 func (m *model) generateCmd(taskID string, shouldRender bool) tea.Cmd {
 	cl := m.cl
 	key := newKey()
@@ -54,22 +54,63 @@ func (m *model) generateCmd(taskID string, shouldRender bool) tea.Cmd {
 		var out map[string]any
 		_, err := cl.DoWith(ctx, "POST", videos.Path(taskID, "generate"), map[string]any{"should_render": shouldRender},
 			map[string]string{"Idempotency-Key": key}, &out)
-		return apiMsg{kind: "generate", out: out, err: err, taskID: taskID}
+		return generatedMsg{out: out, err: err}
 	}
 }
 
-// quoteCmd reads what Generate will charge for a ready plan.
-func (m *model) quoteCmd(task map[string]any) tea.Cmd {
+// planCmd reads a ready plan (GET /plan) and what Generate will charge (GET /quote).
+func (m *model) planCmd(task map[string]any, reply string) tea.Cmd {
 	cl := m.cl
 	return func() tea.Msg {
 		id, _ := task["task_id"].(string)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		var q map[string]any
-		if _, err := cl.Do(ctx, "GET", videos.Path(id, "quote"), nil, &q); err != nil {
-			q, _ = task["quote"].(map[string]any) // the task view carries one too
+		var plan map[string]any
+		if _, err := cl.Do(ctx, "GET", videos.Path(id, "plan"), nil, &plan); err != nil {
+			plan = nil // the card falls back to the task's plan_summary
 		}
-		return planReadyMsg{task: task, quote: q}
+		return planMsg{task: task, plan: plan, quote: readQuote(ctx, m, id, task), reply: reply}
+	}
+}
+
+// readQuote is GET /quote, else the quote the task view carries.
+func readQuote(ctx context.Context, m *model, id string, task map[string]any) map[string]any {
+	var q map[string]any
+	if _, err := m.cl.Do(ctx, "GET", videos.Path(id, "quote"), nil, &q); err != nil {
+		q, _ = task["quote"].(map[string]any)
+	}
+	return q
+}
+
+// chatCmd sends a plain-words change through the plan chat (the studio's edits
+// path), then re-reads the quote.
+func (m *model) chatCmd(taskID, message string) tea.Cmd {
+	cl := m.cl
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		var out map[string]any
+		if _, err := cl.Do(ctx, "POST", videos.Path(taskID, "plan", "chat"), map[string]any{"message": message}, &out); err != nil {
+			return planMsg{err: err}
+		}
+		reply, _ := out["reply"].(string)
+		var plan map[string]any
+		if _, ok := out["screenplay"].(map[string]any); ok {
+			plan = out
+		}
+		return planMsg{plan: plan, quote: readQuote(ctx, m, taskID, nil), reply: reply}
+	}
+}
+
+// answerCmd answers the question a plan stopped on.
+func (m *model) answerCmd(taskID, questionID, answer string) tea.Cmd {
+	cl := m.cl
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		var out map[string]any
+		_, err := cl.Do(ctx, "POST", videos.Path(taskID, "answer"), map[string]any{"question_id": questionID, "answer": answer}, &out)
+		return answeredMsg{err: err}
 	}
 }
 
@@ -119,14 +160,11 @@ func (m *model) projectsCmd() tea.Cmd {
 	}
 }
 
-// updateCheckCmd asks GitHub (cached, ≤1 network call/day) whether a newer
-// version is out, for the startup notice.
+// updateCheckCmd runs the launch update check (cached a day, 1.5 s cap, off
+// in CI and with ZEBRACAT_NO_UPDATE_CHECK=1).
 func (m *model) updateCheckCmd() tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		return updMsg{latest: update.LatestCached(ctx)}
-	}
+	wait := update.Check("v" + version.Version)
+	return func() tea.Msg { return updMsg{notice: wait()} }
 }
 
 // runUpdate self-updates the binary from inside the shell.
