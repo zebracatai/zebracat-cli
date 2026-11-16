@@ -48,33 +48,35 @@ the studio's chat: Zebracat writes a **plan**, you change it **in plain words**,
 nothing is spent until you press **Ctrl+G** and answer **y**. There are no menus.
 
 ```
-╭──────────────────────────────────────────────────────────────────────────╮
-│ ▗▖       ▗▖   Welcome to Zebracat  v0.4.0                                │
-│ ▐▙▄▄▄▄▄▄▄▟▌   you@example.com · $208.25 API balance                      │
-│ ▐▀▀▄▀▀▀▄▀▀▌   ~/projects/coffee                                          │
-│ ▐ ● ▀▀▀ ● ▌                                                              │
-│  ▀▄▄▄▼▄▄▄▀                                                               │
-╰──────────────────────────────────────────────────────────────────────────╯
- › Describe a video, paste a script or a link (TikTok, YouTube, Reels)
- › /help for commands and keys · Ctrl+C twice to quit
+ ▙               ▟
+ █ ▖           ▗ █
+ █ █           █ █    Zebracat v0.5.0
+ █ █ █ █ █ █ █ █ █    you@example.com · $208.25 API balance
+ █ █ █ █ █ █ █ █ █    ~/projects/coffee
+ █ █ █ █ █ █ █ █ █
+ █ █ █ █ █ █ █ █ █    Describe a video, paste a script or a link.
+ █ █ █ █ █ █ █ █ █    /help for commands · ctrl+c twice to quit
+ ▝ ▀ █ █ █ █ █ ▀ ▘
+       ▀ █ ▀
+───────────────────────────────────────────────────────────────────────
 › hi
-  ⎿ Writing a plan — free, nothing is charged until you generate
+───────────────────────────────────────────────────────────────────────
 ● Hi! What should your video be about? Tell me the idea, a product, a story, or a topic.
 › a 20-second video on why cats knock things off tables
-▓ Writing the screenplay… (0:21 · esc to interrupt)
-╭────────────────────────────────────────────────────────────────────────╮
-│ 🎬 Why cats knock things off tables                                    │
-│ 20 s · 4 scenes · vertical · ai video · english · narration            │
-│                                                                        │
-│ 1. (5s) Ever wondered why your cat swipes your mug off the table?      │
-│ …                                                                      │
-│ Price  96 credits ($4.80) from your API balance                        │
-╰────────────────────────────────────────────────────────────────────────╯
-› make it funnier
-● Done: tightened to 15 s and punched up the jokes.
-   … the updated plan card …
-  Generate it for 96 credits ($4.80)?   y generate   n / esc not now
+▄▄ Writing the screenplay… (0:21 · esc to interrupt)
+╭─────────────────────────────────────────────────────────────────────╮
+│ Why cats knock things off tables                                    │
+│ 20 s · 4 scenes · vertical · ai video · english · narration         │
+│                                                                     │
+│ 1. (5s) Ever wondered why your cat swipes your mug off the table?   │
+│ …                                                                   │
+│ Price  96 credits ($4.80) from your API balance                     │
+╰─────────────────────────────────────────────────────────────────────╯
+  Change it in plain words · ctrl+g to generate
 ```
+
+The mark is the real Zebracat logo (the striped cat-head shield from `logo.svg`), drawn
+in `#6B3BF4` (nearest 256-colour on older terminals, plain with `NO_COLOR`).
 
 - **Type an idea, paste a script, or paste a link.** A TikTok / YouTube / Reel link is
   read like the studio reads it: "clone this" copies it, "like this but about matcha"

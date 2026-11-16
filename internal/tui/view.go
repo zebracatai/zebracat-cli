@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/zebracatai/zebracat-cli/internal/dash"
+	"github.com/zebracatai/zebracat-cli/internal/logo"
 	"github.com/zebracatai/zebracat-cli/internal/version"
 	"github.com/zebracatai/zebracat-cli/internal/videos"
 )
@@ -72,7 +73,7 @@ func (m *model) youSaid(text string) tea.Cmd {
 }
 
 // assistant is Zebracat's turn: a purple dot, then the words.
-func (m *model) assistant(text string) tea.Cmd { return m.say(m.hang(stMark.Render("● "), text)) }
+func (m *model) assistant(text string) tea.Cmd { return m.say(m.hang(stKey.Render("● "), text)) }
 
 // note is a dimmed tool/progress line under a turn.
 func (m *model) note(text string) tea.Cmd {
@@ -90,57 +91,77 @@ func (m *model) sayErr(what, fix string) tea.Cmd {
 
 // ---- welcome --------------------------------------------------------------------
 
-// welcomeView is the launch box: our mark, the version, who is signed in and
-// their balance, the folder, then tips (and an update offer when there is one).
+// welcomeView is the launch screen: the real logo, and beside it the name and
+// version, who is signed in with their balance, the folder, then two tips (an
+// update offer or a PATH warning when there is one). No box: quiet, like the
+// rest of the conversation.
 func (m *model) welcomeView() string {
-	inner := m.cols() - 4 // border + padding
-	if inner > 72 {
-		inner = 72
-	}
 	var text []string
-	text = append(text, stTitle.Render("Welcome to Zebracat")+stMuted.Render("  v"+version.Version))
+	text = append(text, stTitle.Render("Zebracat")+stMuted.Render(" v"+version.Version))
 	if m.launch.JustUpdated != "" {
-		text = append(text, stOK.Render("✓ Updated from "+m.launch.JustUpdated))
+		text = append(text, stOK.Render("Updated from "+m.launch.JustUpdated))
 	}
 	if m.cl != nil && m.cl.IsAuthenticated() {
 		if a := m.accountLine(); a != "" {
-			text = append(text, strings.TrimPrefix(a, " · "))
+			text = append(text, stMuted.Render(strings.TrimPrefix(a, " · ")))
 		} else {
 			text = append(text, stMuted.Render("Signed in"))
 		}
 	} else {
-		text = append(text, stWorking.Render("Not signed in")+stMuted.Render(" · type /login"))
+		text = append(text, stMuted.Render("Not signed in · ")+stKey.Render("/login"))
 	}
 	if d := cwd(); d != "" {
+		if max := m.welcomeTextWidth(); ansi.StringWidth(d) > max && max > 10 {
+			r := []rune(d)
+			d = "…" + string(r[len(r)-(max-1):]) // keep the end of the path: it names the folder
+		}
 		text = append(text, stMuted.Render(d))
 	}
-	markW := ansi.StringWidth(mark[0])
-	var body string
-	if inner >= markW+3+24 { // side by side
-		col := lipgloss.NewStyle().Width(inner - markW - 3).Render(strings.Join(text, "\n"))
-		body = lipgloss.JoinHorizontal(lipgloss.Center, markView(), "   ", col)
-	} else { // narrow: the mark above the words
-		col := lipgloss.NewStyle().Width(inner).Render(strings.Join(text, "\n"))
-		body = markView() + "\n\n" + col
-	}
-	out := stBox.Render(body) + "\n"
-	tips := []string{
-		m.hang(stMuted.Render(" › "), stMuted.Render("Describe a video, paste a script or a link (TikTok, YouTube, Reels)")),
-		m.hang(stMuted.Render(" › "), stKey.Render("/help")+stMuted.Render(" for commands and keys · ")+stKey.Render("Ctrl+C")+stMuted.Render(" twice to quit")),
-	}
-	if m.cl == nil || !m.cl.IsAuthenticated() {
-		tips = append(tips, m.hang(stMuted.Render(" › "), stKey.Render("/login")+stMuted.Render(" to add your API key (studio.zebracat.ai → API Keys)")))
-	}
-	out += strings.Join(tips, "\n")
+	text = append(text, "",
+		"Describe a video, paste a script or a link.",
+		stMuted.Render("/help for commands · ctrl+c twice to quit"))
 	if m.offer != "" {
-		out += "\n" + m.hang(stWorking.Render(" ↑ "), "Zebracat CLI "+m.offer+" is available"+stMuted.Render(" — press ")+
-			stKey.Render("u")+stMuted.Render(" to update now"))
+		text = append(text, "", stKey.Render("↑ ")+"Zebracat CLI "+m.offer+" is available"+stMuted.Render(" · press ")+
+			stKey.Render("u")+stMuted.Render(" to update"))
 	}
 	if m.shadow != "" {
-		out += "\n" + m.hang(stWorking.Render(" ! "), stMuted.Render("Another zebracat runs first on your PATH: "+m.shadow+" — run ")+
-			stKey.Render("zebracat doctor"))
+		text = append(text, "", stKey.Render("! ")+stMuted.Render("Another zebracat runs first on your PATH: "+m.shadow+
+			" · run ")+stKey.Render("zebracat doctor"))
 	}
-	return m.fit(out)
+
+	col := m.welcomeTextWidth()
+	gap := 4
+	var out string
+	if m.sideBySide() { // side by side, the words centred on the logo
+		rows := len(logo.Big())
+		pad := (rows - len(text)) / 2
+		if pad < 0 {
+			pad = 0
+		}
+		block := strings.Repeat("\n", pad) + strings.Join(text, "\n")
+		words := lipgloss.NewStyle().Width(col).Render(block)
+		out = lipgloss.JoinHorizontal(lipgloss.Top, bigMark(), strings.Repeat(" ", gap), words)
+	} else { // narrow: the logo, then the words under it
+		out = bigMark() + "\n\n" + lipgloss.NewStyle().Width(m.cols()-1).Render(strings.Join(text, "\n"))
+	}
+	lines := strings.Split(out, "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimRight(" "+l, " ")
+	}
+	return m.fit(strings.Join(lines, "\n"))
+}
+
+// sideBySide: the words fit beside the logo.
+func (m *model) sideBySide() bool {
+	return m.cols()-1-ansi.StringWidth(logo.Big()[0])-4 >= 44
+}
+
+// welcomeTextWidth is the room for the welcome words (beside or under the logo).
+func (m *model) welcomeTextWidth() int {
+	if m.sideBySide() {
+		return m.cols() - 1 - ansi.StringWidth(logo.Big()[0]) - 4
+	}
+	return m.cols() - 2
 }
 
 // accountLine is " · you@x.com · Pro · $208.25 API balance" (or plan credits).
@@ -172,6 +193,9 @@ func (m *model) accountLine() string {
 
 // ---- the live view under the conversation ----------------------------------------
 
+// rule is a dim full-width line; the input sits between two of them.
+func (m *model) rule() string { return stRule.Render(strings.Repeat("─", m.inputWidth())) }
+
 func (m *model) View() string {
 	if m.quitting {
 		return ""
@@ -181,32 +205,52 @@ func (m *model) View() string {
 	}
 	var b strings.Builder
 	if p := m.progressLine(); p != "" {
-		b.WriteString(m.fit(p) + "\n")
+		b.WriteString(m.fit(p) + "\n\n")
 	}
-	w := m.inputWidth()
 	var field string
 	if m.askKey {
-		field = stPrompt.Render("🔑 ") + m.key.View()
+		field = stPrompt.Render("› ") + m.key.View()
 	} else {
 		field = lipgloss.JoinHorizontal(lipgloss.Top, stPrompt.Render("› "), m.in.View())
 	}
-	b.WriteString(stInput.Width(w-2).Render(field) + "\n")
+	b.WriteString(m.rule() + "\n" + field + "\n" + m.rule() + "\n")
 	if len(m.matches) > 0 {
-		for i, c := range m.matches {
-			line := fmt.Sprintf("  %-10s %s", c.name, c.desc)
-			if i == m.sel {
-				b.WriteString(stSel.Render(ansi.Truncate(line, w, "…")) + "\n")
-			} else {
-				b.WriteString(stMuted.Render(ansi.Truncate(line, w, "…")) + "\n")
+		nameW := 0
+		for _, c := range m.matches {
+			if n := ansi.StringWidth(c.name); n > nameW {
+				nameW = n
 			}
 		}
-		return b.String()
+		// at most menuRows at a time, scrolled to keep the selection in view
+		first := 0
+		if m.sel >= menuRows {
+			first = m.sel - menuRows + 1
+		}
+		last := first + menuRows
+		if last > len(m.matches) {
+			last = len(m.matches)
+		}
+		for i := first; i < last; i++ {
+			c := m.matches[i]
+			name := fmt.Sprintf("%-*s", nameW+3, c.name)
+			var line string
+			if i == m.sel {
+				line = stSel.Render("› "+name) + c.desc
+			} else {
+				line = "  " + stMuted.Render(name+c.desc)
+			}
+			b.WriteString(ansi.Truncate(line, m.inputWidth(), "…") + "\n")
+		}
+		return strings.TrimRight(b.String(), "\n")
 	}
-	b.WriteString(ansi.Truncate(m.footer(), w, "…"))
+	b.WriteString(m.footer())
 	return b.String()
 }
 
-// inputWidth is the input box's full width (border included), at most 120.
+// menuRows is how many `/` commands show at once.
+const menuRows = 8
+
+// inputWidth is the input's full width, at most 120.
 func (m *model) inputWidth() int {
 	w := m.cols()
 	if w > 120 {
@@ -215,37 +259,38 @@ func (m *model) inputWidth() int {
 	return w
 }
 
-// footer is the hint line under the input.
+// footer is one dim line under the input: what you can do now, and on the
+// right who you are and your balance.
 func (m *model) footer() string {
 	if !m.quitAt.IsZero() {
-		return stWorking.Render("  Press Ctrl-C again to exit")
+		return stMuted.Render("  Press Ctrl-C again to exit")
 	}
 	var hint string
 	switch m.stage {
 	case stageAsking:
-		hint = "type your answer · its number picks an option"
+		hint = "type your answer · a number picks an option"
 	case stageReady:
 		hint = "type a change · ctrl+g generate · /new start over"
 	case stageDone:
 		hint = "ctrl+o open the video · type a new idea"
 	case stagePlanning, stageEditing, stageMaking:
-		hint = ""
+		hint = "esc to stop waiting"
 	default:
-		hint = "/ for commands · alt+enter new line · ↑ history"
+		hint = "/ for commands · alt+enter new line"
 	}
 	if m.offer != "" && m.stage == stageIdle {
 		hint = "u update to " + m.offer + " · " + hint
 	}
-	parts := []string{}
-	if hint != "" {
-		parts = append(parts, stMuted.Render(hint))
+	left := "  " + hint
+	right := strings.TrimPrefix(m.accountLine(), " · ")
+	if m.cl == nil || !m.cl.IsAuthenticated() {
+		right = "not signed in"
 	}
-	if a := m.accountLine(); a != "" {
-		parts = append(parts, stMuted.Render(strings.TrimPrefix(a, " · ")))
-	} else if m.cl == nil || !m.cl.IsAuthenticated() {
-		parts = append(parts, stWorking.Render("not signed in"))
+	w := m.inputWidth()
+	if right != "" && ansi.StringWidth(left)+ansi.StringWidth(right)+3 <= w {
+		return stMuted.Render(left + strings.Repeat(" ", w-ansi.StringWidth(left)-ansi.StringWidth(right)) + right)
 	}
-	return "  " + strings.Join(parts, stMuted.Render(" · "))
+	return stMuted.Render(ansi.Truncate(left, w, "…"))
 }
 
 // syncPlaceholder makes the input hint match the conversation.

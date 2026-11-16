@@ -426,7 +426,7 @@ func (m *model) leave(extra string) (tea.Model, tea.Cmd) {
 			lines = append(lines, stMuted.Render("The plan keeps being written. See it with ")+stKey.Render("zebracat video status "+j.taskID+" --wait"))
 		}
 	}
-	lines = append(lines, stMuted.Render("Bye 🦓"))
+	lines = append(lines, stMuted.Render("Bye."))
 	m.quitting = true
 	return m, tea.Sequence(m.say(strings.Join(lines, "\n")), tea.Quit)
 }
@@ -493,5 +493,5 @@ func (m *model) progressLine() string {
 	if j.offline {
 		tail += " · reconnecting"
 	}
-	return m.sp.View() + " " + stTitle.Render(verb+"…") + stMuted.Render(" ("+tail+")")
+	return m.sp.View() + " " + stKey.Render(verb+"…") + stMuted.Render(" ("+tail+")")
 }

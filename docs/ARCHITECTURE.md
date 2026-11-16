@@ -33,7 +33,9 @@ on the backend). It does no generation itself: every command is a thin HTTP call
 | `internal/tui/commands.go` | Enter handling, API-key capture, slash-command table + dispatcher + signed-out gate, `/help` text |
 | `internal/tui/convo.go` | the conversation: stages (idle → planning → asking/ready ⇄ editing → confirm → making → done); a `plan_blocked` / `*_request` end is an assistant turn (the answer is sent with the first message), real failures say what to do; the animated progress line; Esc / Ctrl+C (never cancel) |
 | `internal/tui/cards.go` | plan card, question, done card, spend question, `clean()` (strips control characters from server text) |
-| `internal/tui/theme.go` | palette (#7c3aed, adaptive light/dark), the zebra-cat mark, the animated frames, NO_COLOR |
+| `internal/tui/theme.go` | one accent (#6B3BF4, the logo's), dim secondary text, the marks, the animated frames, NO_COLOR |
+| `internal/logo/` | the real logo (squanchy `public/logo.svg`: striped cat-head shield) as geometry, rasterised into quadrant blocks (`Big` 17×10, `Small` 1 row) |
+| `tools/logopreview/` | `go run ./tools/logopreview -o x.png`: the SVG geometry next to the terminal render, on dark and light |
 | `cmd/doctor.go` | `zebracat doctor`: every zebracat on PATH, which one runs, how to remove the others; sign-in and update status |
 | `internal/tui/api.go` | background API calls returning `tea.Cmd` (account, projects, create, poll, quote, generate, update) |
 | `internal/tui/view.go` | `say`/`hang` (everything printed is wrapped to the terminal), welcome box, input box + completion list + footer, projects dashboard |

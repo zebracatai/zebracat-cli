@@ -18,6 +18,7 @@ import (
 
 	"github.com/zebracatai/zebracat-cli/internal/apitest"
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
+	"github.com/zebracatai/zebracat-cli/internal/logo"
 	"github.com/zebracatai/zebracat-cli/internal/version"
 )
 
@@ -253,6 +254,7 @@ func layoutModel(t *testing.T, width int, signedIn bool) *model {
 		m = signedOut(t)
 	}
 	m.width = width
+	m.fitInput()
 	m.acct = &account{email: "admin@example.com", apiDollars: "208.25"}
 	old := cwd
 	cwd = func() string { return "~/projects/coffee" }
@@ -338,12 +340,12 @@ func TestInputIsOneRow(t *testing.T) {
 	for _, w := range []int{60, 80, 100, 120, 160} {
 		m := layoutModel(t, w, true)
 		m.fitInput()
-		if got, room := ansi.StringWidth("› ")+m.in.Width(), m.inputWidth()-4; got > room {
-			t.Fatalf("at %d columns the input line is %d wide but the box holds %d", w, got, room)
+		if got, room := ansi.StringWidth("› ")+m.in.Width(), m.inputWidth(); got > room {
+			t.Fatalf("at %d columns the input line is %d wide but the rules are %d", w, got, room)
 		}
-		box := strings.Split(m.View(), "\n")
-		if len(box) < 4 || !strings.HasPrefix(box[2], "╰") {
-			t.Fatalf("at %d columns the input is not one row:\n%s", w, m.View())
+		lines := strings.Split(m.View(), "\n")
+		if len(lines) < 4 || !strings.HasPrefix(lines[0], "─") || !strings.HasPrefix(lines[2], "─") {
+			t.Fatalf("at %d columns the input is not one row between two rules:\n%s", w, m.View())
 		}
 	}
 }
@@ -369,5 +371,34 @@ func TestLogoutWithAnEnvKeyTellsTheTruth(t *testing.T) {
 	out := printed(msgs(func() tea.Cmd { _, c := m.handleSlash("/logout", nil); return c }()))
 	if !strings.Contains(out, "ZEBRACAT_API_KEY") || strings.Contains(out, "Signed out") {
 		t.Fatalf("logout:\n%s", out)
+	}
+}
+
+// The real logo: 17×9 cells, the 1-row mark, symmetric, and plain under NO_COLOR.
+func TestLogoGolden(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.Ascii)
+	golden(t, "logo", bigMark()+"\n"+smallMark()+"\n")
+	for _, l := range logo.Big() {
+		r := []rune(l)
+		if len(r) > 17 {
+			t.Fatalf("logo row too wide: %q", l)
+		}
+	}
+}
+
+// The `/` menu shows 8 rows at a time and scrolls with the selection.
+func TestSlashMenuScrolls(t *testing.T) {
+	m := layoutModel(t, 100, true)
+	m.in.SetValue("/")
+	m.refreshMatches()
+	v := m.View()
+	if strings.Count(v, "\n  /")+strings.Count(v, "› /") > menuRows+1 || !strings.Contains(v, "› /help") {
+		t.Fatalf("menu:\n%s", v)
+	}
+	for i := 0; i < len(commands)-1; i++ {
+		m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	if v := m.View(); !strings.Contains(v, "› /exit") || strings.Contains(v, "/help ") {
+		t.Fatalf("scrolled menu:\n%s", v)
 	}
 }

@@ -1,5 +1,5 @@
-// Theme: the Zebracat palette (brand #7c3aed), the styles every view uses, our
-// zebra-cat mark and the frames of the animated "working" mark.
+// Theme: one accent colour (the logo's #6B3BF4), dim secondary text, the real
+// logo and the frames of the animated "working" mark.
 package tui
 
 import (
@@ -8,46 +8,43 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+
+	"github.com/zebracatai/zebracat-cli/internal/logo"
 )
 
 // ---- palette ------------------------------------------------------------------
-// Adaptive colours read on dark and light terminals alike.
+// One accent (the logo's #6B3BF4, a lighter tint on dark backgrounds so text stays
+// readable), dim grey for everything secondary, red only for errors.
 var (
-	cPurple = lipgloss.Color("#7c3aed")
-	cPurpLt = lipgloss.AdaptiveColor{Light: "#6d28d9", Dark: "#a78bfa"}
-	cMuted  = lipgloss.AdaptiveColor{Light: "#6b6880", Dark: "#9a93b5"}
-	cGreen  = lipgloss.AdaptiveColor{Light: "#15803d", Dark: "#4ade80"}
+	cBrand  = lipgloss.Color(logo.Color)
+	cAccent = lipgloss.AdaptiveColor{Light: logo.Color, Dark: "#9b7bff"}
+	cMuted  = lipgloss.AdaptiveColor{Light: "#6b6b76", Dark: "#8a8a96"}
+	cRule   = lipgloss.AdaptiveColor{Light: "#c4c4cc", Dark: "#4a4a55"}
 	cRed    = lipgloss.AdaptiveColor{Light: "#b91c1c", Dark: "#f87171"}
-	cAmber  = lipgloss.AdaptiveColor{Light: "#a16207", Dark: "#facc15"}
 
-	stMark    = lipgloss.NewStyle().Foreground(cPurple)
-	stTitle   = lipgloss.NewStyle().Foreground(cPurpLt).Bold(true)
-	stPrompt  = lipgloss.NewStyle().Foreground(cPurpLt).Bold(true)
+	stMark    = lipgloss.NewStyle().Foreground(cBrand)
+	stTitle   = lipgloss.NewStyle().Bold(true)
+	stPrompt  = lipgloss.NewStyle().Foreground(cAccent).Bold(true)
 	stMuted   = lipgloss.NewStyle().Foreground(cMuted)
+	stRule    = lipgloss.NewStyle().Foreground(cRule)
 	stErr     = lipgloss.NewStyle().Foreground(cRed)
-	stOK      = lipgloss.NewStyle().Foreground(cGreen)
-	stKey     = lipgloss.NewStyle().Foreground(cPurpLt)
-	stHint    = lipgloss.NewStyle().Foreground(cMuted).Italic(true)
-	stSel     = lipgloss.NewStyle().Foreground(cPurpLt).Bold(true)
-	stWorking = lipgloss.NewStyle().Foreground(cAmber)
-	stBox     = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cPurple).Padding(0, 1)
-	stInput   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cMuted).Padding(0, 1)
+	stOK      = lipgloss.NewStyle().Foreground(cAccent)
+	stKey     = lipgloss.NewStyle().Foreground(cAccent)
+	stHint    = lipgloss.NewStyle().Foreground(cMuted)
+	stSel     = lipgloss.NewStyle().Foreground(cAccent)
+	stWorking = lipgloss.NewStyle().Foreground(cAccent)
+	stBox     = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cRule).Padding(0, 1)
+	stAsk     = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).Padding(0, 1)
 )
 
-// mark is our zebra-cat: ears, a striped forehead, two eyes, a muzzle. Drawn in
-// solid brand purple with the stripes cut out, so it reads on any background.
-var mark = []string{
-	"▗▖       ▗▖",
-	"▐▙▄▄▄▄▄▄▄▟▌",
-	"▐▀▀▄▀▀▀▄▀▀▌",
-	"▐ ● ▀▀▀ ● ▌",
-	" ▀▄▄▄▼▄▄▄▀ ",
-}
+// bigMark is the real logo (squanchy public/logo.svg), rasterised: 17×10 cells.
+func bigMark() string { return stMark.Render(strings.Join(logo.Big(), "\n")) }
 
-func markView() string { return stMark.Render(strings.Join(mark, "\n")) }
+// smallMark is the same shield in one row.
+func smallMark() string { return stMark.Render(logo.Small()) }
 
-// workFrames: a stripe that fills and empties — our own animated mark.
-var workFrames = []string{"░", "▒", "▓", "█", "▓", "▒"}
+// workFrames: the 1-row shield building up from its chin — our working mark.
+var workFrames = []string{"▗▖", "▄▄", "▙▟", "▙▟", "▄▄", "▗▖", "  "}
 
 // colorOff reports whether colour is turned off (https://no-color.org).
 func colorOff() bool {
