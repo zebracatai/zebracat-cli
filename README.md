@@ -50,7 +50,7 @@ change it **in plain words**, and nothing is spent until you choose **Generate**
 ```
  ▙               ▟
  █ ▖           ▗ █
- █ █           █ █    Zebracat v0.6.3
+ █ █           █ █    Zebracat v0.6.4
  █ █ █ █ █ █ █ █ █    you@example.com · $208.25 API balance
  █ █ █ █ █ █ █ █ █    ~/projects/coffee
  █ █ █ █ █ █ █ █ █
@@ -94,7 +94,7 @@ footer: what you can do now, then your **plan, balance, credits, account and ver
 › Describe your video, paste a script or a link
 ───────────────────────────────────────────────────────────────────────────────
   / for commands · alt+enter new line · ↑ history
-  Cat Mode · $208.25 API balance · 1,240 credits · you@example.com · v0.6.3
+  Cat Mode · $208.25 API balance · 1,240 credits · you@example.com · v0.6.4
 ```
 
 - **Type an idea, paste a script, or paste a link.** A TikTok / YouTube / Reel link is
