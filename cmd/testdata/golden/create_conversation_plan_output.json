@@ -1,0 +1,98 @@
+{
+  "editor_url": "https://studio.zebracat.ai/storyboard/48213",
+  "next": "zebracat video generate 7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01 --yes --wait",
+  "phase": "plan_ready",
+  "plan": {
+    "asks": null,
+    "can_undo": true,
+    "project_id": 48213,
+    "render": {
+      "quality": "balanced"
+    },
+    "rev": 3,
+    "screenplay": {
+      "aspect": "vertical",
+      "audio": {
+        "mode": "narration"
+      },
+      "beats": [
+        {
+          "n": 1,
+          "narration": "Ever wondered why your cat swipes your mug off the table?",
+          "seconds": 5
+        },
+        {
+          "n": 2,
+          "narration": "It starts with instinct: cats test what moves.",
+          "seconds": 5
+        },
+        {
+          "n": 3,
+          "narration": "Then comes attention. A falling cup always gets you running.",
+          "seconds": 5
+        },
+        {
+          "n": 4,
+          "narration": "So next time, play with them first. Your mug will thank you.",
+          "seconds": 5
+        }
+      ],
+      "language": "english",
+      "media_type": "ai_video",
+      "title": "Why cats knock things off tables",
+      "version": 2
+    },
+    "summary_lines": [
+      "A 20 s narrated AI video, vertical, in English.",
+      "4 scenes, one voice."
+    ],
+    "versions": [
+      {
+        "rev": 1
+      },
+      {
+        "rev": 2
+      },
+      {
+        "rev": 3
+      }
+    ]
+  },
+  "quote": {
+    "available": 0,
+    "basis": "plan",
+    "breakdown": [
+      {
+        "credits": 24,
+        "n": 1,
+        "scene_units": 1,
+        "seconds": 5
+      },
+      {
+        "credits": 24,
+        "n": 2,
+        "scene_units": 1,
+        "seconds": 5
+      },
+      {
+        "credits": 24,
+        "n": 3,
+        "scene_units": 1,
+        "seconds": 5
+      },
+      {
+        "credits": 24,
+        "n": 4,
+        "scene_units": 1,
+        "seconds": 5
+      }
+    ],
+    "credit_part": "AIVF",
+    "credits": 96,
+    "pool": "api_dollar",
+    "sufficient": false,
+    "usd": "4.80",
+    "why": "4 AI-video scenes of 5 s at balanced quality."
+  },
+  "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+}

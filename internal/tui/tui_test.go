@@ -39,60 +39,22 @@ func TestIsTerminal(t *testing.T) {
 
 func TestRefreshMatchesAutocomplete(t *testing.T) {
 	m := &model{in: textinput.New()}
-	m.in.SetValue("/v")
+	m.in.SetValue("/g")
 	m.refreshMatches()
 	found := false
 	for _, x := range m.matches {
-		if x == "/video" {
+		if x == "/generate" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("expected /video in autocomplete matches, got %v", m.matches)
+		t.Fatalf("expected /generate in autocomplete matches, got %v", m.matches)
 	}
 	// A non-slash input yields no command matches.
 	m.in.SetValue("hello")
 	m.refreshMatches()
 	if len(m.matches) != 0 {
 		t.Fatalf("expected no matches for plain text, got %v", m.matches)
-	}
-}
-
-func TestWizardFlow(t *testing.T) {
-	m := &model{in: textinput.New(), wiz: newWizard(0, "")}
-	// Step 0 is the free-text idea.
-	m.in.SetValue("a cat video")
-	m.wizAdvance(m.in.Value())
-	if m.wiz == nil || m.wiz.step != 1 || m.wiz.vals["idea"] != "a cat video" {
-		t.Fatalf("after idea: %+v", m.wiz)
-	}
-	// Remaining steps are choice steps — accept the highlighted option each time.
-	guard := 0
-	for m.wiz != nil && guard < 20 {
-		m.wizAdvance("")
-		guard++
-	}
-	if m.wiz != nil {
-		t.Fatal("wizard should be cleared after the final step")
-	}
-	if !m.busy {
-		t.Fatal("model should be busy after submitting the video")
-	}
-}
-
-func TestWizardChoiceRecordsValue(t *testing.T) {
-	m := &model{in: textinput.New(), wiz: newWizard(1, "x")} // step 1 = media_type (choices)
-	if len(m.wiz.cur().choices) == 0 {
-		t.Fatal("step 1 should be a choice step")
-	}
-	m.wiz.cursor = 2 // arrow down twice
-	want := m.wiz.cur().choices[2].value
-	m.wizAdvance("")
-	if m.wiz == nil || m.wiz.step != 2 {
-		t.Fatalf("expected to advance to step 2, got %+v", m.wiz)
-	}
-	if m.wiz.vals["media_type"] != want {
-		t.Fatalf("expected media_type=%q, got %q", want, m.wiz.vals["media_type"])
 	}
 }
 
@@ -106,7 +68,7 @@ func TestHelpListsEveryCommand(t *testing.T) {
 }
 
 func TestSplashNonEmpty(t *testing.T) {
-	if !strings.Contains(splash(), "AI video generation") {
+	if !strings.Contains(splash(), "Tell me the video you want") {
 		t.Fatal("splash should contain the tagline")
 	}
 }
@@ -116,10 +78,10 @@ func TestGatedWhenSignedOut(t *testing.T) {
 	if m.cl.IsAuthenticated() {
 		t.Fatal("test setup: client should be signed out")
 	}
-	// A command that spends credits must not start the wizard while signed out.
-	m.handleSlash("/video", nil)
-	if m.wiz != nil {
-		t.Fatal("/video should be gated (no wizard) when signed out")
+	// A command that spends credits must not start anything while signed out.
+	m.handleSlash("/new", nil)
+	if m.job != nil || m.stage != stageIdle {
+		t.Fatal("/new should be gated when signed out")
 	}
 	if m.busy {
 		t.Fatal("gated command should not mark the model busy")
@@ -127,7 +89,7 @@ func TestGatedWhenSignedOut(t *testing.T) {
 	// Bare text (a video idea) must be gated too.
 	m.in.SetValue("a cat skateboarding")
 	m.handleEnter()
-	if m.wiz != nil {
+	if m.job != nil || m.stage != stageIdle {
 		t.Fatal("bare-text idea should be gated when signed out")
 	}
 	// But /help and /login stay available.
@@ -141,9 +103,8 @@ func TestAllowedWhenSignedIn(t *testing.T) {
 	if !m.cl.IsAuthenticated() {
 		t.Fatal("test setup: client should be signed in")
 	}
-	m.handleSlash("/video", nil)
-	if m.wiz == nil || m.wiz.step != 0 {
-		t.Fatalf("/video should start the wizard when signed in, got %+v", m.wiz)
+	if _, cmd := m.handleSlash("/new", nil); cmd == nil || m.stage != stageIdle || m.job != nil {
+		t.Fatalf("/new should start over when signed in, got stage %v job %+v", m.stage, m.job)
 	}
 }
 

@@ -1,6 +1,6 @@
 ---
 name: zebracat-cli
-version: 0.2.0
+version: 0.3.0
 description: |
   Make AI videos from the terminal with the Zebracat CLI. Use when the user wants to
   generate, plan, edit, price, translate, clone, list or download Zebracat videos, write
@@ -27,6 +27,22 @@ metadata:
 2. Are we authenticated? `zebracat auth status`. The CLI uses an API key: ensure
    `ZEBRACAT_API_KEY` is set (paid from the API dollar balance). Otherwise stop and ask
    the user for a key (studio.zebracat.ai → API Keys).
+
+## Make a video: plan first, one command (preferred)
+
+```bash
+zebracat create "<the user's idea, script or link>" --json   # never prompts, never spends
+```
+
+Answers `{task_id, phase: "plan_ready", plan, quote, next}` (or `phase: "needs_input"` with
+`.question`). Show the user the plan and `quote`; change it with `zebracat plan chat`;
+generate only after they agree: `zebracat video generate <task_id> --yes --wait`.
+A video link (TikTok/YouTube/Reel) in the text is sent like the studio sends it: the
+plan decides whether to clone it or use it as the topic. `--yes` on `create` plans AND
+generates (spends) — only when the user already agreed.
+
+Don't run bare `zebracat` from an agent: it is the human conversation and, without a
+terminal, exits 2 (`needs_terminal`).
 
 ## Make a video: one line
 

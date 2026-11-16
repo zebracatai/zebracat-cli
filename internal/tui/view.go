@@ -16,9 +16,9 @@ import (
 
 func splash() string {
 	body := stTitle.Render(logo) + "\n\n" +
-		stMuted.Render("🦓  AI video generation, right in your terminal.") + "\n\n" +
-		stMuted.Render("Type ") + stKey.Render("/help") + stMuted.Render(" for commands") +
-		stMuted.Render("   ·   ") + stKey.Render("/login") + stMuted.Render(" to start")
+		stMuted.Render("🦓  Tell me the video you want. I plan it, you change it, then we make it.") + "\n\n" +
+		stMuted.Render("Type an idea, paste a script or a TikTok/YouTube link") + "\n" +
+		stKey.Render("/help") + stMuted.Render(" commands   ·   ") + stKey.Render("Ctrl+C") + stMuted.Render(" leave")
 	return stBox.Render(body) + "\n"
 }
 
@@ -36,11 +36,8 @@ func (m *model) authLine() string {
 }
 
 func (m *model) View() string {
-	if m.wiz != nil {
-		return m.wizView()
-	}
-	if m.gen != nil && !m.busy {
-		return m.genView()
+	if m.stage == stageConfirm {
+		return m.confirmView()
 	}
 	var b strings.Builder
 	// autocomplete hint line
@@ -56,6 +53,9 @@ func (m *model) View() string {
 		w = 60
 	}
 	b.WriteString(stInput.Width(w-2).Render(m.in.View()) + "\n")
+	if f := m.footer(); f != "" {
+		b.WriteString(f + "\n")
+	}
 	foot := m.statusLine()
 	if m.busy {
 		foot += stMuted.Render("   ") + m.sp.View() + stMuted.Render(" working…")
@@ -120,7 +120,15 @@ func (m *model) greeting() string {
 // syncPlaceholder makes the input hint match the auth state.
 func (m *model) syncPlaceholder() {
 	if m.cl != nil && m.cl.IsAuthenticated() {
-		m.in.Placeholder = "Describe a video, or type /help …"
+		switch m.stage {
+		case stageReady:
+			m.in.Placeholder = "Tell me what to change, or Ctrl+G to generate …"
+			return
+		case stageAsking:
+			m.in.Placeholder = "Your answer …"
+			return
+		}
+		m.in.Placeholder = "Describe your video, paste a script or a link …"
 	} else {
 		m.in.Placeholder = "Type /login to get started …"
 	}
@@ -134,7 +142,7 @@ func (m *model) dashboardView(out map[string]any) string {
 	var b strings.Builder
 	b.WriteString(stTitle.Render("Your videos") + "\n\n")
 	if len(vids) == 0 {
-		return b.String() + stMuted.Render("  Nothing here yet — type ") + stKey.Render("/video") + stMuted.Render(" to make one.")
+		return b.String() + stMuted.Render("  Nothing here yet — type ") + stKey.Render("an idea") + stMuted.Render(" to make one.")
 	}
 	for _, v := range vids {
 		mm, _ := v.(map[string]any)

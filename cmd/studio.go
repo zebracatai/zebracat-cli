@@ -88,7 +88,7 @@ clips are paid: --dry-run answers the quote and spends nothing.
 A server without the Studio API (production, until Studio launches there) says
 so here instead of answering 404; ` + "`zebracat script`" + ` and ` + "`zebracat image`" + ` work on every server.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		maybeNotifyUpdate(cmd)
+		startUpdateCheck(cmd)
 		c, err := newClient()
 		if err != nil {
 			return err

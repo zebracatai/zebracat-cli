@@ -3,12 +3,31 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/zebracatai/zebracat-cli/internal/client"
+	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/config"
 	"github.com/zebracatai/zebracat-cli/internal/tui"
 )
 
-// runInteractive launches the branded interactive shell (the TUI).
-func runInteractive() error {
+// launchShell runs the interactive conversation (a test swaps it to prove the
+// non-terminal paths never open it).
+var launchShell = func(c *client.Client, baseURL, first string) error {
+	_, err := tui.New(c, baseURL, first).Run()
+	return err
+}
+
+// shellAllowed: the conversation needs a terminal on stdin and stdout and human
+// output; --json, a pipe or CI never get a prompt.
+var shellAllowed = func() bool { return interactive() }
+
+// runInteractive launches the conversation, first being the opening message.
+func runInteractive(first string) error {
+	if !shellAllowed() {
+		e := clierr.Usage("the interactive conversation needs a terminal")
+		e.Code = "needs_terminal"
+		e.Hint = "For scripts and agents: `zebracat create \"<idea>\" --json` (writes a plan, never prompts), or `zebracat --help`."
+		return e
+	}
 	c, err := newClient()
 	if err != nil {
 		return err
@@ -17,21 +36,20 @@ func runInteractive() error {
 	if err != nil {
 		return err
 	}
-	_, err = tui.New(c, config.ResolveBaseURL(s)).Run()
-	return err
+	return launchShell(c, config.ResolveBaseURL(s), first)
 }
 
 var chatCmd = &cobra.Command{
 	Use:   "chat",
-	Short: "Open the interactive Zebracat shell",
-	Long:  "Open the interactive Zebracat shell — the same thing you get by running `zebracat` with no arguments.",
+	Short: "Open the interactive Zebracat conversation",
+	Long:  "Open the interactive Zebracat conversation — the same thing you get by running `zebracat` with no arguments.",
 	Args:  cobra.NoArgs,
-	RunE:  func(cmd *cobra.Command, args []string) error { return runInteractive() },
+	RunE:  func(cmd *cobra.Command, args []string) error { return runInteractive("") },
 }
 
 func init() {
 	rootCmd.AddCommand(chatCmd)
-	// Bare `zebracat` (no subcommand) opens the interactive shell.
+	// Bare `zebracat` (no subcommand) opens the conversation.
 	rootCmd.Args = cobra.NoArgs
-	rootCmd.RunE = func(cmd *cobra.Command, args []string) error { return runInteractive() }
+	rootCmd.RunE = func(cmd *cobra.Command, args []string) error { return runInteractive("") }
 }

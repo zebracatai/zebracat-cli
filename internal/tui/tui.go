@@ -2,7 +2,8 @@
 //
 // It's an inline REPL (no alt-screen, so your results stay in the terminal after
 // you exit), themed in Zebracat purple, with a branded splash, slash commands,
-// autocomplete hints, and a guided "make a video" flow.
+// autocomplete hints, and a conversation that plans, changes and generates a
+// video the way the studio's /chat does (convo.go).
 //
 // It is auth-aware: when you're not signed in it shows that in the header and the
 // status line, and it refuses to run anything that would spend credits until you
@@ -19,14 +20,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/zebracatai/zebracat-cli/internal/client"
-	"github.com/zebracatai/zebracat-cli/internal/update"
-	"github.com/zebracatai/zebracat-cli/internal/version"
-	"github.com/zebracatai/zebracat-cli/internal/videos"
 )
 
 // ---- messages -------------------------------------------------------------
-type apiMsg struct {
-	kind   string // "create" | "generate" | "generic"
+type apiMsg struct { // a slash command's generic API answer
+	kind   string
 	out    any
 	err    error
 	taskID string
@@ -37,16 +35,12 @@ type pollMsg struct {
 	err       error
 	untilDone bool // keep polling past plan_ready (after Generate)
 }
-type planReadyMsg struct { // a plan is ready: its task view and the Generate quote
-	task  map[string]any
-	quote map[string]any
-}
 type acctMsg struct{ a *account }
 type projectsMsg struct {
 	out map[string]any
 	err error
 }
-type updMsg struct{ latest string } // background "is a newer version out?"
+type updMsg struct{ notice string } // the launch update check's one line, or ""
 type updDoneMsg struct {            // result of an in-shell /update
 	tag string
 	err error
@@ -61,39 +55,51 @@ type account struct {
 }
 
 type model struct {
-	cl      *client.Client
-	baseURL string
-	in      textinput.Model
-	sp      spinner.Model
-	busy    bool
-	width   int
-	matches []string
-	wiz     *wizard
-	gen     *genPrompt // the "Generate?" question on a ready plan
-	acct    *account
-	greeted bool
-	askKey  bool   // waiting for the user to paste an API key
-	valid   bool   // the next acctMsg is validating a just-entered key
-	newer   string // a newer release tag, if the background check found one
+	cl         *client.Client
+	baseURL    string
+	in         textinput.Model
+	sp         spinner.Model
+	busy       bool // a slash command's API call is running
+	width      int
+	matches    []string
+	stage      stage
+	job        *job
+	leaveArmed bool // Ctrl+C once while a paid job runs
+	acct       *account
+	greeted    bool
+	askKey     bool   // waiting for the user to paste an API key
+	valid      bool   // the next acctMsg is validating a just-entered key
+	first      string // a message to send as soon as the shell opens (`zebracat create "<idea>"`)
+	clk        func() time.Time
 }
 
-// New builds the TUI model + program.
-func New(cl *client.Client, baseURL string) *tea.Program {
+func (m *model) now() time.Time {
+	if m.clk != nil {
+		return m.clk()
+	}
+	return time.Now()
+}
+
+// New builds the TUI model + program. first, when set, is sent as the first
+// message (`zebracat create "<idea>"`).
+func New(cl *client.Client, baseURL, first string) *tea.Program {
 	ti := textinput.New()
 	ti.Prompt = "🦓 › "
 	ti.PromptStyle = stPrompt
 	ti.Cursor.Style = lipgloss.NewStyle().Foreground(cPurpLt)
-	ti.CharLimit = 2000
+	ti.CharLimit = 20000
 	ti.Focus()
 
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(cPurpLt)
 
-	m := &model{cl: cl, baseURL: baseURL, in: ti, sp: sp}
+	m := &model{cl: cl, baseURL: baseURL, in: ti, sp: sp, first: first}
 	m.syncPlaceholder()
 	return tea.NewProgram(m)
 }
+
+type firstMsg struct{}
 
 func (m *model) Init() tea.Cmd {
 	// Emit the banner through tea.Println (not fmt.Print): the terminal is in raw
@@ -108,10 +114,21 @@ func (m *model) Init() tea.Cmd {
 	if m.cl.IsAuthenticated() {
 		cmds = append(cmds, m.accountCmd())
 	}
+	if m.first != "" {
+		cmds = append(cmds, func() tea.Msg { return firstMsg{} })
+	}
 	return tea.Batch(cmds...)
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	mm, cmd := m.update(msg)
+	if !m.askKey {
+		m.syncPlaceholder() // the input hint follows the conversation
+	}
+	return mm, cmd
+}
+
+func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -122,43 +139,23 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.in.Width = iw
 		return m, nil
 
+	case firstMsg:
+		text := m.first
+		m.first = ""
+		m.in.SetValue(text)
+		return m.handleEnter()
+
 	case tea.KeyMsg:
-		if m.gen != nil && !m.busy {
-			return m.genKey(msg)
-		}
-		// During a choice step, the arrow keys drive the menu (keyboard select).
-		if m.wiz != nil && !m.busy && len(m.wiz.cur().choices) > 0 {
-			switch {
-			case msg.Type == tea.KeyCtrlC:
-				return m, tea.Sequence(tea.Println(stMuted.Render("Goodbye 🦓")), tea.Quit)
-			case msg.Type == tea.KeyEsc:
-				m.wiz = nil
-				return m, tea.Println(stMuted.Render("Cancelled — nothing was created."))
-			case msg.Type == tea.KeyUp || msg.String() == "k":
-				if m.wiz.cursor > 0 {
-					m.wiz.cursor--
-				}
-				return m, nil
-			case msg.Type == tea.KeyDown || msg.String() == "j":
-				if m.wiz.cursor < len(m.wiz.cur().choices)-1 {
-					m.wiz.cursor++
-				}
-				return m, nil
-			case msg.Type == tea.KeyEnter:
-				return m.wizAdvance("")
-			}
-			return m, nil // ignore stray typing while choosing
+		if m.stage == stageConfirm {
+			return m.confirmKey(msg)
 		}
 		switch msg.Type {
 		case tea.KeyCtrlC:
-			return m, tea.Sequence(tea.Println(stMuted.Render("Goodbye 🦓")), tea.Quit)
-		case tea.KeyEsc:
-			if m.wiz != nil {
-				m.wiz = nil
-				m.in.Reset()
-				return m, tea.Println(stMuted.Render("Cancelled — nothing was created."))
-			}
-			return m, nil
+			return m.interrupt()
+		case tea.KeyCtrlG:
+			return m.askGenerate()
+		case tea.KeyCtrlO:
+			return m.openVideo()
 		case tea.KeyTab:
 			if len(m.matches) > 0 {
 				m.in.SetValue(m.matches[0] + " ")
@@ -198,10 +195,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Println(m.dashboardView(msg.out))
 
 	case updMsg:
-		if msg.latest != "" && update.Newer("v"+version.Version, msg.latest) {
-			m.newer = msg.latest
-			return m, tea.Println(stMuted.Render("↑ ") + stKey.Render(msg.latest) +
-				stMuted.Render(" is available — run ") + stKey.Render("/update"))
+		if msg.notice != "" {
+			return m, tea.Println(stWorking.Render("↑ ") + stMuted.Render(msg.notice))
 		}
 		return m, nil
 
@@ -213,7 +208,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.tag == "" {
 			return m, tea.Println(stOK.Render("✓ You're already on the latest version."))
 		}
-		m.newer = ""
 		return m, tea.Println(stOK.Render("✓ Updated to "+msg.tag+". ") +
 			stMuted.Render("Quit and relaunch zebracat to use it."))
 
@@ -222,57 +216,22 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			return m, tea.Println(stErr.Render("✗ ") + msg.err.Error())
 		}
-		out, _ := msg.out.(map[string]any)
-		switch msg.kind {
-		case "create":
-			taskID, _ := out["task_id"].(string)
-			if taskID == "" {
-				return m, tea.Println(render("Result", msg.out))
-			}
-			m.busy = true
-			return m, tea.Batch(
-				tea.Println(stOK.Render("✓ Submitted. ")+stMuted.Render("Writing your plan… (about a minute)")),
-				m.pollCmd(taskID, false),
-			)
-		case "generate":
-			m.busy = true
-			return m, tea.Batch(
-				tea.Println(stOK.Render("✓ Generating. ")+stMuted.Render("Making your video… (a few minutes)")),
-				m.pollCmd(msg.taskID, true),
-			)
-		}
 		return m, tea.Println(msg.title())
 
-	case planReadyMsg:
-		m.busy = false
-		m.gen = newGenPrompt(msg.task, msg.quote)
-		return m, tea.Println(planCard(msg.task, msg.quote))
-
-	case pollMsg:
+	case createdMsg:
+		return m.onCreated(msg)
+	case planMsg:
+		return m.onPlan(msg)
+	case answeredMsg:
 		if msg.err != nil {
-			m.busy = false
+			m.stage = stageAsking
 			return m, tea.Println(stErr.Render("✗ ") + msg.err.Error())
 		}
-		if videos.StopsWait(msg.out, msg.untilDone) {
-			switch videos.PhaseOrStatus(msg.out) {
-			case "plan_ready":
-				return m, m.quoteCmd(msg.out)
-			case "needs_input":
-				m.busy = false
-				return m, tea.Println(questionCard(msg.out))
-			case "completed":
-				m.busy = false
-				return m, tea.Println(stOK.Render("✓ Done! ") + stKey.Render(bestLink(msg.out)))
-			}
-			m.busy = false
-			status := videos.PhaseOrStatus(msg.out)
-			line := stErr.Render("✗ Video " + status)
-			if emsg := errText(msg.out); emsg != "" {
-				line += stMuted.Render(" — " + emsg)
-			}
-			return m, tea.Println(line)
-		}
-		return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return m.poll(msg.taskID, msg.untilDone) })
+		return m, m.pollCmd(m.job.taskID, false)
+	case generatedMsg:
+		return m.onGenerated(msg)
+	case pollMsg:
+		return m.onPoll(msg)
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
