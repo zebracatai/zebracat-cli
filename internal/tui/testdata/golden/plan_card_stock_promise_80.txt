@@ -1,0 +1,16 @@
+╭────────────────────────────────────────────────────────────────────────────╮
+│ Cars on the Move                                                           │
+│ Type Stock footage · Style Photography · Format 16:9 · Length 10 s ·       │
+│ Scenes 2                                                                   │
+│ Audio no voice · Language english                                          │
+│                                                                            │
+│ 1. Cars drive along a sunlit highway through open countryside.             │
+│ 2. Cars move through a busy city street at dusk with glowing headlights    │
+│    and brake lights.                                                       │
+│                                                                            │
+│ Price  0 credits ($0.00) from your API balance                             │
+│        A stock video is not charged per AI-video scene; no scene credits   │
+│        apply.                                                              │
+│ Studio https://studio.zebracat.ai/chat/0b7e6a52-5d0c-4a52-9a43-            │
+│        1e2f3c4d5e6f                                                        │
+╰────────────────────────────────────────────────────────────────────────────╯

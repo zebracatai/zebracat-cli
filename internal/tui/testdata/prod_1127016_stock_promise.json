@@ -1,0 +1,160 @@
+{
+ "_note": "PROD project 1127016 (owner's CLI test, 2026-11-16): GET /videos/{id}, GET /plan, GET /quote as recorded read-only, with the fixed server's /chat link and stock price sentence.",
+ "task": {
+  "task_id": "ad3973e85e984ae499b4a27c26651355",
+  "status": "pending",
+  "phase": "plan_ready",
+  "engine": "director_v2",
+  "video_type": "idea",
+  "project_id": 1127016,
+  "run_id": "r_5bafbcbf10f240b2b667031397dc8067",
+  "links": {
+   "self": "/api/v1/public/videos/ad3973e85e984ae499b4a27c26651355",
+   "plan": "/api/v1/public/videos/ad3973e85e984ae499b4a27c26651355/plan",
+   "quote": "/api/v1/public/videos/ad3973e85e984ae499b4a27c26651355/quote",
+   "editor": "https://studio.zebracat.ai/chat/0b7e6a52-5d0c-4a52-9a43-1e2f3c4d5e6f"
+  },
+  "created_at": "2026-11-16T13:18:32Z",
+  "updated_at": "2026-11-16T13:18:32Z",
+  "plan_summary": {
+   "rev": 1,
+   "title": "Cars on the Move",
+   "media_type": "stock",
+   "audio_mode": "silent",
+   "seconds": 10.0,
+   "scenes": 2,
+   "language": "english",
+   "provisional": true
+  },
+  "quote": {
+   "pool": "api_dollar",
+   "credits": 0,
+   "credit_part": "AIVF",
+   "usd": "0.00",
+   "basis": "estimate",
+   "breakdown": [],
+   "available": 208.25,
+   "sufficient": true,
+   "why": "A stock video is not charged per AI-video scene; no scene credits apply.",
+   "plan": {
+    "rev": 1,
+    "media_type": "stock",
+    "audio_mode": null,
+    "seconds": 10.0,
+    "quality": null,
+    "model": null,
+    "priced_model": null,
+    "alternatives": null,
+    "provisional": true
+   }
+  },
+  "editor_url": "https://studio.zebracat.ai/chat/0b7e6a52-5d0c-4a52-9a43-1e2f3c4d5e6f",
+  "chat_id": "0b7e6a52-5d0c-4a52-9a43-1e2f3c4d5e6f"
+ },
+ "plan": {
+  "project_id": 1127016,
+  "rev": 1,
+  "screenplay": null,
+  "promise": {
+   "version": 1,
+   "rev": 1,
+   "title": "Cars on the Move",
+   "settings": {
+    "type": "stock",
+    "audio": "silent",
+    "music": "energetic_upbeat",
+    "style": "Photography",
+    "aspect": "16:9",
+    "captions": "on",
+    "language": "english"
+   },
+   "cast": [],
+   "places": [
+    {
+     "name": "open road",
+     "upload": null,
+     "recurring": true
+    }
+   ],
+   "scenes": [
+    {
+     "id": "s1",
+     "n": 1,
+     "place": "open road",
+     "who": [],
+     "lines": [],
+     "film": "Cars drive along a sunlit highway through open countryside.",
+     "must_show": []
+    },
+    {
+     "id": "s2",
+     "n": 2,
+     "place": "city street",
+     "who": [],
+     "lines": [],
+     "film": "Cars move through a busy city street at dusk with glowing headlights and brake lights.",
+     "must_show": []
+    }
+   ],
+   "length": {
+    "asked_s": {
+     "min": 10.0,
+     "max": 10.0
+    },
+    "sentence": "You asked 10 s.",
+    "estimate_s": 10.0,
+    "provisional": true
+   },
+   "accepted": true,
+   "checked": false,
+   "obligations": {},
+   "compiled": false
+  },
+  "render": {
+   "brand": {
+    "by": "brief",
+    "use": "unsaid",
+    "kit_id": null
+   },
+   "quality": "balanced",
+   "candidates": {
+    "pick": null,
+    "quality": "balanced",
+    "speaking": [
+     "gemini-omni-flash",
+     "grok-imagine-1.5"
+    ],
+    "not_speaking": [
+     "gemini-omni-flash",
+     "grok-imagine-1.5"
+    ]
+   },
+   "model_pick": null
+  },
+  "source": "promise",
+  "can_undo": false,
+  "versions": []
+ },
+ "quote": {
+  "pool": "api_dollar",
+  "credits": 0,
+  "credit_part": "AIVF",
+  "usd": "0.00",
+  "basis": "estimate",
+  "breakdown": [],
+  "available": 208.25,
+  "sufficient": true,
+  "why": "A stock video is not charged per AI-video scene; no scene credits apply.",
+  "plan": {
+   "rev": 1,
+   "media_type": "stock",
+   "audio_mode": null,
+   "seconds": 10.0,
+   "quality": null,
+   "model": null,
+   "priced_model": null,
+   "alternatives": null,
+   "provisional": true
+  }
+ }
+}

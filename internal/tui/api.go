@@ -71,6 +71,19 @@ func (m *model) generateCmd(j *job, taskID string, shouldRender bool) tea.Cmd {
 	}
 }
 
+// discardCmd lets a plan go (POST /cancel): the task ends cancelled, nothing is
+// charged; the plan itself stays in the studio's /chat.
+func (m *model) discardCmd(j *job) tea.Cmd {
+	cl := m.cl
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		var out map[string]any
+		_, err := cl.Do(ctx, "POST", videos.Path(j.taskID, "cancel"), nil, &out)
+		return discardedMsg{err: err}
+	}
+}
+
 // planCmd reads a ready plan (GET /plan) and what Generate will charge (GET /quote).
 func (m *model) planCmd(j *job, task map[string]any, reply string) tea.Cmd {
 	cl := m.cl

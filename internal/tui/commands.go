@@ -21,7 +21,7 @@ type slashCmd struct{ name, desc string }
 var commands = []slashCmd{
 	{"/help", "Commands and keys"},
 	{"/new", "Start a new video"},
-	{"/generate", "Make the planned video (asks first)"},
+	{"/generate", "Make the planned video (as choosing Generate)"},
 	{"/plan", "Show the plan again"},
 	{"/open", "Open the finished video"},
 	{"/script", "Plan from a script file: /script <path>"},
@@ -158,7 +158,10 @@ func (m *model) handleSlash(text string, echo tea.Cmd) (tea.Model, tea.Cmd) {
 		m.stage, m.job, m.carry = stageIdle, nil, ""
 		return m, then(m.assistant("New video — what should it be about? Type an idea, paste a script or a link."))
 	case "/generate":
-		mm, c := m.askGenerate()
+		if m.stage != stageReady || m.job == nil {
+			return m, then(m.note("There's no plan to generate yet — describe a video first."))
+		}
+		mm, c := m.choose(choiceGenerate)
 		return mm, then(c)
 	case "/plan":
 		if m.job == nil || (m.job.plan == nil && m.job.task == nil) || m.stage < stageReady {
@@ -191,7 +194,7 @@ func helpText() string {
 	var b strings.Builder
 	b.WriteString(stTitle.Render("Talk to it") + "\n")
 	b.WriteString(stMuted.Render("  Describe a video, paste a script, or paste a TikTok / YouTube / Reels link.\n"))
-	b.WriteString(stMuted.Render("  Zebracat writes a plan; change anything in plain words; Ctrl+G makes it (asks first).\n\n"))
+	b.WriteString(stMuted.Render("  Zebracat writes a plan; change anything in plain words; choose Generate or Discard under it.\n\n"))
 	b.WriteString(stTitle.Render("Commands") + "\n")
 	for _, c := range commands {
 		b.WriteString("  " + stKey.Render(fmt.Sprintf("%-10s", c.name)) + stMuted.Render(c.desc) + "\n")
@@ -200,7 +203,7 @@ func helpText() string {
 	for _, k := range [][2]string{
 		{"Enter", "send"}, {"Alt+Enter", "new line (pasting a script keeps its lines)"}, {"↑ / ↓", "history"},
 		{"Ctrl+V", "paste a picture (Alt+V on Windows); or drag a picture file in"},
-		{"Tab", "complete a / command"}, {"Ctrl+G", "generate the plan (asks before spending)"},
+		{"Tab", "complete a / command"}, {"↑↓ Enter · g · d", "under a plan: Generate or Discard"},
 		{"Ctrl+O", "open the finished video"}, {"Esc", "stop waiting (a paid video keeps going)"},
 		{"Ctrl+C", "clear the line; twice to quit"},
 	} {
