@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -49,6 +48,9 @@ func zebracatsOnPath() []pathBinary {
 	seen := map[string]bool{}
 	out := []pathBinary{}
 	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if dir == "" || !filepath.IsAbs(dir) {
+			continue // a relative entry (".") would name whatever is in the current folder
+		}
 		p := filepath.Join(dir, name)
 		st, err := os.Stat(p)
 		if err != nil || st.IsDir() || st.Mode()&0o111 == 0 {
@@ -84,27 +86,26 @@ func methodOfPath(p string) string {
 	return "binary"
 }
 
-// versionOf asks another zebracat for its version (JSON, else its first
-// version-looking word).
+// versionOf is another copy's version, read without running it: an npm copy's
+// package.json; anything else is "unknown" (doctor never executes other binaries).
 func versionOf(path string) string {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	c := exec.CommandContext(ctx, path, "version", "--json")
-	c.Env = append(os.Environ(), "ZEBRACAT_NO_UPDATE_CHECK=1", "NO_COLOR=1", "ZEBRACAT_OUTPUT=json")
-	out, err := c.Output()
-	if err != nil && len(out) == 0 {
-		return "unknown"
+	real := path
+	if r, err := filepath.EvalSymlinks(path); err == nil {
+		real = r
 	}
-	var v struct {
-		Version string `json:"version"`
-	}
-	if json.Unmarshal(out, &v) == nil && v.Version != "" {
-		return strings.TrimPrefix(v.Version, "v")
-	}
-	for _, f := range strings.Fields(string(out)) {
-		f = strings.TrimPrefix(f, "v")
-		if f != "" && f[0] >= '0' && f[0] <= '9' && strings.Count(f, ".") >= 1 {
-			return f
+	if methodOfPath(real) == "npm" {
+		for dir := filepath.Dir(real); dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+			b, err := os.ReadFile(filepath.Join(dir, "package.json"))
+			if err != nil {
+				continue
+			}
+			var pkg struct {
+				Name, Version string
+			}
+			if json.Unmarshal(b, &pkg) == nil && pkg.Name == "@zebracat/cli" && pkg.Version != "" {
+				return pkg.Version
+			}
+			break
 		}
 	}
 	return "unknown"

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/zebracatai/zebracat-cli/internal/apitest"
@@ -88,5 +90,38 @@ func TestDoctorAndVersionNameTheBinary(t *testing.T) {
 	v := run(t, "version", "--json").JSON(t)
 	if v["path"] == nil || v["install_method"] == nil || v["version"] == nil {
 		t.Fatalf("version: %v", v)
+	}
+}
+
+// doctor never runs other copies, skips relative PATH entries, and reads an npm
+// copy's version from its package.json.
+func TestDoctorReadsOtherCopiesWithoutRunningThem(t *testing.T) {
+	srv, _ := setup(t)
+	srv.On("GET", "/account", apitest.Answer{Status: "200", Raw: `{"email": "a@example.com"}`})
+	fakeLatest(t, "v0.0.1")
+	root := t.TempDir()
+	pkg := filepath.Join(root, "lib", "node_modules", "@zebracat", "cli")
+	_ = os.MkdirAll(filepath.Join(pkg, "bin"), 0o755)
+	_ = os.WriteFile(filepath.Join(pkg, "package.json"), []byte(`{"name":"@zebracat/cli","version":"0.1.6"}`), 0o644)
+	marker := filepath.Join(root, "ran")
+	script := "#!/bin/sh\ntouch " + marker + "\n"
+	_ = os.WriteFile(filepath.Join(pkg, "bin", "zebracat"), []byte(script), 0o755)
+	rel := t.TempDir()
+	_ = os.WriteFile(filepath.Join(rel, "zebracat"), []byte(script), 0o755)
+	wd, _ := os.Getwd()
+	_ = os.Chdir(rel)
+	t.Cleanup(func() { _ = os.Chdir(wd) })
+	t.Setenv("PATH", ".:"+filepath.Join(pkg, "bin"))
+	out := run(t, "doctor", "--json").JSON(t)
+	bins, _ := out["on_path"].([]any)
+	if len(bins) != 1 {
+		t.Fatalf("on_path %v (the relative '.' entry must be skipped)", bins)
+	}
+	b := bins[0].(map[string]any)
+	if b["version"] != "0.1.6" || b["install_method"] != "npm" || b["remove"] != "npm uninstall -g @zebracat/cli" {
+		t.Fatalf("npm copy %v", b)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("doctor ran another binary")
 	}
 }
