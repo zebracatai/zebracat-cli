@@ -101,7 +101,7 @@ func (m *model) startPlan(text string, kind brief.Kind) (tea.Model, tea.Cmd) {
 func (m *model) onCreated(msg createdMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.stage, m.job = stageIdle, nil
-		return m, tea.Println(stErr.Render("✗ ") + msg.err.Error())
+		return m, tea.Println(stErr.Render("✗ ") + clean(msg.err.Error()))
 	}
 	id, _ := msg.out["task_id"].(string)
 	if id == "" {
@@ -121,7 +121,7 @@ func (m *model) onPoll(msg pollMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.err != nil {
 		return m, tea.Batch(
-			tea.Println(stErr.Render("✗ ")+msg.err.Error()+stMuted.Render(" — retrying…")),
+			tea.Println(stErr.Render("✗ ")+clean(msg.err.Error())+stMuted.Render(" — retrying…")),
 			tea.Tick(5*time.Second, func(time.Time) tea.Msg { return m.poll(msg.taskID, msg.untilDone) }))
 	}
 	j.task = msg.out
@@ -162,7 +162,7 @@ func (m *model) onPlan(msg planMsg) (tea.Model, tea.Cmd) {
 	}
 	if msg.err != nil {
 		m.stage = stageReady
-		return m, tea.Println(stErr.Render("✗ ") + msg.err.Error() + stMuted.Render(" — the plan is unchanged."))
+		return m, tea.Println(stErr.Render("✗ ") + clean(msg.err.Error()) + stMuted.Render(" — the plan is unchanged."))
 	}
 	if msg.task != nil {
 		j.task = msg.task
@@ -174,7 +174,7 @@ func (m *model) onPlan(msg planMsg) (tea.Model, tea.Cmd) {
 	m.stage = stageReady
 	var out []tea.Cmd
 	if msg.reply != "" {
-		out = append(out, tea.Println(stTitle.Render("🦓 ")+msg.reply))
+		out = append(out, tea.Println(stTitle.Render("🦓 ")+clean(msg.reply)))
 	}
 	out = append(out, tea.Println(planCard(j, m.width)))
 	return m, tea.Sequence(out...)
@@ -183,7 +183,7 @@ func (m *model) onPlan(msg planMsg) (tea.Model, tea.Cmd) {
 func (m *model) onGenerated(msg generatedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.stage = stageReady
-		return m, tea.Println(stErr.Render("✗ ") + msg.err.Error() + stMuted.Render(" — nothing was generated."))
+		return m, tea.Println(stErr.Render("✗ ") + clean(msg.err.Error()) + stMuted.Render(" — nothing was generated."))
 	}
 	m.stage = stageMaking
 	m.job.started = m.now()
@@ -356,29 +356,29 @@ func planCard(j *job, width int) string {
 		title = "Your plan"
 	}
 	var b strings.Builder
-	b.WriteString(stTitle.Render("🎬 "+title) + "\n")
+	b.WriteString(stTitle.Render("🎬 "+clean(title)) + "\n")
 	if facts := planFacts(sp, j.task); facts != "" {
-		b.WriteString(stMuted.Render(facts) + "\n")
+		b.WriteString(stMuted.Render(clean(facts)) + "\n")
 	}
 	if beats := videos.Beats(src); len(beats) > 0 {
 		b.WriteString("\n")
 		for _, l := range beats {
-			b.WriteString(wrapBeat(l, width) + "\n")
+			b.WriteString(wrapBeat(clean(l), width) + "\n")
 		}
 	} else {
 		for _, l := range videos.SummaryLines(src) {
-			b.WriteString(l + "\n")
+			b.WriteString(clean(l) + "\n")
 		}
 	}
 	b.WriteString("\n")
 	if v := voices(sp); v != "" {
-		b.WriteString(stMuted.Render("Voice  ") + v + "\n")
+		b.WriteString(stMuted.Render("Voice  ") + clean(v) + "\n")
 	}
 	if q := videos.QuoteLine(j.quote); q != "" {
-		b.WriteString(stMuted.Render("Price  ") + stKey.Render(q) + "\n")
+		b.WriteString(stMuted.Render("Price  ") + stKey.Render(clean(q)) + "\n")
 	}
 	if j.editorURL != "" {
-		b.WriteString(stMuted.Render("Studio ") + stKey.Render(j.editorURL) + "\n")
+		b.WriteString(stMuted.Render("Studio ") + stKey.Render(clean(j.editorURL)) + "\n")
 	}
 	w := width - 2
 	if w < 40 || w > 100 {
@@ -460,10 +460,10 @@ func doneCard(j *job) string {
 	var b strings.Builder
 	b.WriteString(stOK.Render("✓ Your video is ready") + stMuted.Render(" · "+clock(time.Since(j.started))) + "\n")
 	if j.videoURL != "" {
-		b.WriteString(stMuted.Render("  Video  ") + stKey.Render(j.videoURL) + "\n")
+		b.WriteString(stMuted.Render("  Video  ") + stKey.Render(clean(j.videoURL)) + "\n")
 	}
 	if j.editorURL != "" {
-		b.WriteString(stMuted.Render("  Studio ") + stKey.Render(j.editorURL) + "\n")
+		b.WriteString(stMuted.Render("  Studio ") + stKey.Render(clean(j.editorURL)) + "\n")
 	}
 	b.WriteString(stHint.Render("  Ctrl+O or /open to watch it · type a new idea to make another"))
 	return b.String()
@@ -491,6 +491,6 @@ func (m *model) confirmView() string {
 	if q != "" {
 		price = strings.SplitN(q, " — ", 2)[0]
 	}
-	return "\n" + stTitle.Render("  Generate it for "+price+"?") + stMuted.Render("  y / n") + "\n" +
+	return "\n" + stTitle.Render("  Generate it for "+clean(price)+"?") + stMuted.Render("  y / n") + "\n" +
 		stHint.Render("  This spends credits. n or Esc keeps the plan.")
 }

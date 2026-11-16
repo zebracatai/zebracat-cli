@@ -292,3 +292,20 @@ func TestShortBalanceNeverAsksToSpend(t *testing.T) {
 		t.Fatalf("stage %v generate %d", m.stage, srv.Count("POST", "/generate"))
 	}
 }
+
+// Text from the server or the plan model can't drive the terminal.
+func TestServerTextCannotEscapeTheTerminal(t *testing.T) {
+	evil := "Done\x1b]0;pwned\x07 \x1b[2J\u009bok\nnext"
+	if got := clean(evil); strings.ContainsAny(got, "\x1b\x07\u009b") || !strings.Contains(got, "\nnext") {
+		t.Fatalf("clean = %q", got)
+	}
+	j := &job{plan: map[string]any{"screenplay": map[string]any{"title": "T\x1b[31m", "beats": []any{
+		map[string]any{"n": float64(1), "seconds": float64(5), "narration": "hi\x1b]52;c;Zm9v\x07"}}}}}
+	if card := planCard(j, 80); strings.Contains(card, "\x1b]") || strings.Contains(card, "\x07") {
+		t.Fatalf("the plan card carries a raw escape: %q", card)
+	}
+	q := questionCard(map[string]any{"question": map[string]any{"id": "q", "question": "Pick\x1b[2J", "options": []any{"a\x1b[1A"}}})
+	if strings.Contains(q, "\x1b[2J") || strings.Contains(q, "\x1b[1A") {
+		t.Fatalf("question card: %q", q)
+	}
+}
