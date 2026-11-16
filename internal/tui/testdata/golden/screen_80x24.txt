@@ -1,6 +1,6 @@
  ▙               ▟
  █ ▖           ▗ █
- █ █           █ █    Zebracat v0.6.1
+ █ █           █ █    Zebracat v0.6.2
  █ █ █ █ █ █ █ █ █    admin@example.com · $208.25 API balance
  █ █ █ █ █ █ █ █ █    ~/projects/coffee
  █ █ █ █ █ █ █ █ █
@@ -21,4 +21,4 @@
 › Describe your video, paste a script or a link                                
 ───────────────────────────────────────────────────────────────────────────────
   / for commands · alt+enter new line · ↑ history
-  Cat Mode · $208.25 API balance · 1,240 credits · admin@example.com · v0.6.1
+  Cat Mode · $208.25 API balance · 1,240 credits · admin@example.com · v0.6.2

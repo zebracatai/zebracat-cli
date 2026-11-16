@@ -1,6 +1,6 @@
 ---
 name: zebracat-cli
-version: 0.6.1
+version: 0.6.2
 description: |
   Make AI videos from the terminal with the Zebracat CLI. Use when the user wants to
   generate, plan, edit, price, translate, clone, list or download Zebracat videos, write

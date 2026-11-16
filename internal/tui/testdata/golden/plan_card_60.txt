@@ -1,7 +1,8 @@
 ╭────────────────────────────────────────────────────────╮
 │ Why cats knock things off tables                       │
-│ 5 s · 1 scene · vertical · ai video · english ·        │
-│ narration                                              │
+│ Type ai video · Format vertical · Length 5 s · Scenes  │
+│ 1                                                      │
+│ Audio narration · Language english                     │
 │                                                        │
 │ 1. (5s) Ever wondered why your cat swipes your mug off │
 │    the table? It starts with instinct: cats test what  │
