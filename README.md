@@ -50,7 +50,7 @@ nothing is spent until you press **Ctrl+G** and answer **y**. There are no menus
 ```
  ▙               ▟
  █ ▖           ▗ █
- █ █           █ █    Zebracat v0.5.0
+ █ █           █ █    Zebracat v0.6.0
  █ █ █ █ █ █ █ █ █    you@example.com · $208.25 API balance
  █ █ █ █ █ █ █ █ █    ~/projects/coffee
  █ █ █ █ █ █ █ █ █
@@ -76,7 +76,22 @@ nothing is spent until you press **Ctrl+G** and answer **y**. There are no menus
 ```
 
 The mark is the real Zebracat logo (the striped cat-head shield from `logo.svg`), drawn
-in `#6B3BF4` (nearest 256-colour on older terminals, plain with `NO_COLOR`).
+in `#6B3BF4` (nearest 256-colour on older terminals, plain with `NO_COLOR`). It follows
+the window: 34×20 on a big terminal, 17×10 on a normal one, 9×5 on a small one, a
+1-row mark on a tiny one, and redraws when you resize.
+
+The input stays on the **last lines of the terminal**, with the conversation scrolling
+above it (your terminal's scrollback keeps everything). Under it, a two-line status
+footer: what you can do now, then your **plan, balance, credits, account and version**
+(cut from the end on a narrow terminal; the balance refreshes after you spend):
+
+```
+───────────────────────────────────────────────────────────────────────────────
+› Describe your video, paste a script or a link
+───────────────────────────────────────────────────────────────────────────────
+  / for commands · alt+enter new line · ↑ history
+  Cat Mode · $208.25 API balance · 1,240 credits · you@example.com · v0.6.0
+```
 
 - **Type an idea, paste a script, or paste a link.** A TikTok / YouTube / Reel link is
   read like the studio reads it: "clone this" copies it, "like this but about matcha"

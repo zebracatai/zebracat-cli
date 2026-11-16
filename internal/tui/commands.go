@@ -109,7 +109,8 @@ func (m *model) handleSlash(text string, echo tea.Cmd) (tea.Model, tea.Cmd) {
 	case "/quit", "/exit":
 		return m.leave("")
 	case "/clear":
-		return m, tea.Sequence(tea.ClearScreen, m.say(m.welcomeView()))
+		m.blocks, m.printed = nil, 0
+		return m, tea.Sequence(tea.ClearScreen, m.sayWelcome())
 	case "/login":
 		if m.cl.IsAuthenticated() {
 			return m, then(m.note("You're already signed in. /logout first to switch accounts."))
@@ -156,7 +157,8 @@ func (m *model) handleSlash(text string, echo tea.Cmd) (tea.Model, tea.Cmd) {
 		if m.job == nil || (m.job.plan == nil && m.job.task == nil) || m.stage < stageReady {
 			return m, then(m.note("No plan yet — describe a video first."))
 		}
-		return m, then(m.say(planCard(m.job, m.width)))
+		snap := *m.job
+		return m, then(m.sayR(func() string { return planCard(&snap, m.width) }))
 	case "/open":
 		mm, c := m.openVideo()
 		return mm, then(c)

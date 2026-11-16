@@ -69,7 +69,12 @@ func drawCells(img *image.RGBA, ox, oy int, lines []string) {
 
 func main() {
 	out := flag.String("o", "logo-preview.png", "output PNG")
+	sizes := flag.Bool("sizes", false, "draw every terminal size (34×20, 17×10, 9×5, 1-row) instead")
 	flag.Parse()
+	if *sizes {
+		writeSizes(*out)
+		return
+	}
 	big := logo.Big()
 	svgW, svgH := int(logo.Width*svgScale), int(logo.Height*svgScale)
 	termW, termH := 17*cellW, len(big)*cellH
@@ -85,6 +90,53 @@ func main() {
 		drawCells(img, pad+svgW+pad+termW+pad, oy+pad, small)
 	}
 	f, err := os.Create(*out)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, img); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// writeSizes draws every size the CLI picks from the window, side by side.
+func writeSizes(out string) {
+	var sets [][]string
+	for i := len(logo.Sizes) - 1; i >= 0; i-- {
+		sets = append(sets, logo.Sized(logo.Sizes[i]))
+	}
+	sets = append(sets, []string{logo.Small()})
+	w, h := pad, 0
+	for _, s := range sets {
+		c := 0
+		for _, l := range s {
+			if n := len([]rune(l)); n > c {
+				c = n
+			}
+		}
+		w += c*cellW + pad
+		if len(s)*cellH > h {
+			h = len(s) * cellH
+		}
+	}
+	panelH := pad + h + pad
+	img := image.NewRGBA(image.Rect(0, 0, w, panelH*2))
+	for i, bg := range []color.Color{dark, light} {
+		oy := i * panelH
+		fill(img, image.Rect(0, oy, w, oy+panelH), bg)
+		x := pad
+		for _, s := range sets {
+			drawCells(img, x, oy+pad+h-len(s)*cellH, s) // bottoms aligned
+			c := 0
+			for _, l := range s {
+				if n := len([]rune(l)); n > c {
+					c = n
+				}
+			}
+			x += c*cellW + pad
+		}
+	}
+	f, err := os.Create(out)
 	if err != nil {
 		log.Fatal(err)
 	}

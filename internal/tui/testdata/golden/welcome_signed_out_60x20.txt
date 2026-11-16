@@ -1,0 +1,6 @@
+ ▌       ▌    Zebracat v0.6.0
+ ▌▌▖▖▖▖▖▌▌    Not signed in · /login
+ ▌▌▌▌▌▌▌▌▌    ~/projects/coffee
+ ▌▌▌▌▌▌▌▌▌
+  ▘▘▌▌▌▘▘     Describe a video, paste a script or a link.
+              /help for commands · ctrl+c twice to quit

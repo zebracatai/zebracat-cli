@@ -161,6 +161,19 @@ func (m *model) accountCmd() tea.Cmd {
 	}
 }
 
+// refreshAccount re-reads the account quietly (the footer's balance after a spend).
+func (m *model) refreshAccount() tea.Cmd {
+	cl := m.cl
+	if cl == nil || !cl.IsAuthenticated() {
+		return nil
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		return acctMsg{a: fetchAccount(ctx, cl), quiet: true}
+	}
+}
+
 // projectsCmd fetches the project list for the dashboard view.
 func (m *model) projectsCmd() tea.Cmd {
 	cl := m.cl

@@ -755,5 +755,20 @@
         }
       }
     }
+  },
+  "GET /api/v1/public/account": {
+    "200": {
+      "default": {
+        "email": "admin@example.com",
+        "plan": "Cat Mode",
+        "active_till": "2026-12-16T00:00:00+00:00",
+        "account_credit": {
+          "limit": 3000,
+          "used": 1760,
+          "remaining": 1240
+        },
+        "api_dollar_balance": "208.25"
+      }
+    }
   }
 }

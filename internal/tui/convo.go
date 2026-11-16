@@ -187,7 +187,7 @@ func (m *model) onPoll(msg pollMsg) (tea.Model, tea.Cmd) {
 	case "completed":
 		m.stage = stageDone
 		j.videoURL, _ = msg.out["video_url"].(string)
-		return m, tea.Batch(back, m.say(doneCard(j, m.now().Sub(j.started))))
+		return m, tea.Batch(back, m.say(doneCard(j, m.now().Sub(j.started))), m.refreshAccount())
 	}
 	return m.ended(msg.out, msg.untilDone)
 }
@@ -245,7 +245,8 @@ func (m *model) onPlan(msg planMsg) (tea.Model, tea.Cmd) {
 		out = append(out, m.assistant(clean(msg.reply)))
 	}
 	if msg.plan != nil || msg.task != nil {
-		out = append(out, m.say(planCard(j, m.width)))
+		snap := *j // this card shows the plan as it is now, even after later changes
+		out = append(out, m.sayR(func() string { return planCard(&snap, m.width) }))
 	}
 	return m, tea.Sequence(out...)
 }
@@ -273,7 +274,7 @@ func (m *model) onGenerated(msg generatedMsg) (tea.Model, tea.Cmd) {
 	m.job.started = m.now()
 	m.job.phase = "generating"
 	return m, tea.Batch(m.note("Generating — a few minutes. Esc stops watching; the video keeps going."),
-		m.pollCmd(m.job.taskID, true))
+		m.pollCmd(m.job.taskID, true), m.refreshAccount())
 }
 
 // sayAPIErr turns a call's error into a plain sentence and one fix line.

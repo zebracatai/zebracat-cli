@@ -311,11 +311,11 @@ func TestLayoutFitsEveryWidth(t *testing.T) {
 		if v := m.View(); maxWidth(v) > w {
 			t.Fatalf("view at %d columns is %d wide:\n%s", w, maxWidth(v), v)
 		}
-		golden(t, "welcome_"+strconv.Itoa(w), welcome)
 		golden(t, "plan_card_"+strconv.Itoa(w), card)
 	}
 	m := layoutModel(t, 60, false)
-	golden(t, "welcome_signed_out_60", m.welcomeView())
+	m.height = 20
+	golden(t, "welcome_signed_out_60x20", m.welcomeView())
 }
 
 // NO_COLOR turns every colour off, even on a colour terminal.
@@ -391,14 +391,14 @@ func TestSlashMenuScrolls(t *testing.T) {
 	m := layoutModel(t, 100, true)
 	m.in.SetValue("/")
 	m.refreshMatches()
-	v := m.View()
-	if strings.Count(v, "\n  /")+strings.Count(v, "› /") > menuRows+1 || !strings.Contains(v, "› /help") {
+	v := m.menuView()
+	if len(strings.Split(v, "\n")) != menuRows || !strings.Contains(v, "› /help") {
 		t.Fatalf("menu:\n%s", v)
 	}
 	for i := 0; i < len(commands)-1; i++ {
 		m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	}
-	if v := m.View(); !strings.Contains(v, "› /exit") || strings.Contains(v, "/help ") {
+	if v := m.menuView(); !strings.Contains(v, "› /exit") || strings.Contains(v, "/help ") {
 		t.Fatalf("scrolled menu:\n%s", v)
 	}
 }
