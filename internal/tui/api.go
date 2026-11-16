@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/zebracatai/zebracat-cli/internal/attach"
 	"github.com/zebracatai/zebracat-cli/internal/client"
 	"github.com/zebracatai/zebracat-cli/internal/update"
 	"github.com/zebracatai/zebracat-cli/internal/version"
@@ -33,12 +34,23 @@ func (m *model) apiCmd(method, path string, body any) tea.Cmd {
 
 // createCmd posts a message as a Director v2 plan (auto_generate=false): the
 // person sees the plan and its quote before anything is spent.
-func (m *model) createCmd(j *job, body map[string]any) tea.Cmd {
+func (m *model) createCmd(j *job, body map[string]any, imgs []attach.Image) tea.Cmd {
 	cl := m.cl
 	key := newKey()
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
+		if len(imgs) > 0 { // the pictures first, the way the studio uploads them
+			var urls []string
+			for _, im := range imgs {
+				u, err := attach.Upload(ctx, cl, im)
+				if err != nil {
+					return createdMsg{j: j, err: err}
+				}
+				urls = append(urls, u)
+			}
+			body["uploads"] = attach.Uploads(urls, imgs)
+		}
 		var out map[string]any
 		_, err := cl.DoWith(ctx, "POST", videos.Base+"/videos", body, map[string]string{"Idempotency-Key": key}, &out)
 		return createdMsg{j: j, out: out, err: err}

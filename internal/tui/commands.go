@@ -52,13 +52,20 @@ func (m *model) handleEnter() (tea.Model, tea.Cmd) {
 		return m.saveKey(key)
 	}
 	text := strings.TrimSpace(m.in.Value())
+	if text == "" && len(m.images) > 0 {
+		return m, m.note("Say what the video should be — your pictures go with it.")
+	}
 	m.in.Reset()
 	m.matches = nil
 	if text == "" {
 		return m, nil
 	}
 	m.remember(text)
-	echo := m.youSaid(text)
+	echoed := text
+	if len(m.images) > 0 && !strings.HasPrefix(text, "/") {
+		echoed += "  " + m.chips()
+	}
+	echo := m.youSaid(echoed)
 
 	if strings.HasPrefix(text, "/") && !strings.Contains(strings.Fields(text)[0], "\n") {
 		return m.handleSlash(text, echo)
@@ -192,6 +199,7 @@ func helpText() string {
 	b.WriteString("\n" + stTitle.Render("Keys") + "\n")
 	for _, k := range [][2]string{
 		{"Enter", "send"}, {"Alt+Enter", "new line (pasting a script keeps its lines)"}, {"↑ / ↓", "history"},
+		{"Ctrl+V", "paste a picture (Alt+V on Windows); or drag a picture file in"},
 		{"Tab", "complete a / command"}, {"Ctrl+G", "generate the plan (asks before spending)"},
 		{"Ctrl+O", "open the finished video"}, {"Esc", "stop waiting (a paid video keeps going)"},
 		{"Ctrl+C", "clear the line; twice to quit"},

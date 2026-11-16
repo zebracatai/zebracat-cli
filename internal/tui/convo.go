@@ -9,6 +9,8 @@
 package tui
 
 import (
+	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -17,6 +19,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/zebracatai/zebracat-cli/internal/attach"
 	"github.com/zebracatai/zebracat-cli/internal/brief"
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/videos"
@@ -51,6 +54,7 @@ var requestHints = map[string]string{
 type job struct {
 	taskID       string
 	text         string         // what the person sent (kept for a question back)
+	images       []attach.Image // the pictures sent with it
 	task         map[string]any // the last task view
 	plan         map[string]any // the last plan view (screenplay, summary_lines)
 	quote        map[string]any
@@ -112,10 +116,15 @@ func (m *model) startPlan(text string, kind brief.Kind) (tea.Model, tea.Cmd) {
 	} else if body["input_kind"] == "url" {
 		note = "Reading that page and writing a plan — free until you generate"
 	}
-	m.job = &job{text: text, shouldRender: true, started: m.now(), phase: "pending"}
+	imgs := m.images
+	m.images = nil
+	if len(imgs) > 0 {
+		note = fmt.Sprintf("Uploading %d picture(s), then writing a plan — free until you generate", len(imgs))
+	}
+	m.job = &job{text: text, images: imgs, shouldRender: true, started: m.now(), phase: "pending"}
 	m.stage = stagePlanning
 	m.leaveArmed = false
-	return m, tea.Batch(m.note(note), m.createCmd(m.job, body))
+	return m, tea.Batch(m.note(note), m.createCmd(m.job, body, imgs))
 }
 
 // ---- results --------------------------------------------------------------------
@@ -125,8 +134,14 @@ func (m *model) onCreated(msg createdMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if msg.err != nil {
+		m.images = append(m.job.images, m.images...) // the pictures come back to the input
 		m.stage, m.job = stageIdle, nil
-		return m, m.sayAPIErr(msg.err, "Nothing was charged. Try again.")
+		return m, m.sayAPIErr(msg.err, "Nothing was charged. Your pictures are still attached; send again.")
+	}
+	for _, im := range m.job.images { // sent: a pasted picture's temp file can go
+		if im.Temp {
+			os.Remove(im.Path)
+		}
 	}
 	id, _ := msg.out["task_id"].(string)
 	if id == "" {
@@ -320,6 +335,9 @@ func (m *model) converse(text string) (tea.Model, tea.Cmd) {
 		m.job.started = m.now()
 		return m, m.answerCmd(m.job, m.job.taskID, m.job.questionID, answer)
 	case stageReady:
+		if len(m.images) > 0 { // the plan chat takes words only
+			return m, m.note("Pictures go with a new video: /new, then send your idea with them. (They stay attached.)")
+		}
 		m.stage = stageEditing
 		m.job.started = m.now()
 		return m, m.chatCmd(m.job, m.job.taskID, text)

@@ -50,7 +50,7 @@ nothing is spent until you press **Ctrl+G** and answer **y**. There are no menus
 ```
  ▙               ▟
  █ ▖           ▗ █
- █ █           █ █    Zebracat v0.6.0
+ █ █           █ █    Zebracat v0.6.1
  █ █ █ █ █ █ █ █ █    you@example.com · $208.25 API balance
  █ █ █ █ █ █ █ █ █    ~/projects/coffee
  █ █ █ █ █ █ █ █ █
@@ -90,7 +90,7 @@ footer: what you can do now, then your **plan, balance, credits, account and ver
 › Describe your video, paste a script or a link
 ───────────────────────────────────────────────────────────────────────────────
   / for commands · alt+enter new line · ↑ history
-  Cat Mode · $208.25 API balance · 1,240 credits · you@example.com · v0.6.0
+  Cat Mode · $208.25 API balance · 1,240 credits · you@example.com · v0.6.1
 ```
 
 - **Type an idea, paste a script, or paste a link.** A TikTok / YouTube / Reel link is
@@ -112,6 +112,28 @@ footer: what you can do now, then your **plan, balance, credits, account and ver
   `/status`, `/balance`, `/voices`, `/styles`, `/login`, `/logout`, `/update`, `/clear`, `/exit`.
 - `NO_COLOR` turns colour off; output stays in your scrollback after you exit.
 
+### Pictures: paste or drop them in
+
+Attach pictures to your message (a product, a person, a place, a style). They show in
+the input as chips, `[Image #1 · 1080×1920 · 240 KB]` (paste with **Ctrl+V**, or **Alt+V**); **Backspace** on an empty line
+removes the last one. On send they're uploaded the way the studio's chat does it, and the
+plan uses them. PNG, JPEG or WebP, up to 12 MB each; several per message are fine.
+
+| Where | Paste a picture | Drop a file |
+|---|---|---|
+| macOS (Terminal, iTerm2, Ghostty, WezTerm, Kitty) | copy the picture, press **Ctrl+V** (not Cmd+V: the terminal keeps Cmd+V for text) | drag the file into the window |
+| Linux (Wayland) | **Ctrl+V**, needs `wl-clipboard` (`wl-paste`) | drag the file in |
+| Linux (X11) | **Ctrl+V**, needs `xclip` | drag the file in |
+| Windows (Windows Terminal, PowerShell) | **Alt+V** (Windows Terminal keeps Ctrl+V for its own text paste); read through PowerShell. WSL: use a drop or a path | drag the file in |
+| over SSH, in tmux on a remote box, in containers | Ctrl+V reads the *remote* clipboard, which has no picture | paste the file's path instead |
+
+A dropped or pasted path (`/Users/me/photo.png`, a quoted path, `my\ photo.png`,
+`file://…`) becomes a chip when the file is a picture; any other text stays text.
+Text pastes, even long multi-line scripts, go into the input as one paste.
+
+Pictures go with a new video. The plan chat takes words only, so to add pictures to an
+existing plan, start a new video (`/new`) with them.
+
 **Scripts and agents never get a prompt.** Without a terminal (a pipe, CI) or with
 `--json`, `zebracat` alone exits 2 (`needs_terminal`), and `zebracat create` writes the
 plan and prints it with its quote as JSON:
@@ -120,6 +142,7 @@ plan and prints it with its quote as JSON:
 zebracat create "why cats knock things off tables" --json   # plan + quote, never spends
 zebracat create "…" --yes --json                            # plan, generate, wait (spends)
 zebracat create --script script.txt --json
+zebracat create "a launch video for this mug" --image mug.png:product --json   # pictures: <path>[:person|place|product|style|logo|other]
 zebracat create https://youtu.be/abc123 --json              # a link, like the studio
 ```
 

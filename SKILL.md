@@ -1,6 +1,6 @@
 ---
 name: zebracat-cli
-version: 0.6.0
+version: 0.6.1
 description: |
   Make AI videos from the terminal with the Zebracat CLI. Use when the user wants to
   generate, plan, edit, price, translate, clone, list or download Zebracat videos, write
@@ -40,6 +40,10 @@ generate only after they agree: `zebracat video generate <task_id> --yes --wait`
 A video link (TikTok/YouTube/Reel) in the text is sent like the studio sends it: the
 plan decides whether to clone it or use it as the topic. `--yes` on `create` plans AND
 generates (spends) — only when the user already agreed.
+
+Pictures the user gives you: `--image <path>[:person|place|product|style|logo|other]`
+(repeatable; PNG/JPEG/WebP ≤12 MB). They are uploaded like the studio's chat and sent as
+the plan's `uploads`.
 
 Don't run bare `zebracat` from an agent: it is the human conversation and, without a
 terminal, exits 2 (`needs_terminal`). A brief with nothing to film ("hi") ends with

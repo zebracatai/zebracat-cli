@@ -1,6 +1,6 @@
  ▙               ▟
  █ ▖           ▗ █
- █ █           █ █    Zebracat v0.6.0
+ █ █           █ █    Zebracat v0.6.1
  █ █ █ █ █ █ █ █ █    admin@example.com · $208.25 API balance
  █ █ █ █ █ █ █ █ █    ~/projects/coffee
  █ █ █ █ █ █ █ █ █

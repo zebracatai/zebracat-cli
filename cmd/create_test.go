@@ -1,6 +1,13 @@
 package cmd
 
 import (
+	"bytes"
+	"image"
+	"image/png"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/zebracatai/zebracat-cli/internal/apitest"
@@ -99,5 +106,32 @@ func TestCreateStopsOnAQuestion(t *testing.T) {
 	r := run(t, "create", "a tea video", "--json")
 	if r.exit() != 0 || r.JSON(t)["phase"] != "needs_input" {
 		t.Fatalf("exit %d out %s", r.exit(), r.stdout)
+	}
+}
+
+// --image uploads the picture like the studio and sends it with the plan.
+func TestCreateWithAnImage(t *testing.T) {
+	srv, _ := setup(t)
+	noShell(t)
+	srv.On("GET", "/videos/{task_id}", apitest.Answer{Example: "plan_ready"})
+	srv.Handle("/api/user/upload_assets", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"uploaded_files": [{"url": "https://cdn.example.com/ai-chat/uploads/mug.png"}]}`))
+	})
+	var b bytes.Buffer
+	_ = png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 10, 10)))
+	p := filepath.Join(t.TempDir(), "mug.png")
+	_ = os.WriteFile(p, b.Bytes(), 0o644)
+	r := run(t, "create", "a launch video for this mug", "--image", p+":product", "--json")
+	if r.exit() != 0 {
+		t.Fatalf("exit %d: %s", r.exit(), r.stderr)
+	}
+	post, _ := srv.Last("POST", "/videos")
+	ups, _ := post.Body["uploads"].([]any)
+	if len(ups) != 1 || ups[0].(map[string]any)["kind"] != "product" || ups[0].(map[string]any)["url"] != "https://cdn.example.com/ai-chat/uploads/mug.png" {
+		t.Fatalf("uploads %v", post.Body["uploads"])
+	}
+	_ = os.WriteFile(p+".txt", []byte("hi"), 0o644)
+	if r := run(t, "create", "x", "--image", p+".txt", "--json"); r.exit() != 2 || !strings.Contains(r.err.Message, "PNG, JPEG or WebP") {
+		t.Fatalf("a text file: exit %d %v", r.exit(), r.err)
 	}
 }

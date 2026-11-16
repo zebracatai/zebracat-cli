@@ -23,6 +23,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/zebracatai/zebracat-cli/internal/attach"
 	"github.com/zebracatai/zebracat-cli/internal/client"
 	"github.com/zebracatai/zebracat-cli/internal/update"
 	"github.com/zebracatai/zebracat-cli/internal/version"
@@ -70,9 +71,19 @@ type account struct {
 
 // Launch is what the CLI knows before the conversation opens.
 type Launch struct {
-	First       string // a message to send at once (`zebracat create "<idea>"`)
-	JustUpdated string // the version we were updated from (relaunch after an update)
+	First       string         // a message to send at once (`zebracat create "<idea>"`)
+	JustUpdated string         // the version we were updated from (relaunch after an update)
+	Images      []attach.Image // pictures given with --image, sent with the first message
 }
+
+// pastedMsg is the clipboard picture Ctrl+V read (or why there is none).
+type pastedMsg struct {
+	im  attach.Image
+	err error
+}
+
+// clipboardImage reads the clipboard's picture (a test swaps it).
+var clipboardImage = attach.Clipboard
 
 // Result tells the caller what to do after the conversation ends.
 type Result struct {
@@ -94,7 +105,8 @@ type model struct {
 	busy    bool    // a slash command's API call is running
 	stage   stage
 	job     *job
-	carry   string // the words of a brief the plan asked about, sent with the answer
+	carry   string         // the words of a brief the plan asked about, sent with the answer
+	images  []attach.Image // pictures attached to the next message (chips in the input)
 	acct    *account
 	askKey  bool // waiting for the user to paste an API key
 	valid   bool // the next acctMsg is validating a just-entered key
@@ -160,6 +172,7 @@ func Run(cl *client.Client, baseURL string, l Launch) (Result, error) {
 	applyColorEnv()
 	m := newModel(cl, baseURL)
 	m.launch = l
+	m.images = append(m.images, l.Images...)
 	m.shadow = shadowOnPath()
 
 	// Account and update check in parallel, capped, before the welcome box.
@@ -297,6 +310,15 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.say(render("Result", msg.out))
 
+	case pastedMsg:
+		if msg.err != nil {
+			if msg.err == attach.ErrNoImage {
+				return m, m.note("No picture in the clipboard. Text pastes with your terminal's paste (Cmd+V / Ctrl+Shift+V); you can also drag a picture file in.")
+			}
+			return m, m.sayErr(msg.err.Error(), "Drag the picture file into the terminal instead.")
+		}
+		m.images = append(m.images, msg.im)
+		return m, nil
 	case createdMsg:
 		return m.onCreated(msg)
 	case planMsg:
@@ -345,6 +367,15 @@ func (m *model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.askGenerate()
 	case tea.KeyCtrlO:
 		return m.openVideo()
+	case tea.KeyCtrlV: // paste a picture from the clipboard
+		if m.askKey {
+			break
+		}
+		return m.pasteClipboard()
+	}
+	// Alt+V does the same: Windows Terminal keeps Ctrl+V for its own text paste.
+	if msg.Alt && msg.Type == tea.KeyRunes && string(msg.Runes) == "v" && !m.askKey {
+		return m.pasteClipboard()
 	}
 	if m.askKey {
 		if msg.Type == tea.KeyEnter {
@@ -363,6 +394,22 @@ func (m *model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.runUpdate(m.say(stMuted.Render("⎿ Updating to " + tag + "…")))
 		}
 		m.offer = ""
+	}
+	// A paste (or a drag-and-drop) that names picture files becomes chips.
+	if msg.Paste {
+		imgs, err := attach.Paths(string(msg.Runes))
+		if err != nil {
+			return m, m.sayErr(err.Error(), "Pictures can be PNG, JPEG or WebP, up to "+attach.Size(attach.MaxBytes)+".")
+		}
+		if len(imgs) > 0 {
+			m.images = append(m.images, imgs...)
+			return m, nil
+		}
+	}
+	// Backspace on an empty line removes the last picture.
+	if msg.Type == tea.KeyBackspace && len(m.images) > 0 && m.in.Value() == "" {
+		m.dropImage(len(m.images) - 1)
+		return m, nil
 	}
 	switch msg.Type {
 	case tea.KeyTab:
@@ -466,4 +513,29 @@ var cwd = func() string {
 		d = "~" + strings.TrimPrefix(d, h)
 	}
 	return d
+}
+
+// dropImage removes a picture (and its temp file, if it came from the clipboard).
+func (m *model) dropImage(i int) {
+	if i < 0 || i >= len(m.images) {
+		return
+	}
+	if m.images[i].Temp {
+		os.Remove(m.images[i].Path)
+	}
+	m.images = append(m.images[:i], m.images[i+1:]...)
+}
+
+// chips is the attached pictures as they show in the input.
+func (m *model) chips() string {
+	var parts []string
+	for i, im := range m.images {
+		parts = append(parts, stKey.Render(im.Chip(i+1)))
+	}
+	return strings.Join(parts, " ")
+}
+
+// pasteClipboard reads the clipboard's picture in the background.
+func (m *model) pasteClipboard() (tea.Model, tea.Cmd) {
+	return m, func() tea.Msg { im, err := clipboardImage(); return pastedMsg{im, err} }
 }
