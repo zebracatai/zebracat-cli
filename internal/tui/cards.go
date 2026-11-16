@@ -161,6 +161,10 @@ var typeLabels = map[string]string{
 	"motion_graphics": "Motion graphics",
 }
 
+// noStyleTypes are library footage: no visual style, an older plan's ignored
+// (owner 2026-11-16: "visual style is only for AI image and AI videos").
+var noStyleTypes = map[string]bool{"stock": true, "brainrot": true}
+
 // audioLabels name the plan's audio modes.
 var audioLabels = map[string]string{
 	"narration": "voice-over",
@@ -229,8 +233,11 @@ func planFacts(sp, pr, task map[string]any) [][2]string {
 	if a, ok := sp["audio"].(map[string]any); ok {
 		audio = str(a, "mode")
 	}
-	add("Type", label(typeLabels, first(str(sp, "media_type"), str(settings, "type"), str(summary, "media_type"))))
-	add("Style", first(style, str(settings, "style")))
+	mediaType := first(str(sp, "media_type"), str(settings, "type"), str(summary, "media_type"))
+	add("Type", label(typeLabels, mediaType))
+	if !noStyleTypes[mediaType] {
+		add("Style", first(style, str(settings, "style")))
+	}
 	add("Format", first(str(sp, "aspect"), str(settings, "aspect")))
 	if secs > 0 {
 		add("Length", strconv.FormatFloat(secs, 'f', -1, 64)+" s")

@@ -373,8 +373,10 @@ func TestServerTextCannotEscapeTheTerminal(t *testing.T) {
 
 // The owner's PROD plan 1127016 ("make a 10 second stock video about cars"), as
 // the server answers it: a plan before Generate (no screenplay yet). The card
-// says it is stock footage with its style, format, length and scenes, links the
-// plan in /chat, says why the price is 0, and offers Generate / Discard.
+// says it is stock footage with its format, length and scenes (no style: a
+// stock plan has none, owner 2026-11-16, though this recorded plan still names
+// one), links the plan in /chat, says why the price is 0, and offers
+// Generate / Discard.
 func TestStockPlanBeforeGenerate(t *testing.T) {
 	raw, err := os.ReadFile("testdata/prod_1127016_stock_promise.json")
 	if err != nil {
@@ -389,14 +391,15 @@ func TestStockPlanBeforeGenerate(t *testing.T) {
 	m.stage = stageReady
 	m.syncPlaceholder()
 	card := planCard(m.job, 80)
-	for _, want := range []string{"Cars on the Move", "Type Stock footage", "Style Photography", "Format 16:9", "Length 10 s",
+	for _, want := range []string{"Cars on the Move", "Type Stock footage", "Format 16:9", "Length 10 s",
 		"Scenes 2", "Audio no voice", "1. Cars drive along a sunlit highway", "0 credits ($0.00) from your API balance",
 		"A stock video is not charged per AI-video scene", "https://studio.zebracat.ai/chat/0b7e6a52"} {
 		if !strings.Contains(ansi.Strip(card), want) {
 			t.Fatalf("stock card misses %q:\n%s", want, ansi.Strip(card))
 		}
 	}
-	if strings.Contains(card, "/storyboard/") || strings.Contains(card, "price follows") {
+	if strings.Contains(card, "/storyboard/") || strings.Contains(card, "price follows") ||
+		strings.Contains(ansi.Strip(card), "Style") {
 		t.Fatalf("stock card:\n%s", card)
 	}
 	golden(t, "plan_card_stock_promise_80", card)

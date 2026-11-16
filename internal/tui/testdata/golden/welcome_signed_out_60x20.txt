@@ -1,4 +1,4 @@
- ▌       ▌    Zebracat v0.6.3
+ ▌       ▌    Zebracat v0.6.4
  ▌▌▖▖▖▖▖▌▌    Not signed in · /login
  ▌▌▌▌▌▌▌▌▌    ~/projects/coffee
  ▌▌▌▌▌▌▌▌▌

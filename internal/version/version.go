@@ -3,7 +3,7 @@ package version
 
 var (
 	// Version is the semantic version of the CLI. Overridden by goreleaser.
-	Version = "0.6.3"
+	Version = "0.6.4"
 	// Commit is the git commit the binary was built from.
 	Commit = "dev"
 	// Date is the build date (RFC3339).
