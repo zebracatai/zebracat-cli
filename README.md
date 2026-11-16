@@ -45,47 +45,55 @@ go install github.com/zebracatai/zebracat-cli@latest   # installs as `zebracat-c
 
 Run `zebracat` (or `zebracat create "<idea>"`) and say what you want. It works like
 the studio's chat: Zebracat writes a **plan**, you change it **in plain words**, and
-nothing is spent until you press **Ctrl+G** and answer **y**.
+nothing is spent until you press **Ctrl+G** and answer **y**. There are no menus.
 
 ```
-🦓 › a 20-second video on why cats knock things off tables
-  Planning your video… (free — nothing is charged until you generate)
-╭──────────────────────────────────────────────────────────────────────╮
-│  🎬 Why cats knock things off tables                                 │
-│  20 s · 4 scenes · vertical · ai video · english · narration         │
-│                                                                      │
-│  1. (5s) Ever wondered why your cat swipes your mug off the table?   │
-│  2. (5s) It starts with instinct: cats test what moves.              │
-│  3. (5s) Then comes attention. A falling cup always gets you running.│
-│  4. (5s) So next time, play with them first. Your mug will thank you.│
-│                                                                      │
-│  Price  96 credits ($4.80) from your API balance                     │
-│  Studio https://studio.zebracat.ai/storyboard/48213                  │
-╰──────────────────────────────────────────────────────────────────────╯
-🦓 › make it funnier and shorter
-🦓 Done: tightened to 15 s and punched up the jokes.
+╭──────────────────────────────────────────────────────────────────────────╮
+│ ▗▖       ▗▖   Welcome to Zebracat  v0.4.0                                │
+│ ▐▙▄▄▄▄▄▄▄▟▌   you@example.com · $208.25 API balance                      │
+│ ▐▀▀▄▀▀▀▄▀▀▌   ~/projects/coffee                                          │
+│ ▐ ● ▀▀▀ ● ▌                                                              │
+│  ▀▄▄▄▼▄▄▄▀                                                               │
+╰──────────────────────────────────────────────────────────────────────────╯
+ › Describe a video, paste a script or a link (TikTok, YouTube, Reels)
+ › /help for commands and keys · Ctrl+C twice to quit
+› hi
+  ⎿ Writing a plan — free, nothing is charged until you generate
+● Hi! What should your video be about? Tell me the idea, a product, a story, or a topic.
+› a 20-second video on why cats knock things off tables
+▓ Writing the screenplay… (0:21 · esc to interrupt)
+╭────────────────────────────────────────────────────────────────────────╮
+│ 🎬 Why cats knock things off tables                                    │
+│ 20 s · 4 scenes · vertical · ai video · english · narration            │
+│                                                                        │
+│ 1. (5s) Ever wondered why your cat swipes your mug off the table?      │
+│ …                                                                      │
+│ Price  96 credits ($4.80) from your API balance                        │
+╰────────────────────────────────────────────────────────────────────────╯
+› make it funnier
+● Done: tightened to 15 s and punched up the jokes.
    … the updated plan card …
-  Generate it for 96 credits ($4.80) from your API balance?  y / n
-  ⣾ Making the scenes · 1:12
-✓ Your video is ready · 3:40
-  Video  https://cdn.zebracat.ai/videos/48213/final.mp4
-  Ctrl+O or /open to watch it · type a new idea to make another
+  Generate it for 96 credits ($4.80)?   y generate   n / esc not now
 ```
 
 - **Type an idea, paste a script, or paste a link.** A TikTok / YouTube / Reel link is
-  read like the studio reads it: say "clone this" (or paste the link alone) to copy
-  it, or "like this but about matcha" to use it as inspiration. A lone web-page link
-  becomes a video about that page. `/script <file>` plans from a script file.
-- **The plan card** shows the scenes, length, look, voices and the exact price.
-- **Change it in plain words** ("make it funnier", "use a female voice", "drop scene 3").
-- **Questions** the plan asks are answered by typing (or the option's number).
-- **Ctrl+G** (or `/generate`) asks "Generate it for N credits?" — only **y** spends.
-- **Live progress**: stage, elapsed time (and % when the server reports it).
-- **Ctrl+C never cancels a paid video**: while one is being made, the first Ctrl+C
-  tells you it keeps going on our servers, the second leaves.
-- Slash commands (Tab completes): `/new`, `/generate`, `/plan`, `/open`, `/script`,
-  `/status`, `/projects`, `/voices`, `/styles`, `/account`, `/login`, `/update`, `/help`, `/quit`.
-- Output stays in your scrollback after you exit (no alt-screen).
+  read like the studio reads it: "clone this" copies it, "like this but about matcha"
+  uses it as inspiration. A lone web-page link becomes a video about that page.
+  Multi-line pastes keep their lines (Alt+Enter adds a line); `/script <file>` loads one.
+- **When the plan asks something** ("What should your video be about?", or a question
+  with options), that's Zebracat's turn — just answer; your first message goes with it.
+- **The plan card** shows scenes, length, look, voices and the exact price. Change it in
+  plain words ("use a female voice", "drop scene 3").
+- **Ctrl+G** asks "Generate it for N credits?" — only **y** spends. A balance that
+  doesn't cover it is told so instead.
+- **The animated mark** shows what the server is doing (writing the screenplay, making
+  the scenes, exporting the MP4), the elapsed time, and **Esc** to stop waiting.
+  Esc and Ctrl+C never cancel anything: a paid video keeps being made.
+- **Keys:** Enter send · Alt+Enter new line · ↑/↓ history · Tab completes `/` commands ·
+  Ctrl+O opens the finished video · Ctrl+C clears the line, twice quits.
+- **Commands:** `/help`, `/new`, `/generate`, `/plan`, `/open`, `/script`, `/videos`,
+  `/status`, `/balance`, `/voices`, `/styles`, `/login`, `/logout`, `/update`, `/clear`, `/exit`.
+- `NO_COLOR` turns colour off; output stays in your scrollback after you exit.
 
 **Scripts and agents never get a prompt.** Without a terminal (a pipe, CI) or with
 `--json`, `zebracat` alone exits 2 (`needs_terminal`), and `zebracat create` writes the
@@ -225,7 +233,7 @@ zebracat account     show | pricing | usage
 zebracat webhook     list | create | delete
 zebracat config      list | set
 zebracat completion  bash | zsh | fish | powershell
-zebracat update | version
+zebracat update | version | doctor
 ```
 
 Run `zebracat <command> --help` for full flags. The allowed values in the help text
@@ -292,22 +300,28 @@ Override per-invocation with `--base-url`, `--api-key`, or the `ZEBRACAT_API_KEY
 ## Updating
 
 ```bash
-zebracat update           # download the latest release, check its checksum, replace this binary
+zebracat update           # download the latest release, check its checksum, replace this binary, start it
 zebracat update --check   # just tell me if an update is available
 ```
 
 On launch the CLI checks GitHub's latest release at most **once a day** (cached in
-`~/.zebracat/update.json`, 1.5 s at most, never blocking or failing a command) and
-prints one line on stderr when a newer version is out:
+`~/.zebracat/update.json`, 1.5 s at most, never blocking or failing a command). In the
+conversation the welcome box offers it: **press `u`** and the new version installs and
+opens in place ("✓ Updated from v0.3.0"). Other commands print one line on stderr:
 
 ```
-↑ Zebracat CLI v0.3.1 is available — run `zebracat update`
+↑ Zebracat CLI v0.4.1 is available — run `zebracat update`
 ```
 
-It is off with `ZEBRACAT_NO_UPDATE_CHECK=1`, in CI (`CI`, `GITHUB_ACTIONS`, …), with
-`--quiet`, and when stderr is not a terminal. npm, Homebrew and `go install` copies
-are told their own command (`npm install -g @zebracat/cli@latest`, …) instead of being
-replaced. In the conversation, run `/update`.
+`zebracat update` on a terminal starts the new version right away (`--no-relaunch`,
+`--json` and scripts only update). The check is off with `ZEBRACAT_NO_UPDATE_CHECK=1`, in
+CI, with `--quiet`, and when stderr is not a terminal. npm, Homebrew and `go install`
+copies are told their own command (`npm install -g @zebracat/cli@latest`, …).
+
+**Two copies?** `zebracat doctor` lists every `zebracat` on your PATH, which one runs,
+its version and how to remove the others (an old `npm install -g @zebracat/cli` copy
+can shadow the one `install.sh` put in `~/.local/bin`). `zebracat --version` prints the
+path of the binary that answered.
 
 ## Development
 

@@ -1,0 +1,5 @@
+# Fetched at install time — never commit the native binary.
+bin/zebracat
+bin/zebracat.exe
+node_modules/
+*.tgz

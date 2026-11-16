@@ -4,8 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/textinput"
-
 	"github.com/zebracatai/zebracat-cli/internal/client"
 	"github.com/zebracatai/zebracat-cli/internal/config"
 )
@@ -14,14 +12,18 @@ import (
 func signedOut(t *testing.T) *model {
 	t.Setenv("ZEBRACAT_API_KEY", "")
 	cl := client.New("http://example.invalid", &config.Credentials{}, "")
-	return &model{in: textinput.New(), cl: cl}
+	m := newModel(cl, "")
+	m.width = 100
+	return m
 }
 
 // signedIn builds a model authenticated via an API key flag.
 func signedIn(t *testing.T) *model {
 	t.Setenv("ZEBRACAT_API_KEY", "")
 	cl := client.New("http://example.invalid", &config.Credentials{}, "sk-test")
-	return &model{in: textinput.New(), cl: cl}
+	m := newModel(cl, "")
+	m.width = 100
+	return m
 }
 
 func TestIsTerminal(t *testing.T) {
@@ -38,12 +40,12 @@ func TestIsTerminal(t *testing.T) {
 }
 
 func TestRefreshMatchesAutocomplete(t *testing.T) {
-	m := &model{in: textinput.New()}
+	m := newModel(client.New("http://example.invalid", &config.Credentials{}, ""), "")
 	m.in.SetValue("/g")
 	m.refreshMatches()
 	found := false
 	for _, x := range m.matches {
-		if x == "/generate" {
+		if x.name == "/generate" {
 			found = true
 		}
 	}
@@ -64,12 +66,6 @@ func TestHelpListsEveryCommand(t *testing.T) {
 		if !strings.Contains(h, c.name) {
 			t.Fatalf("help text missing %q", c.name)
 		}
-	}
-}
-
-func TestSplashNonEmpty(t *testing.T) {
-	if !strings.Contains(splash(), "Tell me the video you want") {
-		t.Fatal("splash should contain the tagline")
 	}
 }
 

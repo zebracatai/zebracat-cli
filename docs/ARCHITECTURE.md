@@ -29,12 +29,14 @@ on the backend). It does no generation itself: every command is a thin HTTP call
 | `internal/ui/` | JSON/human output, colours, spinner, tables |
 | `internal/dash/` | project-status labels/icons/relative time shared by `video list` and the TUI dashboard |
 | `internal/update/` | launch check via the `/releases/latest` redirect (cached a day in `update.json`, 1.5 s cap, off in CI / `ZEBRACAT_NO_UPDATE_CHECK=1`), install-method detection (npm/brew/go), checksum-verified self-update |
-| `internal/tui/tui.go` | TUI model, `New`, `Init`, `Update` (message loop), message types |
+| `internal/tui/tui.go` | TUI model, `Run` (account + update check before the welcome box; returns a relaunch request after an in-app update), keys (history, completion, the `u` offer), message types |
 | `internal/tui/commands.go` | Enter handling, API-key capture, slash-command table + dispatcher + signed-out gate, `/help` text |
-| `internal/tui/convo.go` | the conversation: stages (idle → planning → asking/ready ⇄ editing → confirm → making → done), plan card, progress line, Ctrl+G/Ctrl+O/Ctrl+C |
-| `internal/tui/cards.go` | the question card, task error text, idempotency keys |
+| `internal/tui/convo.go` | the conversation: stages (idle → planning → asking/ready ⇄ editing → confirm → making → done); a `plan_blocked` / `*_request` end is an assistant turn (the answer is sent with the first message), real failures say what to do; the animated progress line; Esc / Ctrl+C (never cancel) |
+| `internal/tui/cards.go` | plan card, question, done card, spend question, `clean()` (strips control characters from server text) |
+| `internal/tui/theme.go` | palette (#7c3aed, adaptive light/dark), the zebra-cat mark, the animated frames, NO_COLOR |
+| `cmd/doctor.go` | `zebracat doctor`: every zebracat on PATH, which one runs, how to remove the others; sign-in and update status |
 | `internal/tui/api.go` | background API calls returning `tea.Cmd` (account, projects, create, poll, quote, generate, update) |
-| `internal/tui/view.go` | splash, auth banner, input/footer view, projects dashboard, payload formatters |
+| `internal/tui/view.go` | `say`/`hang` (everything printed is wrapped to the terminal), welcome box, input box + completion list + footer, projects dashboard |
 | `internal/tui/theme.go` | palette, lipgloss styles, logo |
 | `deploy/nginx-oauth-patch.py` | one-off prod nginx patch for the public API / OAuth discovery routes (run by hand) |
 

@@ -70,16 +70,17 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the CLI version",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		out := map[string]any{"version": version.Version, "commit": version.Commit, "date": version.Date}
+		out := map[string]any{"version": version.Version, "commit": version.Commit, "date": version.Date,
+			"path": update.CurrentPath(), "install_method": update.Method()}
 		return emit(out, func() {
 			fmt.Print(ui.Banner())
-			fmt.Printf("zebracat %s (%s, %s)\n", version.Version, version.Commit, version.Date)
+			fmt.Printf("zebracat %s (%s, %s)\n%s (%s)\n", version.Version, version.Commit, version.Date, update.CurrentPath(), update.Method())
 		})
 	},
 }
 
 // ---- update ----
-var flagUpdateCheck bool
+var flagUpdateCheck, flagUpdateNoRelaunch bool
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
@@ -87,8 +88,10 @@ var updateCmd = &cobra.Command{
 	Long: `Download the latest release and replace this binary in place.
 
 Use --check to only report whether an update is available, without installing.
-An npm, Homebrew or "go install" copy is left to its package manager: the
-command prints the line to run instead.
+On a terminal the new version starts right away (the conversation, saying
+"Updated from …"); --no-relaunch, --json and scripts just update. An npm,
+Homebrew or "go install" copy is left to its package manager: the command
+prints the line to run instead.
 
 The launch check (once a day, 1.5 s at most, never blocking) is off with
 ZEBRACAT_NO_UPDATE_CHECK=1 and in CI.`,
@@ -125,22 +128,38 @@ ZEBRACAT_NO_UPDATE_CHECK=1 and in CI.`,
 		}
 
 		sp := ui.StartSpinner(fmt.Sprintf("Updating to %s…", latest))
-		err = update.Apply(ctx, latest)
+		path, err := applyUpdate(ctx, latest)
 		sp.Stop()
 		if err != nil {
 			return clierr.API("%v", err)
 		}
-		path := update.CurrentPath()
-		out := map[string]any{"current": current, "latest": latest, "updated": true, "path": path}
-		return emit(out, func() {
-			ui.Success("Updated %s → %s", current, latest)
-			ui.Info("Binary: %s — restart zebracat to use it.", path)
-		})
+		relaunch := !flagUpdateNoRelaunch && !flagJSON && interactive()
+		out := map[string]any{"current": current, "latest": latest, "updated": true, "path": path, "relaunched": relaunch}
+		if !relaunch {
+			return emit(out, func() {
+				ui.Success("Updated %s → %s", current, latest)
+				ui.Info("Binary: %s", path)
+			})
+		}
+		// On a terminal the new version opens straight away: the conversation,
+		// with "Updated from …" in its welcome box.
+		ui.Success("Updated %s → %s — starting it…", current, latest)
+		if err := relaunchBinary(path, current, nil); err != nil {
+			ui.Info("Start it with: zebracat (%v)", err)
+		}
+		return nil
 	},
 }
+
+// applyUpdate and relaunchBinary are swapped in tests.
+var (
+	applyUpdate    = update.Apply
+	relaunchBinary = update.Relaunch
+)
 
 func init() {
 	configCmd.AddCommand(configListCmd, configSetCmd)
 	updateCmd.Flags().BoolVar(&flagUpdateCheck, "check", false, "Only check for an update; don't install it")
+	updateCmd.Flags().BoolVar(&flagUpdateNoRelaunch, "no-relaunch", false, "Don't start the new version after updating")
 	rootCmd.AddCommand(configCmd, versionCmd, updateCmd)
 }

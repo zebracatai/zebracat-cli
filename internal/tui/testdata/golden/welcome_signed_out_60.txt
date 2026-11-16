@@ -1,0 +1,12 @@
+╭─────────────────────────────────────────────────────────╮
+│ ▗▖       ▗▖                                             │
+│ ▐▙▄▄▄▄▄▄▄▟▌   Welcome to Zebracat  v0.4.0               │
+│ ▐▀▀▄▀▀▀▄▀▀▌   Not signed in · type /login               │
+│ ▐ ● ▀▀▀ ● ▌   ~/projects/coffee                         │
+│  ▀▄▄▄▼▄▄▄▀                                              │
+╰─────────────────────────────────────────────────────────╯
+ › Describe a video, paste a script or a link (TikTok,
+   YouTube, Reels)
+ › /help for commands and keys · Ctrl+C twice to quit
+ › /login to add your API key (studio.zebracat.ai → API
+   Keys)

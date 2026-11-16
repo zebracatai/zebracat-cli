@@ -58,7 +58,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagAPIKey, "api-key", "", "API key (overrides ZEBRACAT_API_KEY / stored credentials)")
 	rootCmd.PersistentFlags().StringVar(&flagBaseURL, "base-url", "", "Override the API base URL")
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "Suppress non-essential stderr output")
-	rootCmd.SetVersionTemplate(ui.Banner() + "zebracat {{.Version}}\n")
+	rootCmd.SetVersionTemplate(ui.Banner() + "zebracat {{.Version}}\n" + update.CurrentPath() + " (" + update.Method() + ") — `zebracat doctor` lists every copy on your PATH\n")
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) { startUpdateCheck(cmd) }
 	rootCmd.PersistentPostRun = func(cmd *cobra.Command, args []string) { finishUpdateCheck() }
 }
@@ -73,7 +73,7 @@ var updateNotice func() string
 func startUpdateCheck(cmd *cobra.Command) {
 	updateNotice = nil
 	switch cmd.Name() {
-	case "zebracat", "chat", "create", "update", "version", "completion", "help", "__complete", "__completeNoDesc":
+	case "zebracat", "chat", "create", "update", "version", "doctor", "completion", "help", "__complete", "__completeNoDesc":
 		return // the TUI shows its own notice; these commands shouldn't nag
 	}
 	if flagQuiet || !ui.IsTTY(os.Stderr) {

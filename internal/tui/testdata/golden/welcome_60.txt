@@ -1,0 +1,10 @@
+╭─────────────────────────────────────────────────────────╮
+│ ▗▖       ▗▖                                             │
+│ ▐▙▄▄▄▄▄▄▄▟▌   Welcome to Zebracat  v0.4.0               │
+│ ▐▀▀▄▀▀▀▄▀▀▌   admin@example.com · $208.25 API balance   │
+│ ▐ ● ▀▀▀ ● ▌   ~/projects/coffee                         │
+│  ▀▄▄▄▼▄▄▄▀                                              │
+╰─────────────────────────────────────────────────────────╯
+ › Describe a video, paste a script or a link (TikTok,
+   YouTube, Reels)
+ › /help for commands and keys · Ctrl+C twice to quit
