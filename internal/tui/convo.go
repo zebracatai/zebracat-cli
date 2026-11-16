@@ -1,8 +1,8 @@
 // The conversation, like the studio's v2 /chat. The person types an idea,
 // pastes a link (or loads a script); Director v2 writes the plan (POST /videos,
 // plan only); the CLI shows it as a card with the quote; plain words change it
-// (the plan chat, POST /videos/{id}/plan/chat); Generate happens only after
-// Ctrl+G and a y. When the plan asks something — a question card, or a brief
+// (the plan chat, POST /videos/{id}/plan/chat); under the card the person
+// chooses Generate (POST /generate) or Discard (POST /cancel). When the plan asks something — a question card, or a brief
 // with nothing to film ("What should your video be about?") — that is the
 // assistant's turn and the person's next message answers it; it is never shown
 // as a failure.
@@ -32,9 +32,8 @@ const (
 	stageIdle     stage = iota // waiting for an idea, a script or a link
 	stagePlanning              // the plan is being written (free)
 	stageAsking                // the plan asked a question: the next message answers it
-	stageReady                 // the plan is shown: words change it, Ctrl+G generates
+	stageReady                 // the plan is shown: Generate / Discard, or words change it
 	stageEditing               // a plan-chat change is being applied (free)
-	stageConfirm               // "spend N credits?" y/n
 	stageMaking                // generating / rendering (paid, running on our servers)
 	stageDone                  // the video is ready
 )
@@ -86,6 +85,9 @@ type planMsg struct { // a plan is ready (or changed): the task, its plan view, 
 }
 type answeredMsg struct {
 	j   *job
+	err error
+}
+type discardedMsg struct {
 	err error
 }
 type generatedMsg struct {
@@ -255,6 +257,7 @@ func (m *model) onPlan(msg planMsg) (tea.Model, tea.Cmd) {
 		j.quote = msg.quote
 	}
 	m.stage = stageReady
+	m.choice = choiceGenerate
 	var out []tea.Cmd
 	if msg.reply != "" {
 		out = append(out, m.assistant(clean(msg.reply)))
@@ -351,35 +354,92 @@ func (m *model) converse(text string) (tea.Model, tea.Cmd) {
 	return m.startPlan(text, brief.KindIdea)
 }
 
-// askGenerate shows the explicit spend question.
-func (m *model) askGenerate() (tea.Model, tea.Cmd) {
+// The two choices under a plan card.
+const (
+	choiceGenerate = iota
+	choiceDiscard
+)
+
+// choose runs a choice under the plan card. Generate is the studio's Generate
+// on this plan (it writes the screenplay first when the plan has none yet);
+// Discard lets the plan go (POST /cancel: nothing was charged) and goes back to
+// the input.
+func (m *model) choose(c int) (tea.Model, tea.Cmd) {
 	if m.stage != stageReady || m.job == nil {
-		return m, m.note("There's no plan to generate yet — describe a video first.")
+		return m, nil
+	}
+	m.choice = c
+	if c == choiceDiscard {
+		j := m.job
+		m.stage, m.job = stageIdle, nil
+		m.choice = choiceGenerate
+		return m, tea.Sequence(m.note("Discard"), m.discardCmd(j))
 	}
 	if ok, known := m.job.quote["sufficient"].(bool); known && !ok {
-		return m, m.sayErr("Your balance doesn't cover this video ("+strings.SplitN(videos.QuoteLine(m.job.quote), " — ", 2)[0]+").",
-			"Top up at https://studio.zebracat.ai, then Ctrl+G again. The plan is kept.")
+		main, _ := priceLines(m.job.quote)
+		return m, m.sayErr("Your balance doesn't cover this video ("+strings.SplitN(main, " — ", 2)[0]+").",
+			"Top up at https://studio.zebracat.ai, then choose Generate again. The plan is kept.")
 	}
-	m.stage = stageConfirm
-	return m, nil
+	m.stage = stageMaking
+	m.job.started = m.now()
+	m.job.phase = "generating"
+	return m, tea.Batch(m.note(generateLabel(m.job.quote)), m.generateCmd(m.job, m.job.taskID, m.job.shouldRender))
 }
 
-// confirmKey answers the spend question: y generates, n / Esc goes back.
-func (m *model) confirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch strings.ToLower(msg.String()) {
-	case "y":
-		m.stage = stageMaking
-		m.job.started = m.now()
-		m.job.phase = "generating"
-		return m, tea.Batch(m.note("Generate: yes"), m.generateCmd(m.job, m.job.taskID, m.job.shouldRender))
-	case "n", "esc":
-		m.stage = stageReady
-		return m, m.note("Not now — the plan is kept and nothing was charged.")
-	case "ctrl+c":
-		m.stage = stageReady
-		return m.interrupt()
+// onDiscarded reports a discarded plan.
+func (m *model) onDiscarded(msg discardedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		return m, m.sayAPIErr(msg.err, "Nothing was charged.")
 	}
-	return m, nil
+	return m, m.note("Discarded — nothing was charged. Describe a new video when you're ready.")
+}
+
+// choiceKey is a key while the choice under the plan card has the keys (the
+// input is empty): ↑/↓ move, Enter picks, g / d pick directly. Any other key
+// is typing a change (handled = false).
+func (m *model) choiceKey(msg tea.KeyMsg) (handled bool, model tea.Model, cmd tea.Cmd) {
+	if m.stage != stageReady || m.job == nil || m.busy || m.askKey || len(m.matches) > 0 ||
+		m.in.Value() != "" || len(m.images) > 0 {
+		return false, m, nil
+	}
+	switch msg.Type {
+	case tea.KeyUp, tea.KeyDown:
+		m.choice = 1 - m.choice
+		return true, m, nil
+	case tea.KeyEnter:
+		if msg.Alt {
+			return false, m, nil
+		}
+		model, cmd = m.choose(m.choice)
+		return true, model, cmd
+	case tea.KeyRunes:
+		switch string(msg.Runes) {
+		case "g":
+			model, cmd = m.choose(choiceGenerate)
+			return true, model, cmd
+		case "d":
+			model, cmd = m.choose(choiceDiscard)
+			return true, model, cmd
+		}
+	}
+	return false, m, nil
+}
+
+// choiceView is the choice under the plan card.
+func (m *model) choiceView() string {
+	if m.stage != stageReady || m.job == nil {
+		return ""
+	}
+	items := []string{generateLabel(m.job.quote), "Discard"}
+	var b strings.Builder
+	for i, it := range items {
+		if i == m.choice {
+			b.WriteString(stKey.Render("❯ "+it) + "\n")
+		} else {
+			b.WriteString("  " + it + "\n")
+		}
+	}
+	return b.String()
 }
 
 // escape is Esc: stop waiting. A plan keeps being written on the server (it's
@@ -439,7 +499,7 @@ func (m *model) leave(extra string) (tea.Model, tea.Cmd) {
 		switch m.stage {
 		case stageMaking:
 			lines = append(lines, stMuted.Render("Your video keeps being made. Follow it with ")+stKey.Render("zebracat video status "+j.taskID+" --wait"))
-		case stageReady, stageConfirm, stageEditing, stageAsking:
+		case stageReady, stageEditing, stageAsking:
 			lines = append(lines, stMuted.Render("Your plan is saved. Generate it later with ")+stKey.Render("zebracat video generate "+j.taskID))
 		case stagePlanning:
 			lines = append(lines, stMuted.Render("The plan keeps being written. See it with ")+stKey.Render("zebracat video status "+j.taskID+" --wait"))

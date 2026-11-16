@@ -285,14 +285,13 @@ func (m *model) View() string {
 }
 
 func (m *model) liveView() string {
-	if m.stage == stageConfirm {
-		return m.confirmView()
-	}
 	var b strings.Builder
 	if menu := m.menuView(); menu != "" { // the `/` menu opens above the input
 		b.WriteString(menu + "\n")
 	} else if p := m.progressLine(); p != "" {
 		b.WriteString(m.fit(p) + "\n\n")
+	} else if c := m.choiceView(); c != "" { // Generate / Discard under the plan card
+		b.WriteString(m.fit(c) + "\n")
 	}
 	var field string
 	if m.askKey {
@@ -385,7 +384,7 @@ func (m *model) footer() string {
 	case stageAsking:
 		hints = []string{"type your answer", "a number picks an option"}
 	case stageReady:
-		hints = []string{"type a change", "ctrl+g generate", "/new start over"}
+		hints = []string{"↑↓ enter choose", "g generate · d discard", "or type a change"}
 	case stageDone:
 		hints = []string{"ctrl+o open the video", "type a new idea"}
 	case stagePlanning, stageMaking:
@@ -476,7 +475,7 @@ func (m *model) syncPlaceholder() {
 	case m.cl == nil || !m.cl.IsAuthenticated():
 		m.in.Placeholder = "Type /login to get started"
 	case m.stage == stageReady:
-		m.in.Placeholder = "Tell me what to change, or press Ctrl+G to generate"
+		m.in.Placeholder = "Choose above, or type a change"
 	case m.stage == stageAsking:
 		m.in.Placeholder = "Your answer"
 	case m.carry != "":

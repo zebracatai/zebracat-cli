@@ -44,13 +44,13 @@ go install github.com/zebracatai/zebracat-cli@latest   # installs as `zebracat-c
 ## Talk to it
 
 Run `zebracat` (or `zebracat create "<idea>"`) and say what you want. It works like
-the studio's chat: Zebracat writes a **plan**, you change it **in plain words**, and
-nothing is spent until you press **Ctrl+G** and answer **y**. There are no menus.
+the studio's chat (the same plan engine as /chat): Zebracat writes a **plan**, you
+change it **in plain words**, and nothing is spent until you choose **Generate**.
 
 ```
  ▙               ▟
  █ ▖           ▗ █
- █ █           █ █    Zebracat v0.6.2
+ █ █           █ █    Zebracat v0.6.3
  █ █ █ █ █ █ █ █ █    you@example.com · $208.25 API balance
  █ █ █ █ █ █ █ █ █    ~/projects/coffee
  █ █ █ █ █ █ █ █ █
@@ -66,13 +66,17 @@ nothing is spent until you press **Ctrl+G** and answer **y**. There are no menus
 ▄▄ Writing the screenplay… (0:21 · esc to interrupt)
 ╭─────────────────────────────────────────────────────────────────────╮
 │ Why cats knock things off tables                                    │
-│ 20 s · 4 scenes · vertical · ai video · english · narration         │
+│ Type AI video · Style Cinematic · Format vertical · Length 20 s ·   │
+│ Scenes 4                                                            │
+│ Audio voice-over · Language english                                 │
 │                                                                     │
 │ 1. (5s) Ever wondered why your cat swipes your mug off the table?   │
 │ …                                                                   │
 │ Price  96 credits ($4.80) from your API balance                     │
+│ Studio https://studio.zebracat.ai/chat/0b7e6a52-…                   │
 ╰─────────────────────────────────────────────────────────────────────╯
-  Change it in plain words · ctrl+g to generate
+❯ Generate (96 credits)
+  Discard
 ```
 
 The mark is the real Zebracat logo (the striped cat-head shield from `logo.svg`), drawn
@@ -90,7 +94,7 @@ footer: what you can do now, then your **plan, balance, credits, account and ver
 › Describe your video, paste a script or a link
 ───────────────────────────────────────────────────────────────────────────────
   / for commands · alt+enter new line · ↑ history
-  Cat Mode · $208.25 API balance · 1,240 credits · you@example.com · v0.6.2
+  Cat Mode · $208.25 API balance · 1,240 credits · you@example.com · v0.6.3
 ```
 
 - **Type an idea, paste a script, or paste a link.** A TikTok / YouTube / Reel link is
@@ -99,10 +103,17 @@ footer: what you can do now, then your **plan, balance, credits, account and ver
   Multi-line pastes keep their lines (Alt+Enter adds a line); `/script <file>` loads one.
 - **When the plan asks something** ("What should your video be about?", or a question
   with options), that's Zebracat's turn — just answer; your first message goes with it.
-- **The plan card** shows scenes, length, look, voices and the exact price. Change it in
-  plain words ("use a female voice", "drop scene 3").
-- **Ctrl+G** asks "Generate it for N credits?" — only **y** spends. A balance that
-  doesn't cover it is told so instead.
+- **The plan card** shows the video type (AI video, stock footage, brainrot…), style,
+  format, length, scenes, voices and the price, and links the plan in the studio's /chat.
+  A plan whose screenplay is written at Generate shows the studio's estimate and says
+  the exact price comes then; stock footage says why it costs no scene credits.
+- **Under the card: `❯ Generate (N credits)` / `Discard`.** ↑/↓ and Enter, or **g** /
+  **d**. Generate is the studio's Generate (it writes the screenplay first when the plan
+  has none yet). Discard lets the plan go (nothing is charged) and you start again.
+  A balance that doesn't cover it is told so instead.
+- **Or just type a change** in plain words ("use a female voice", "drop scene 3"): the
+  plan is changed, and the card and the choice come back. (A change that starts with g
+  or d: type a space first.)
 - **The animated mark** shows what the server is doing (writing the screenplay, making
   the scenes, exporting the MP4), the elapsed time, and **Esc** to stop waiting.
   Esc and Ctrl+C never cancel anything: a paid video keeps being made.
@@ -250,7 +261,7 @@ v1 task ids (older videos) keep their v1 `status`.
 ## Commands
 
 ```
-zebracat [create]    the conversation (plan → change → Ctrl+G); `create --json` for scripts
+zebracat [create]    the conversation (plan → change → Generate / Discard); `create --json` for scripts
 zebracat login       same as `auth login`
 zebracat auth        login | logout | status | whoami
 zebracat video       create | list | get | status | quote | generate | answer | cancel

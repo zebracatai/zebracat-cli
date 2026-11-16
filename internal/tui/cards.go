@@ -46,15 +46,22 @@ func boxWidth(width int) int {
 	return w
 }
 
-// planCard is the plan as a bordered card: title, the facts line, the scenes,
-// the voices, the price, then what the person can do next.
+// planCard is the plan as a bordered card: title, the facts (Type, Style,
+// Format, Length, Scenes; then Audio, Language), the scenes, the voices, the
+// price and the studio link. A plan before Generate (a "promise": no screenplay
+// until Generate writes it, as on the studio's plan card) shows its story's
+// settings and scenes. The Generate / Discard choice sits under it (view.go).
 func planCard(j *job, width int) string {
 	src := j.plan
 	if src == nil {
 		src = j.task
 	}
 	sp, _ := src["screenplay"].(map[string]any)
+	pr, _ := src["promise"].(map[string]any)
 	title, _ := sp["title"].(string)
+	if title == "" {
+		title, _ = pr["title"].(string)
+	}
 	if title == "" {
 		if s, ok := j.task["plan_summary"].(map[string]any); ok {
 			title, _ = s["title"].(string)
@@ -69,8 +76,8 @@ func planCard(j *job, width int) string {
 
 	var b strings.Builder
 	b.WriteString(wrap(stHead.Render(clean(title))) + "\n")
-	if facts := planFacts(sp, j.task); len(facts) > 0 {
-		// two rows: what it is (Type, Format, Length, Scenes), then how it sounds
+	if facts := planFacts(sp, pr, j.task); len(facts) > 0 {
+		// two rows: what it is (Type, Style, Format, Length, Scenes), then how it sounds
 		var rows [2][]string
 		for _, f := range facts {
 			r := 0
@@ -85,7 +92,11 @@ func planCard(j *job, width int) string {
 			}
 		}
 	}
-	if beats := videos.Beats(src); len(beats) > 0 {
+	beats := videos.Beats(src)
+	if len(beats) == 0 {
+		beats = promiseScenes(pr)
+	}
+	if len(beats) > 0 {
 		b.WriteString("\n")
 		for _, l := range beats {
 			l = clean(l)
@@ -94,6 +105,8 @@ func planCard(j *job, width int) string {
 				if e := strings.Index(l, ") "); e > d {
 					l = stHead.Render(l[:d+1]) + " " + stMuted.Render(l[d+2:e+1]) + l[e+1:]
 				}
+			} else if d := strings.Index(l, ". "); d > 0 && d < 5 {
+				l = stHead.Render(l[:d+1]) + l[d+1:]
 			}
 			b.WriteString(hangText(l, inner, 3) + "\n")
 		}
@@ -103,18 +116,23 @@ func planCard(j *job, width int) string {
 		}
 	}
 	b.WriteString("\n")
-	if v := voices(sp); v != "" {
+	v := voices(sp)
+	if v == "" {
+		v = voices(pr)
+	}
+	if v != "" {
 		b.WriteString(hangText(stLabel.Render("Voice  ")+clean(v), inner, 7) + "\n")
 	}
-	if q := videos.QuoteLine(j.quote); q != "" {
-		b.WriteString(hangText(stLabel.Render("Price  ")+priceStyle(j.quote).Render(clean(q)), inner, 7) + "\n")
+	if main, note := priceLines(j.quote); main != "" {
+		b.WriteString(hangText(stLabel.Render("Price  ")+priceStyle(j.quote).Render(clean(main)), inner, 7) + "\n")
+		if note != "" {
+			b.WriteString(hangText("       "+stMuted.Render(clean(note)), inner, 7) + "\n")
+		}
 	}
 	if j.editorURL != "" {
 		b.WriteString(hangText(stLabel.Render("Studio ")+stMuted.Render(clean(j.editorURL)), inner, 7) + "\n")
 	}
-	card := stBox.Width(w - 2).Render(strings.TrimRight(b.String(), "\n")) // Width excludes the border
-	hint := ansi.Wrap(stHint.Render("  Change it in plain words · ctrl+g to generate"), w, "")
-	return card + "\n" + hint
+	return stBox.Width(w - 2).Render(strings.TrimRight(b.String(), "\n")) // Width excludes the border
 }
 
 // hangText wraps s to width with every line after the first indented by indent.
@@ -132,14 +150,51 @@ func hangText(s string, width, indent int) string {
 	return lines[0] + "\n" + strings.Join(more, "\n")
 }
 
-// planFacts are the plan's labelled facts: Type, Format, Length, Scenes, Audio,
-// Language (only the ones the plan has).
-func planFacts(sp, task map[string]any) [][2]string {
+// typeLabels are the studio's names for the plan's media types (an unknown one
+// is shown as it comes, underscores as spaces).
+var typeLabels = map[string]string{
+	"ai_video":        "AI video",
+	"ai_image_video":  "AI images",
+	"stock":           "Stock footage",
+	"brainrot":        "Brainrot",
+	"avatar":          "Avatar",
+	"motion_graphics": "Motion graphics",
+}
+
+// audioLabels name the plan's audio modes.
+var audioLabels = map[string]string{
+	"narration": "voice-over",
+	"dialogue":  "dialogue",
+	"silent":    "no voice",
+}
+
+func label(set map[string]string, v string) string {
+	if l, ok := set[v]; ok {
+		return l
+	}
+	return v
+}
+
+// planFacts are the plan's labelled facts, only the ones the plan has: Type,
+// Style, Format, Length, Scenes, Audio, Language. A written screenplay answers
+// first; before Generate the promise's settings and the task's plan_summary do.
+func planFacts(sp, pr, task map[string]any) [][2]string {
 	var out [][2]string
 	add := func(label, v string) {
 		if v != "" {
 			out = append(out, [2]string{label, strings.ReplaceAll(v, "_", " ")})
 		}
+	}
+	summary, _ := task["plan_summary"].(map[string]any)
+	settings, _ := pr["settings"].(map[string]any)
+	str := func(m map[string]any, k string) string { v, _ := m[k].(string); return v }
+	first := func(vs ...string) string {
+		for _, v := range vs {
+			if v != "" {
+				return v
+			}
+		}
+		return ""
 	}
 	secs := 0.0
 	beats, _ := sp["beats"].([]any)
@@ -150,25 +205,134 @@ func planFacts(sp, task map[string]any) [][2]string {
 		}
 	}
 	if secs == 0 {
-		if s, ok := task["plan_summary"].(map[string]any); ok {
-			secs, _ = s["seconds"].(float64)
+		secs, _ = summary["seconds"].(float64)
+	}
+	if secs == 0 {
+		if l, ok := pr["length"].(map[string]any); ok {
+			secs, _ = l["estimate_s"].(float64)
 		}
 	}
-	str := func(k string) string { v, _ := sp[k].(string); return v }
-	add("Type", str("media_type"))
-	add("Format", str("aspect"))
+	scenes := len(beats)
+	if scenes == 0 {
+		ps, _ := pr["scenes"].([]any)
+		scenes = len(ps)
+	}
+	if scenes == 0 {
+		n, _ := summary["scenes"].(float64)
+		scenes = int(n)
+	}
+	style := str(sp, "style")
+	if m, ok := sp["style"].(map[string]any); ok {
+		style = str(m, "name")
+	}
+	audio := str(settings, "audio")
+	if a, ok := sp["audio"].(map[string]any); ok {
+		audio = str(a, "mode")
+	}
+	add("Type", label(typeLabels, first(str(sp, "media_type"), str(settings, "type"), str(summary, "media_type"))))
+	add("Style", first(style, str(settings, "style")))
+	add("Format", first(str(sp, "aspect"), str(settings, "aspect")))
 	if secs > 0 {
 		add("Length", strconv.FormatFloat(secs, 'f', -1, 64)+" s")
 	}
-	if len(beats) > 0 {
-		add("Scenes", strconv.Itoa(len(beats)))
+	if scenes > 0 {
+		add("Scenes", strconv.Itoa(scenes))
 	}
-	if a, ok := sp["audio"].(map[string]any); ok {
-		v, _ := a["mode"].(string)
-		add("Audio", v)
-	}
-	add("Language", str("language"))
+	add("Audio", label(audioLabels, first(audio, str(summary, "audio_mode"))))
+	add("Language", first(str(sp, "language"), str(settings, "language"), str(summary, "language")))
 	return out
+}
+
+// promiseScenes are a plan's scenes before Generate writes the screenplay:
+// "1. what is filmed — Speaker: line / Speaker: line".
+func promiseScenes(pr map[string]any) []string {
+	scenes, _ := pr["scenes"].([]any)
+	var out []string
+	for i, s := range scenes {
+		sm, _ := s.(map[string]any)
+		if sm == nil {
+			continue
+		}
+		n := num(sm["n"])
+		if sm["n"] == nil {
+			n = strconv.Itoa(i + 1)
+		}
+		words, _ := sm["film"].(string)
+		var said []string
+		lines, _ := sm["lines"].([]any)
+		for _, l := range lines {
+			if lm, ok := l.(map[string]any); ok {
+				text, _ := lm["text"].(string)
+				if who, _ := lm["speaker"].(string); who != "" {
+					text = who + ": " + text
+				}
+				said = append(said, text)
+			}
+		}
+		if len(said) > 0 {
+			words = strings.TrimSpace(words + " — " + strings.Join(said, " / "))
+		}
+		if words == "" {
+			words = "(no words)"
+		}
+		out = append(out, n+". "+words)
+	}
+	return out
+}
+
+func num(v any) string {
+	switch n := v.(type) {
+	case float64:
+		return strconv.FormatFloat(n, 'f', -1, 64)
+	case nil:
+		return "?"
+	}
+	return fmt.Sprint(v)
+}
+
+// priceLines is the card's price: the figure, and one short line under it. A
+// plan priced only once Generate writes its screenplay shows the studio card's
+// estimate and says the exact price comes then; a plan that spends no scene
+// credits (stock footage, for one) says why its price is 0.
+func priceLines(q map[string]any) (main, note string) {
+	if q == nil {
+		return "", ""
+	}
+	plan, _ := q["plan"].(map[string]any)
+	media, _ := plan["media_type"].(string)
+	estimate := q["basis"] == "estimate" && (media == "" || media == "ai_video")
+	main = num(q["credits"]) + " credits"
+	if estimate {
+		main = "about " + main
+	}
+	if usd, _ := q["usd"].(string); usd != "" {
+		main += " ($" + usd + ")"
+	}
+	switch q["pool"] {
+	case "api_dollar":
+		main += " from your API balance"
+	case "account":
+		main += " from your plan credits"
+	}
+	if suf, ok := q["sufficient"].(bool); ok && !suf {
+		main += " — not enough balance"
+	}
+	if estimate {
+		return main, "Estimate: the exact price is set when Generate writes the screenplay."
+	}
+	why, _ := q["why"].(string)
+	return main, why
+}
+
+// generateLabel is the Generate choice: "Generate (about 76 credits)".
+func generateLabel(q map[string]any) string {
+	if q == nil {
+		return "Generate"
+	}
+	main, _ := priceLines(q)
+	main = strings.SplitN(main, " from your ", 2)[0]
+	main = strings.SplitN(main, " (", 2)[0]
+	return "Generate (" + main + ")"
 }
 
 // priceStyle colours the price: green when the balance covers it, red when it
@@ -183,7 +347,8 @@ func priceStyle(q map[string]any) lipgloss.Style {
 	return stWarn
 }
 
-// voices lists the cast's voices: "Narrator (Rachel) · Sam".
+// voices lists the cast's voices: "Narrator (Rachel) · Sam". A voice the plan
+// describes in words (before Generate casts it) is left out: the name says who.
 func voices(sp map[string]any) string {
 	cast, _ := sp["cast"].([]any)
 	var out []string
@@ -229,20 +394,6 @@ func questionCard(task map[string]any) string {
 		b.WriteString("\n" + stKey.Render(fmt.Sprintf("  %d ", i+1)) + clean(o))
 	}
 	return b.String()
-}
-
-// confirmView is the spend question.
-func (m *model) confirmView() string {
-	q := videos.QuoteLine(m.job.quote)
-	price := "this video"
-	if q != "" {
-		price = strings.SplitN(q, " — ", 2)[0]
-	}
-	box := stAsk.Width(boxWidth(m.width) - 2).Render(
-		stTitle.Render("Generate it for "+clean(price)+"?") + "\n" +
-			stMuted.Render("This spends credits. The plan stays as it is either way.") + "\n\n" +
-			stKey.Render("y") + " generate   " + stKey.Render("n") + stMuted.Render(" or ") + stKey.Render("esc") + " not now")
-	return m.fit(box)
 }
 
 // errText is a task's error as one line (v1 sends a string, v2 an object).

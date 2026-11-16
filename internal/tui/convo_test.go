@@ -1,6 +1,11 @@
 package tui
 
 import (
+	"encoding/json"
+	"fmt"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/zebracatai/zebracat-cli/internal/videos"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -97,8 +102,9 @@ func toPlan(t *testing.T, m *model, srv *apitest.Server, idea string) {
 	}
 }
 
-// The whole conversation: idea → plan card → a change in plain words → Ctrl+G →
-// "n" (nothing spent) → Ctrl+G → "y" → generate → done → Ctrl+O opens it.
+// The whole conversation: idea → plan card with Generate / Discard under it →
+// a change in plain words → the choice again → ↓↑ move it → Enter on Generate →
+// done → Ctrl+O opens it.
 func TestConversationPlanEditConfirm(t *testing.T) {
 	m, srv := against(t)
 	srv.On("GET", "/videos/{task_id}/quote", apitest.Answer{Status: "200", Raw: `{"pool": "api_dollar", "credits": 96,
@@ -111,8 +117,8 @@ func TestConversationPlanEditConfirm(t *testing.T) {
 		t.Fatalf("create body %v headers %v", post.Body, post.Header)
 	}
 	card := planCard(m.job, 80)
-	for _, want := range []string{"Why cats knock things off tables", "Type ai video · Format vertical · Length 20 s · Scenes 4", "Audio narration · Language english",
-		"Ever wondered why your cat swipes", "96 credits ($4.80)", "ctrl+g"} {
+	for _, want := range []string{"Why cats knock things off tables", "Type AI video · Format vertical · Length 20 s · Scenes 4", "Audio voice-over · Language english",
+		"Ever wondered why your cat swipes", "96 credits ($4.80)"} {
 		if !strings.Contains(card, want) {
 			t.Fatalf("plan card misses %q:\n%s", want, card)
 		}
@@ -139,24 +145,25 @@ func TestConversationPlanEditConfirm(t *testing.T) {
 		t.Fatalf("stage after a change = %v", m.stage)
 	}
 
-	// Ctrl+G asks; n keeps the plan.
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
-	if m.stage != stageConfirm || !strings.Contains(m.View(), "Generate it for 96 credits ($4.80) from your API balance?") {
-		t.Fatalf("confirm view:\n%s", m.View())
+	// The choice under the card: Generate first, Discard under it; no Ctrl+G.
+	if strings.Contains(card, "ctrl+g") || strings.Contains(m.View(), "ctrl+g") {
+		t.Fatal("the plan offers its choice, not Ctrl+G")
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")}) // any other key does nothing
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.stage != stageConfirm || srv.Count("POST", "/generate") != 0 {
-		t.Fatal("only y or n answers the spend question")
+	view := m.View()
+	if !strings.Contains(view, "❯ Generate (96 credits)") || !strings.Contains(view, "  Discard") {
+		t.Fatalf("choice view:\n%s", view)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	if m.stage != stageReady || srv.Count("POST", "/generate") != 0 {
-		t.Fatal("n must keep the plan and spend nothing")
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if !strings.Contains(m.View(), "❯ Discard") || srv.Count("POST", "/generate") != 0 {
+		t.Fatalf("↓ moves to Discard:\n%s", m.View())
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if !strings.Contains(m.View(), "❯ Generate") || srv.Count("POST", "/generate") != 0 {
+		t.Fatal("↑ moves back to Generate and spends nothing")
 	}
 
-	// Ctrl+G, y → Generate, once, with an idempotency key.
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	// Enter on Generate → Generate, once, with an idempotency key (no second question).
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	gen := find[generatedMsg](t, msgs(cmd))
 	if c, _ := srv.Last("POST", "/generate"); srv.Count("POST", "/generate") != 1 || c.Header.Get("Idempotency-Key") == "" {
 		t.Fatalf("generate calls %d", srv.Count("POST", "/generate"))
@@ -283,28 +290,67 @@ func hasQuit(ms []tea.Msg) bool {
 	return false
 }
 
-// Ctrl+C on the spend question leaves without generating.
-func TestCtrlCOnTheSpendQuestion(t *testing.T) {
+// Ctrl+C under the choice leaves without generating.
+func TestCtrlCUnderTheChoice(t *testing.T) {
 	m, srv := against(t)
 	m.job = &job{taskID: taskID, quote: map[string]any{"credits": float64(10)}}
-	m.stage = stageConfirm
+	m.stage = stageReady
 	m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	find[tea.QuitMsg](t, msgs(cmd))
 	if srv.Count("POST", "/generate") != 0 {
-		t.Fatal("Ctrl+C is not a yes")
+		t.Fatal("Ctrl+C is not Generate")
 	}
 }
 
-// A quote the balance doesn't cover never reaches the spend question.
-func TestShortBalanceNeverAsksToSpend(t *testing.T) {
+// A quote the balance doesn't cover never generates.
+func TestShortBalanceNeverGenerates(t *testing.T) {
 	m, srv := against(t)
 	m.job = &job{taskID: taskID, quote: map[string]any{"credits": float64(96), "sufficient": false}}
 	m.stage = stageReady
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if m.stage != stageReady || srv.Count("POST", "/generate") != 0 {
 		t.Fatalf("stage %v generate %d", m.stage, srv.Count("POST", "/generate"))
+	}
+}
+
+// g generates at once; d discards the plan (POST /cancel) and goes back to the
+// input; a change typed instead edits the plan.
+func TestChoiceShortcutsAndTyping(t *testing.T) {
+	m, srv := against(t)
+	srv.On("GET", "/videos/{task_id}/quote", apitest.Answer{Status: "200", Raw: `{"pool": "api_dollar", "credits": 96,
+		"usd": "4.80", "basis": "plan", "available": 25, "sufficient": true}`})
+	toPlan(t, m, srv, "why cats knock things off tables")
+	// typing a change: the choice lets the keys through to the input
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	if m.in.Value() != "m" || m.stage != stageReady {
+		t.Fatalf("typing went to %q (stage %v)", m.in.Value(), m.stage)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ore g")}) // a g inside words is just a letter
+	if m.in.Value() != "more g" || srv.Count("POST", "/generate") != 0 {
+		t.Fatalf("input %q generate %d", m.in.Value(), srv.Count("POST", "/generate"))
+	}
+	m.in.Reset()
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	if m.stage != stageIdle || m.job != nil {
+		t.Fatalf("d leaves the plan: stage %v", m.stage)
+	}
+	disc := find[discardedMsg](t, msgs(cmd))
+	if srv.Count("POST", "/cancel") != 1 || srv.Count("POST", "/generate") != 0 || disc.err != nil {
+		t.Fatalf("discard: cancel %d generate %d err %v", srv.Count("POST", "/cancel"), srv.Count("POST", "/generate"), disc.err)
+	}
+	_, cmd = m.Update(disc)
+	if !strings.Contains(fmt.Sprint(msgs(cmd)), "Discarded") {
+		t.Fatalf("discard note: %v", msgs(cmd))
+	}
+
+	toPlan(t, m, srv, "a second idea")
+	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+	find[generatedMsg](t, msgs(cmd))
+	if srv.Count("POST", "/generate") != 1 || m.stage != stageMaking {
+		t.Fatalf("g: generate %d stage %v", srv.Count("POST", "/generate"), m.stage)
 	}
 }
 
@@ -323,4 +369,36 @@ func TestServerTextCannotEscapeTheTerminal(t *testing.T) {
 	if strings.Contains(q, "\x1b[2J") || strings.Contains(q, "\x1b[1A") {
 		t.Fatalf("question card: %q", q)
 	}
+}
+
+// The owner's PROD plan 1127016 ("make a 10 second stock video about cars"), as
+// the server answers it: a plan before Generate (no screenplay yet). The card
+// says it is stock footage with its style, format, length and scenes, links the
+// plan in /chat, says why the price is 0, and offers Generate / Discard.
+func TestStockPlanBeforeGenerate(t *testing.T) {
+	raw, err := os.ReadFile("testdata/prod_1127016_stock_promise.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rec struct{ Task, Plan, Quote map[string]any }
+	if err := json.Unmarshal(raw, &rec); err != nil {
+		t.Fatal(err)
+	}
+	m := layoutModel(t, 80, true)
+	m.job = &job{taskID: taskID, task: rec.Task, plan: rec.Plan, quote: rec.Quote, editorURL: videos.EditorURL(rec.Task)}
+	m.stage = stageReady
+	m.syncPlaceholder()
+	card := planCard(m.job, 80)
+	for _, want := range []string{"Cars on the Move", "Type Stock footage", "Style Photography", "Format 16:9", "Length 10 s",
+		"Scenes 2", "Audio no voice", "1. Cars drive along a sunlit highway", "0 credits ($0.00) from your API balance",
+		"A stock video is not charged per AI-video scene", "https://studio.zebracat.ai/chat/0b7e6a52"} {
+		if !strings.Contains(ansi.Strip(card), want) {
+			t.Fatalf("stock card misses %q:\n%s", want, ansi.Strip(card))
+		}
+	}
+	if strings.Contains(card, "/storyboard/") || strings.Contains(card, "price follows") {
+		t.Fatalf("stock card:\n%s", card)
+	}
+	golden(t, "plan_card_stock_promise_80", card)
+	golden(t, "choice_80", m.liveView())
 }

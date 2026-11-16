@@ -119,6 +119,7 @@ type model struct {
 
 	quitAt     time.Time // first Ctrl-C (a second within quitWindow leaves)
 	leaveArmed bool      // first Ctrl-C while a paid job runs
+	choice     int       // the highlighted choice under a plan card (Generate / Discard)
 
 	quitting bool   // leaving: the live view is cleared
 	welcomed bool   // the welcome box has been printed
@@ -327,6 +328,8 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.onAnswered(msg)
 	case generatedMsg:
 		return m.onGenerated(msg)
+	case discardedMsg:
+		return m.onDiscarded(msg)
 	case pollMsg:
 		return m.onPoll(msg)
 
@@ -351,8 +354,8 @@ func (m *model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.Type != tea.KeyCtrlC {
 		m.quitAt = time.Time{}
 	}
-	if m.stage == stageConfirm {
-		return m.confirmKey(msg)
+	if handled, model, cmd := m.choiceKey(msg); handled {
+		return model, cmd
 	}
 	switch msg.Type {
 	case tea.KeyCtrlC:
@@ -363,8 +366,6 @@ func (m *model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.escape()
-	case tea.KeyCtrlG:
-		return m.askGenerate()
 	case tea.KeyCtrlO:
 		return m.openVideo()
 	case tea.KeyCtrlV: // paste a picture from the clipboard
