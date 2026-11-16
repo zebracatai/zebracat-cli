@@ -7,13 +7,21 @@ import (
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/config"
 	"github.com/zebracatai/zebracat-cli/internal/tui"
+	"github.com/zebracatai/zebracat-cli/internal/update"
 )
 
 // launchShell runs the interactive conversation (a test swaps it to prove the
-// non-terminal paths never open it).
+// non-terminal paths never open it). After an in-app update it starts the new
+// binary in its place.
 var launchShell = func(c *client.Client, baseURL, first string) error {
-	_, err := tui.New(c, baseURL, first).Run()
-	return err
+	res, err := tui.Run(c, baseURL, tui.Launch{First: first, JustUpdated: update.TakeUpdatedFrom()})
+	if err != nil {
+		return err
+	}
+	if res.Relaunch != "" {
+		return relaunchBinary(res.Relaunch, res.From, nil)
+	}
+	return nil
 }
 
 // shellAllowed: the conversation needs a terminal on stdin and stdout and human

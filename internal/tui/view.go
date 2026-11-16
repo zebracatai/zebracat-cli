@@ -1,5 +1,5 @@
-// Rendering: the splash, auth banner, input box + footer, the projects
-// dashboard, and small formatters for API payloads.
+// Rendering: printing helpers (wrapped to the terminal), the welcome box, the
+// input box with its completion list and footer, the projects dashboard.
 package tui
 
 import (
@@ -8,129 +8,259 @@ import (
 	"strconv"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/zebracatai/zebracat-cli/internal/dash"
+	"github.com/zebracatai/zebracat-cli/internal/version"
 	"github.com/zebracatai/zebracat-cli/internal/videos"
 )
 
-func splash() string {
-	body := stTitle.Render(logo) + "\n\n" +
-		stMuted.Render("🦓  Tell me the video you want. I plan it, you change it, then we make it.") + "\n\n" +
-		stMuted.Render("Type an idea, paste a script or a TikTok/YouTube link") + "\n" +
-		stKey.Render("/help") + stMuted.Render(" commands   ·   ") + stKey.Render("Ctrl+C") + stMuted.Render(" leave")
-	return stBox.Render(body) + "\n"
+// ---- printing ---------------------------------------------------------------
+// Everything printed above the input goes through say, wrapped to the terminal,
+// so a long line can never run into the input box.
+
+// cols is the usable width (one column spare: a full-width line makes some
+// terminals wrap early).
+func (m *model) cols() int {
+	if m.width <= 0 {
+		return 79
+	}
+	if m.width < 20 {
+		return 19
+	}
+	return m.width - 1
 }
 
-// authLine is the one-shot banner under the splash: signed-in mode or a /login nudge.
-func (m *model) authLine() string {
-	switch m.cl.AuthMode() {
-	case "oauth":
-		return stOK.Render("● ") + stMuted.Render("Signed in — spending your plan credits.")
-	case "api_key":
-		return stOK.Render("● ") + stMuted.Render("Authenticated with an API key — pay-as-you-go.")
-	default:
-		return stErr.Render("○ ") + stMuted.Render("You're not signed in. Type ") +
-			stKey.Render("/login") + stMuted.Render(" to add your Zebracat API key.")
+// fit wraps every line wider than the terminal.
+func (m *model) fit(s string) string {
+	w := m.cols()
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		if ansi.StringWidth(l) > w {
+			lines[i] = ansi.Wrap(l, w, "")
+		}
 	}
+	return strings.Join(lines, "\n")
 }
+
+func (m *model) say(s string) tea.Cmd { return tea.Println(m.fit(s)) }
+
+// hang wraps body under a prefix with a hanging indent.
+func (m *model) hang(prefix, body string) string {
+	pw := ansi.StringWidth(prefix)
+	w := m.cols() - pw
+	if w < 10 {
+		w = 10
+	}
+	lines := strings.Split(ansi.Wrap(body, w, ""), "\n")
+	pad := strings.Repeat(" ", pw)
+	for i := range lines {
+		if i == 0 {
+			lines[i] = prefix + lines[i]
+		} else {
+			lines[i] = pad + lines[i]
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// youSaid echoes what the person sent, dimmed, like a chat transcript.
+func (m *model) youSaid(text string) tea.Cmd {
+	return m.say(m.hang(stMuted.Render("› "), stMuted.Render(strings.TrimSpace(text))))
+}
+
+// assistant is Zebracat's turn: a purple dot, then the words.
+func (m *model) assistant(text string) tea.Cmd { return m.say(m.hang(stMark.Render("● "), text)) }
+
+// note is a dimmed tool/progress line under a turn.
+func (m *model) note(text string) tea.Cmd {
+	return m.say(m.hang(stMuted.Render("  ⎿ "), stMuted.Render(text)))
+}
+
+// sayErr is a red line with what happened and one line with what to do.
+func (m *model) sayErr(what, fix string) tea.Cmd {
+	s := m.hang(stErr.Render("✗ "), stErr.Render(clean(what)))
+	if fix != "" {
+		s += "\n" + m.hang(stMuted.Render("  ⎿ "), stMuted.Render(fix))
+	}
+	return m.say(s)
+}
+
+// ---- welcome --------------------------------------------------------------------
+
+// welcomeView is the launch box: our mark, the version, who is signed in and
+// their balance, the folder, then tips (and an update offer when there is one).
+func (m *model) welcomeView() string {
+	inner := m.cols() - 4 // border + padding
+	if inner > 72 {
+		inner = 72
+	}
+	var text []string
+	text = append(text, stTitle.Render("Welcome to Zebracat")+stMuted.Render("  v"+version.Version))
+	if m.launch.JustUpdated != "" {
+		text = append(text, stOK.Render("✓ Updated from "+m.launch.JustUpdated))
+	}
+	if m.cl != nil && m.cl.IsAuthenticated() {
+		if a := m.accountLine(); a != "" {
+			text = append(text, strings.TrimPrefix(a, " · "))
+		} else {
+			text = append(text, stMuted.Render("Signed in"))
+		}
+	} else {
+		text = append(text, stWorking.Render("Not signed in")+stMuted.Render(" · type /login"))
+	}
+	if d := cwd(); d != "" {
+		text = append(text, stMuted.Render(d))
+	}
+	markW := ansi.StringWidth(mark[0])
+	var body string
+	if inner >= markW+3+24 { // side by side
+		col := lipgloss.NewStyle().Width(inner - markW - 3).Render(strings.Join(text, "\n"))
+		body = lipgloss.JoinHorizontal(lipgloss.Center, markView(), "   ", col)
+	} else { // narrow: the mark above the words
+		col := lipgloss.NewStyle().Width(inner).Render(strings.Join(text, "\n"))
+		body = markView() + "\n\n" + col
+	}
+	out := stBox.Render(body) + "\n"
+	tips := []string{
+		m.hang(stMuted.Render(" › "), stMuted.Render("Describe a video, paste a script or a link (TikTok, YouTube, Reels)")),
+		m.hang(stMuted.Render(" › "), stKey.Render("/help")+stMuted.Render(" for commands and keys · ")+stKey.Render("Ctrl+C")+stMuted.Render(" twice to quit")),
+	}
+	if m.cl == nil || !m.cl.IsAuthenticated() {
+		tips = append(tips, m.hang(stMuted.Render(" › "), stKey.Render("/login")+stMuted.Render(" to add your API key (studio.zebracat.ai → API Keys)")))
+	}
+	out += strings.Join(tips, "\n")
+	if m.offer != "" {
+		out += "\n" + m.hang(stWorking.Render(" ↑ "), "Zebracat CLI "+m.offer+" is available"+stMuted.Render(" — press ")+
+			stKey.Render("u")+stMuted.Render(" to update now"))
+	}
+	if m.shadow != "" {
+		out += "\n" + m.hang(stWorking.Render(" ! "), stMuted.Render("Another zebracat runs first on your PATH: "+m.shadow+" — run ")+
+			stKey.Render("zebracat doctor"))
+	}
+	return m.fit(out)
+}
+
+// accountLine is " · you@x.com · Pro · $208.25 API balance" (or plan credits).
+func (m *model) accountLine() string {
+	if m.acct == nil {
+		return ""
+	}
+	var parts []string
+	if m.acct.email != "" {
+		parts = append(parts, m.acct.email)
+	}
+	if m.cl != nil && m.cl.AuthMode() == "api_key" {
+		if m.acct.apiDollars != "" {
+			parts = append(parts, "$"+m.acct.apiDollars+" API balance")
+		}
+	} else {
+		if m.acct.plan != "" {
+			parts = append(parts, m.acct.plan)
+		}
+		if m.acct.credits != "" {
+			parts = append(parts, m.acct.credits+" credits")
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " · " + strings.Join(parts, " · ")
+}
+
+// ---- the live view under the conversation ----------------------------------------
 
 func (m *model) View() string {
+	if m.quitting {
+		return ""
+	}
 	if m.stage == stageConfirm {
 		return m.confirmView()
 	}
 	var b strings.Builder
-	// autocomplete hint line
+	if p := m.progressLine(); p != "" {
+		b.WriteString(m.fit(p) + "\n")
+	}
+	w := m.inputWidth()
+	var field string
+	if m.askKey {
+		field = stPrompt.Render("🔑 ") + m.key.View()
+	} else {
+		field = lipgloss.JoinHorizontal(lipgloss.Top, stPrompt.Render("› "), m.in.View())
+	}
+	b.WriteString(stInput.Width(w-2).Render(field) + "\n")
 	if len(m.matches) > 0 {
-		var parts []string
-		for _, mtc := range m.matches {
-			parts = append(parts, stKey.Render(mtc))
+		for i, c := range m.matches {
+			line := fmt.Sprintf("  %-10s %s", c.name, c.desc)
+			if i == m.sel {
+				b.WriteString(stSel.Render(ansi.Truncate(line, w, "…")) + "\n")
+			} else {
+				b.WriteString(stMuted.Render(ansi.Truncate(line, w, "…")) + "\n")
+			}
 		}
-		b.WriteString(stMuted.Render("  ↹ ") + strings.Join(parts, stMuted.Render(" · ")) + "\n")
+		return b.String()
 	}
-	w := m.width
-	if w < 24 {
-		w = 60
-	}
-	b.WriteString(stInput.Width(w-2).Render(m.in.View()) + "\n")
-	if f := m.footer(); f != "" {
-		b.WriteString(f + "\n")
-	}
-	foot := m.statusLine()
-	if m.busy {
-		foot += stMuted.Render("   ") + m.sp.View() + stMuted.Render(" working…")
-	}
-	b.WriteString(foot)
+	b.WriteString(ansi.Truncate(m.footer(), w, "…"))
 	return b.String()
 }
 
-// statusLine is the persistent footer: who you are + balance.
-func (m *model) statusLine() string {
-	switch m.cl.AuthMode() {
-	case "oauth":
-		s := "signed in"
-		if m.acct != nil {
-			if m.acct.email != "" {
-				s = m.acct.email
-			}
-			if m.acct.plan != "" {
-				s += " · " + m.acct.plan
-			}
-			if m.acct.credits != "" {
-				s += " · " + m.acct.credits + " credits"
-			}
-		}
-		return "  " + stOK.Render("●") + " " + stMuted.Render(s)
-	case "api_key":
-		s := "API key · pay-as-you-go"
-		if m.acct != nil && m.acct.apiDollars != "" {
-			s = "API key · $" + m.acct.apiDollars + " balance"
-		}
-		return "  " + stOK.Render("●") + " " + stMuted.Render(s)
+// inputWidth is the input box's full width (border included), at most 120.
+func (m *model) inputWidth() int {
+	w := m.cols()
+	if w > 120 {
+		w = 120
+	}
+	return w
+}
+
+// footer is the hint line under the input.
+func (m *model) footer() string {
+	if !m.quitAt.IsZero() {
+		return stWorking.Render("  Press Ctrl-C again to exit")
+	}
+	var hint string
+	switch m.stage {
+	case stageAsking:
+		hint = "type your answer · its number picks an option"
+	case stageReady:
+		hint = "type a change · ctrl+g generate · /new start over"
+	case stageDone:
+		hint = "ctrl+o open the video · type a new idea"
+	case stagePlanning, stageEditing, stageMaking:
+		hint = ""
 	default:
-		return "  " + stErr.Render("○") + " " + stMuted.Render("not signed in — type ") + stKey.Render("/login")
+		hint = "/ for commands · alt+enter new line · ↑ history"
 	}
+	if m.offer != "" && m.stage == stageIdle {
+		hint = "u update to " + m.offer + " · " + hint
+	}
+	parts := []string{}
+	if hint != "" {
+		parts = append(parts, stMuted.Render(hint))
+	}
+	if a := m.accountLine(); a != "" {
+		parts = append(parts, stMuted.Render(strings.TrimPrefix(a, " · ")))
+	} else if m.cl == nil || !m.cl.IsAuthenticated() {
+		parts = append(parts, stWorking.Render("not signed in"))
+	}
+	return "  " + strings.Join(parts, stMuted.Render(" · "))
 }
 
-// greeting is the welcome line printed once /account resolves.
-func (m *model) greeting() string {
-	who := "there"
-	if m.acct != nil && m.acct.email != "" {
-		who = m.acct.email
-	}
-	line := stOK.Render("👋 Welcome back, ") + stKey.Render(who)
-	if m.acct == nil {
-		return line
-	}
-	if m.cl.AuthMode() == "api_key" {
-		if m.acct.apiDollars != "" {
-			line += stMuted.Render(" · $" + m.acct.apiDollars + " API balance")
-		}
-		return line
-	}
-	if m.acct.plan != "" {
-		line += stMuted.Render(" · " + m.acct.plan)
-	}
-	if m.acct.credits != "" {
-		line += stMuted.Render(" · " + m.acct.credits + " credits left")
-	}
-	return line
-}
-
-// syncPlaceholder makes the input hint match the auth state.
+// syncPlaceholder makes the input hint match the conversation.
 func (m *model) syncPlaceholder() {
-	if m.cl != nil && m.cl.IsAuthenticated() {
-		switch m.stage {
-		case stageReady:
-			m.in.Placeholder = "Tell me what to change, or Ctrl+G to generate …"
-			return
-		case stageAsking:
-			m.in.Placeholder = "Your answer …"
-			return
-		}
-		m.in.Placeholder = "Describe your video, paste a script or a link …"
-	} else {
-		m.in.Placeholder = "Type /login to get started …"
+	switch {
+	case m.cl == nil || !m.cl.IsAuthenticated():
+		m.in.Placeholder = "Type /login to get started"
+	case m.stage == stageReady:
+		m.in.Placeholder = "Tell me what to change, or press Ctrl+G to generate"
+	case m.stage == stageAsking:
+		m.in.Placeholder = "Your answer"
+	case m.carry != "":
+		m.in.Placeholder = "Your answer"
+	default:
+		m.in.Placeholder = "Describe your video, paste a script or a link"
 	}
 }
 
@@ -177,7 +307,6 @@ func (m *model) dashboardView(out map[string]any) string {
 }
 
 // ---- rendering ------------------------------------------------------------
-func (a apiMsg) title() string { return render("Result", a.out) }
 
 func render(title string, data any) string {
 	b, err := json.MarshalIndent(data, "", "  ")

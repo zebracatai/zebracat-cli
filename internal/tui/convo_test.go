@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/zebracatai/zebracat-cli/internal/apitest"
@@ -22,7 +21,9 @@ func against(t *testing.T) (*model, *apitest.Server) {
 	srv := apitest.New(t)
 	t.Setenv("ZEBRACAT_API_KEY", "sk-dummy")
 	cl := client.New(srv.URL, &config.Credentials{}, "")
-	return &model{in: textinput.New(), cl: cl}, srv
+	m := newModel(cl, srv.URL)
+	m.width = 100
+	return m, srv
 }
 
 // msgs runs a command and every command it batches or sequences, returning the
@@ -84,7 +85,7 @@ func toPlan(t *testing.T, m *model, srv *apitest.Server, idea string) {
 	if _, cmd = m.Update(pm); cmd == nil || m.stage != stagePlanning {
 		t.Fatal("planning keeps polling")
 	}
-	if !strings.Contains(m.View(), "Writing the plan") {
+	if !strings.Contains(m.View(), "Writing the screenplay…") || !strings.Contains(m.View(), "esc to interrupt") {
 		t.Fatalf("planning progress:\n%s", m.View())
 	}
 	pm = m.poll(taskID, false).(pollMsg) // plan_ready
@@ -174,7 +175,7 @@ func TestConversationPlanEditConfirm(t *testing.T) {
 	if m.stage != stageDone || m.job.videoURL != "https://cdn.zebracat.ai/videos/48213/final.mp4" {
 		t.Fatalf("done: stage %v job %+v", m.stage, m.job)
 	}
-	if !strings.Contains(doneCard(m.job), "final.mp4") {
+	if !strings.Contains(doneCard(m.job, time.Minute), "final.mp4") {
 		t.Fatal("the done card shows the video link")
 	}
 
@@ -266,7 +267,20 @@ func TestCtrlCNeverCancelsAPaidJob(t *testing.T) {
 	m.job = &job{taskID: taskID}
 	m.stage = stageReady
 	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if hasQuit(msgs(cmd)) || !strings.Contains(m.View(), "Press Ctrl-C again to exit") {
+		t.Fatalf("the first Ctrl-C only warns:\n%s", m.View())
+	}
+	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	find[tea.QuitMsg](t, msgs(cmd))
+}
+
+func hasQuit(ms []tea.Msg) bool {
+	for _, x := range ms {
+		if _, ok := x.(tea.QuitMsg); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // Ctrl+C on the spend question leaves without generating.
@@ -274,6 +288,7 @@ func TestCtrlCOnTheSpendQuestion(t *testing.T) {
 	m, srv := against(t)
 	m.job = &job{taskID: taskID, quote: map[string]any{"credits": float64(10)}}
 	m.stage = stageConfirm
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	find[tea.QuitMsg](t, msgs(cmd))
 	if srv.Count("POST", "/generate") != 0 {

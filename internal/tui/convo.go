@@ -1,13 +1,14 @@
-// The conversation: what replaced the old "pick the type, pick the length…"
-// wizard. Like the studio's v2 /chat, the person types an idea, pastes a link
-// (or loads a script); Director v2 writes the plan (POST /videos, plan only);
-// the CLI shows it as a card with the quote; plain words change it (the plan
-// chat, POST /videos/{id}/plan/chat); Generate happens only after Ctrl+G or
-// /generate AND a y on the "spend N credits?" line.
+// The conversation, like the studio's v2 /chat. The person types an idea,
+// pastes a link (or loads a script); Director v2 writes the plan (POST /videos,
+// plan only); the CLI shows it as a card with the quote; plain words change it
+// (the plan chat, POST /videos/{id}/plan/chat); Generate happens only after
+// Ctrl+G and a y. When the plan asks something — a question card, or a brief
+// with nothing to film ("What should your video be about?") — that is the
+// assistant's turn and the person's next message answers it; it is never shown
+// as a failure.
 package tui
 
 import (
-	"fmt"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -15,9 +16,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/zebracatai/zebracat-cli/internal/brief"
+	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/videos"
 )
 
@@ -35,9 +36,21 @@ const (
 	stageDone                  // the video is ready
 )
 
+// The run's own codes for "this brief is a question back, not a failure"
+// (backend engine/director_v2/run.py PLAN_BLOCKED; public_apis/v2/lifecycle.py
+// "<request>_request"). Structured codes, never the message text.
+const codeBlocked = "plan_blocked"
+
+// requestHints: a brief that asked for another tool, by its code.
+var requestHints = map[string]string{
+	"translate_video_request": "That sounds like a translation. Run: zebracat video translate --url <video> --to <language>",
+	"character_swap_request":  "That sounds like a character swap. Run: zebracat swap --video <url> --character <face-image-url> --consent",
+}
+
 // job is the one video the conversation is about.
 type job struct {
 	taskID       string
+	text         string         // what the person sent (kept for a question back)
 	task         map[string]any // the last task view
 	plan         map[string]any // the last plan view (screenplay, summary_lines)
 	quote        map[string]any
@@ -48,23 +61,31 @@ type job struct {
 	options      []string
 	videoURL     string
 	editorURL    string
+	offline      bool // the last poll failed; we keep trying quietly
 }
 
-// ---- messages ---------------------------------------------------------------
+// ---- messages (each carries its job, so a late answer for a job the person
+// left is ignored) ------------------------------------------------------------
 
 type createdMsg struct {
+	j   *job
 	out map[string]any
 	err error
 }
 type planMsg struct { // a plan is ready (or changed): the task, its plan view, the quote
+	j     *job
 	task  map[string]any
 	plan  map[string]any
 	quote map[string]any
 	reply string // the plan chat's answer, for a change
 	err   error
 }
-type answeredMsg struct{ err error }
+type answeredMsg struct {
+	j   *job
+	err error
+}
 type generatedMsg struct {
+	j   *job
 	out map[string]any
 	err error
 }
@@ -85,44 +106,65 @@ var openURL = func(u string) error {
 // startPlan sends a message (or a loaded script) to Director v2 as a plan only.
 func (m *model) startPlan(text string, kind brief.Kind) (tea.Model, tea.Cmd) {
 	body := brief.Body(text, kind, true)
-	note := "Planning your video…"
+	note := "Writing a plan — free, nothing is charged until you generate"
 	if link, _ := body["source_video"].(string); link != "" {
-		note = "Reading that video and planning…"
+		note = "Reading that video and writing a plan — free until you generate"
 	} else if body["input_kind"] == "url" {
-		note = "Reading that page and planning…"
+		note = "Reading that page and writing a plan — free until you generate"
 	}
-	m.job = &job{shouldRender: true, started: m.now(), phase: "planning"}
+	m.job = &job{text: text, shouldRender: true, started: m.now(), phase: "pending"}
 	m.stage = stagePlanning
-	return m, tea.Batch(tea.Println(stMuted.Render("  "+note+" (free — nothing is charged until you generate)")), m.createCmd(body))
+	m.leaveArmed = false
+	return m, tea.Batch(m.note(note), m.createCmd(m.job, body))
 }
 
 // ---- results --------------------------------------------------------------------
 
 func (m *model) onCreated(msg createdMsg) (tea.Model, tea.Cmd) {
+	if msg.j != m.job || m.job == nil {
+		return m, nil
+	}
 	if msg.err != nil {
 		m.stage, m.job = stageIdle, nil
-		return m, tea.Println(stErr.Render("✗ ") + clean(msg.err.Error()))
+		return m, m.sayAPIErr(msg.err, "Nothing was charged. Try again.")
 	}
 	id, _ := msg.out["task_id"].(string)
 	if id == "" {
 		m.stage, m.job = stageIdle, nil
-		return m, tea.Println(stErr.Render("✗ The server answered without a task id."))
+		return m, m.sayErr("The server answered without a task id.", "Try again in a moment.")
 	}
 	m.job.taskID = id
 	m.job.task = msg.out
+	m.job.phase = "planning"
 	return m, m.pollCmd(id, false)
 }
 
 // onPoll moves the conversation on from a task view.
 func (m *model) onPoll(msg pollMsg) (tea.Model, tea.Cmd) {
 	j := m.job
-	if j == nil || j.taskID != msg.taskID {
+	if j == nil || j.taskID != msg.taskID || (msg.j != nil && msg.j != j) {
 		return m, nil // a poll of a job the person left
 	}
+	again := tea.Tick(5*time.Second, func(time.Time) tea.Msg {
+		pm := m.poll(msg.taskID, msg.untilDone).(pollMsg)
+		pm.j = j
+		return pm
+	})
 	if msg.err != nil {
-		return m, tea.Batch(
-			tea.Println(stErr.Render("✗ ")+clean(msg.err.Error())+stMuted.Render(" — retrying…")),
-			tea.Tick(5*time.Second, func(time.Time) tea.Msg { return m.poll(msg.taskID, msg.untilDone) }))
+		if ce, ok := msg.err.(*clierr.Error); ok && ce.Exit == clierr.CodeAuth {
+			m.stage = stageIdle
+			return m, m.sayAPIErr(msg.err, "")
+		}
+		if j.offline {
+			return m, again // said once; keep trying quietly
+		}
+		j.offline = true
+		return m, tea.Batch(m.note("Lost the connection — still trying. Your video is safe on our servers."), again)
+	}
+	var back tea.Cmd
+	if j.offline {
+		j.offline = false
+		back = m.note("Back online.")
 	}
 	j.task = msg.out
 	if p := videos.PhaseOrStatus(msg.out); p != "" {
@@ -132,37 +174,61 @@ func (m *model) onPoll(msg pollMsg) (tea.Model, tea.Cmd) {
 		j.editorURL = u
 	}
 	if !videos.StopsWait(msg.out, msg.untilDone) {
-		return m, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return m.poll(msg.taskID, msg.untilDone) })
+		return m, tea.Batch(back, again)
 	}
 	switch videos.PhaseOrStatus(msg.out) {
 	case "plan_ready":
-		return m, m.planCmd(msg.out, "")
+		return m, tea.Batch(back, m.planCmd(j, msg.out, ""))
 	case "needs_input":
 		m.stage = stageAsking
 		qid, _, opts := videos.Question(msg.out)
 		j.questionID, j.options = qid, opts
-		return m, tea.Println(questionCard(msg.out))
+		return m, tea.Batch(back, m.assistant(questionCard(msg.out)))
 	case "completed":
 		m.stage = stageDone
 		j.videoURL, _ = msg.out["video_url"].(string)
-		return m, tea.Println(doneCard(j))
+		return m, tea.Batch(back, m.say(doneCard(j, m.now().Sub(j.started))))
 	}
-	m.stage = stageIdle
-	line := stErr.Render("✗ Video " + videos.PhaseOrStatus(msg.out))
-	if e := errText(msg.out); e != "" {
-		line += stMuted.Render(" — " + e)
+	return m.ended(msg.out, msg.untilDone)
+}
+
+// ended handles a task that stopped without a plan or a video: a question back
+// is a turn; a request for another tool says which; anything else is an error
+// with what to do.
+func (m *model) ended(task map[string]any, paid bool) (tea.Model, tea.Cmd) {
+	j := m.job
+	code, text := errCode(task), errText(task)
+	m.stage, m.job = stageIdle, nil
+	switch {
+	case code == codeBlocked && !paid:
+		m.carry = j.text // the answer goes with what they said first
+		if text == "" {
+			text = "What should your video show or be about? Tell me in a sentence or two."
+		}
+		return m, m.assistant(text)
+	case requestHints[code] != "" && !paid:
+		return m, m.assistant(requestHints[code])
+	case videos.PhaseOrStatus(task) == "cancelled":
+		return m, m.note("This video was cancelled. Nothing more will be charged.")
 	}
-	return m, tea.Println(line)
+	if text == "" {
+		text = "something went wrong on our side"
+	}
+	if paid {
+		return m, m.sayErr("The video couldn't be finished: "+text,
+			"See `zebracat video status "+j.taskID+"`; quote that id to support if it stays failed.")
+	}
+	return m, m.sayErr("The plan couldn't be written: "+text, "Nothing was charged. Try again, or say it differently.")
 }
 
 func (m *model) onPlan(msg planMsg) (tea.Model, tea.Cmd) {
 	j := m.job
-	if j == nil {
+	if j == nil || msg.j != j {
 		return m, nil
 	}
 	if msg.err != nil {
 		m.stage = stageReady
-		return m, tea.Println(stErr.Render("✗ ") + clean(msg.err.Error()) + stMuted.Render(" — the plan is unchanged."))
+		return m, m.sayAPIErr(msg.err, "The plan is unchanged.")
 	}
 	if msg.task != nil {
 		j.task = msg.task
@@ -170,27 +236,73 @@ func (m *model) onPlan(msg planMsg) (tea.Model, tea.Cmd) {
 	if msg.plan != nil {
 		j.plan = msg.plan
 	}
-	j.quote = msg.quote
+	if msg.quote != nil {
+		j.quote = msg.quote
+	}
 	m.stage = stageReady
 	var out []tea.Cmd
 	if msg.reply != "" {
-		out = append(out, tea.Println(stTitle.Render("🦓 ")+clean(msg.reply)))
+		out = append(out, m.assistant(clean(msg.reply)))
 	}
-	out = append(out, tea.Println(planCard(j, m.width)))
+	if msg.plan != nil || msg.task != nil {
+		out = append(out, m.say(planCard(j, m.width)))
+	}
 	return m, tea.Sequence(out...)
 }
 
+func (m *model) onAnswered(msg answeredMsg) (tea.Model, tea.Cmd) {
+	if m.job == nil || msg.j != m.job {
+		return m, nil
+	}
+	if msg.err != nil {
+		m.stage = stageAsking
+		return m, m.sayAPIErr(msg.err, "Answer again.")
+	}
+	return m, m.pollCmd(m.job.taskID, false)
+}
+
 func (m *model) onGenerated(msg generatedMsg) (tea.Model, tea.Cmd) {
+	if m.job == nil || msg.j != m.job {
+		return m, nil
+	}
 	if msg.err != nil {
 		m.stage = stageReady
-		return m, tea.Println(stErr.Render("✗ ") + clean(msg.err.Error()) + stMuted.Render(" — nothing was generated."))
+		return m, m.sayAPIErr(msg.err, "Nothing was generated; the plan is kept.")
 	}
 	m.stage = stageMaking
 	m.job.started = m.now()
 	m.job.phase = "generating"
-	return m, tea.Batch(
-		tea.Println(stOK.Render("✓ Generating. ")+stMuted.Render("A few minutes. Ctrl+C leaves; it keeps going.")),
+	return m, tea.Batch(m.note("Generating — a few minutes. Esc stops watching; the video keeps going."),
 		m.pollCmd(m.job.taskID, true))
+}
+
+// sayAPIErr turns a call's error into a plain sentence and one fix line.
+func (m *model) sayAPIErr(err error, after string) tea.Cmd {
+	ce, ok := err.(*clierr.Error)
+	if !ok {
+		return m.sayErr(err.Error(), after)
+	}
+	switch {
+	case ce.Exit == clierr.CodeAuth:
+		return m.sayErr("Your API key was rejected (expired or removed).", "Type /login to add a new one.")
+	case ce.Code == "network_error" || ce.Exit == clierr.CodeTimeout:
+		return m.sayErr("Can't reach Zebracat right now.", strings.TrimSpace("Check your internet connection. "+after))
+	case ce.Code == "insufficient_funds" || ce.Type == "insufficient_funds":
+		fix := ce.Hint
+		if fix == "" {
+			fix = "Top up at https://studio.zebracat.ai, then try again."
+		}
+		return m.sayErr("Your balance doesn't cover this.", fix)
+	case ce.Code == "rate_limited" || ce.Type == "rate_limited":
+		return m.sayErr("Too many requests just now.", strings.TrimSpace("Wait a minute. "+after))
+	}
+	fix := ce.Hint
+	if fix == "" {
+		fix = after
+	} else if after != "" {
+		fix += " " + after
+	}
+	return m.sayErr(ce.Message, strings.TrimSpace(fix))
 }
 
 // ---- input ----------------------------------------------------------------------
@@ -205,13 +317,17 @@ func (m *model) converse(text string) (tea.Model, tea.Cmd) {
 		}
 		m.stage = stagePlanning
 		m.job.started = m.now()
-		return m, m.answerCmd(m.job.taskID, m.job.questionID, answer)
+		return m, m.answerCmd(m.job, m.job.taskID, m.job.questionID, answer)
 	case stageReady:
 		m.stage = stageEditing
 		m.job.started = m.now()
-		return m, m.chatCmd(m.job.taskID, text)
+		return m, m.chatCmd(m.job, m.job.taskID, text)
 	case stagePlanning, stageEditing, stageMaking:
-		return m, tea.Println(stHint.Render("  One moment — I'm still working on the last step."))
+		return m, m.note("One moment — I'm still on the last step (Esc stops waiting).")
+	}
+	if m.carry != "" { // answering the plan's question about the first message
+		text = m.carry + "\n" + text
+		m.carry = ""
 	}
 	return m.startPlan(text, brief.KindIdea)
 }
@@ -219,12 +335,11 @@ func (m *model) converse(text string) (tea.Model, tea.Cmd) {
 // askGenerate shows the explicit spend question.
 func (m *model) askGenerate() (tea.Model, tea.Cmd) {
 	if m.stage != stageReady || m.job == nil {
-		return m, tea.Println(stHint.Render("  There's no plan to generate yet — type an idea first."))
+		return m, m.note("There's no plan to generate yet — describe a video first.")
 	}
 	if ok, known := m.job.quote["sufficient"].(bool); known && !ok {
-		return m, tea.Println(stErr.Render("✗ Your balance doesn't cover this video ") +
-			stMuted.Render("("+strings.SplitN(videos.QuoteLine(m.job.quote), " — ", 2)[0]+"). Top up at ") +
-			stKey.Render("https://studio.zebracat.ai") + stMuted.Render(", then Ctrl+G again. The plan is kept."))
+		return m, m.sayErr("Your balance doesn't cover this video ("+strings.SplitN(videos.QuoteLine(m.job.quote), " — ", 2)[0]+").",
+			"Top up at https://studio.zebracat.ai, then Ctrl+G again. The plan is kept.")
 	}
 	m.stage = stageConfirm
 	return m, nil
@@ -236,261 +351,147 @@ func (m *model) confirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "y":
 		m.stage = stageMaking
 		m.job.started = m.now()
-		return m, tea.Batch(tea.Println(stMuted.Render("  Generate?  ")+stKey.Render("yes")), m.generateCmd(m.job.taskID, m.job.shouldRender))
+		m.job.phase = "generating"
+		return m, tea.Batch(m.note("Generate: yes"), m.generateCmd(m.job, m.job.taskID, m.job.shouldRender))
 	case "n", "esc":
 		m.stage = stageReady
-		return m, tea.Println(stMuted.Render("  Not now — the plan is kept and nothing was charged."))
+		return m, m.note("Not now — the plan is kept and nothing was charged.")
 	case "ctrl+c":
+		m.stage = stageReady
 		return m.interrupt()
 	}
 	return m, nil
 }
 
-// interrupt is Ctrl+C. It never cancels anything on the server: a paid job keeps
-// going, and leaving while one runs takes a second Ctrl+C.
-func (m *model) interrupt() (tea.Model, tea.Cmd) {
-	bye := func(line string) (tea.Model, tea.Cmd) {
-		if line == "" {
-			return m, tea.Sequence(tea.Println(stMuted.Render("Goodbye 🦓")), tea.Quit)
-		}
-		return m, tea.Sequence(tea.Println(line), tea.Println(stMuted.Render("Goodbye 🦓")), tea.Quit)
+// escape is Esc: stop waiting. A plan keeps being written on the server (it's
+// free); a paid video keeps being made; nothing is ever cancelled.
+func (m *model) escape() (tea.Model, tea.Cmd) {
+	j := m.job
+	if j == nil {
+		return m, nil
 	}
-	if m.job == nil || m.job.taskID == "" {
-		return bye("")
-	}
-	id := m.job.taskID
 	switch m.stage {
-	case stageMaking:
-		if !m.leaveArmed {
-			m.leaveArmed = true
-			return m, tea.Println(stWorking.Render("! ") + "It keeps being made on our servers; nothing is cancelled.\n" +
-				stMuted.Render("  Ctrl+C again to leave, or keep waiting."))
-		}
-		return bye(stMuted.Render("  Follow it with ") + stKey.Render("zebracat video status "+id+" --wait"))
-	case stageReady, stageConfirm, stageEditing, stageAsking:
-		return bye(stMuted.Render("  Your plan is saved. Generate it later with ") + stKey.Render("zebracat video generate "+id))
 	case stagePlanning:
-		return bye(stMuted.Render("  Planning continues; see it with ") + stKey.Render("zebracat video status "+id+" --wait"))
+		m.stage, m.job = stageIdle, nil
+		if j.taskID != "" {
+			return m, m.note("Stopped waiting. Nothing was charged. See that plan later with `zebracat video status " + j.taskID + "`.")
+		}
+		return m, m.note("Stopped waiting. Nothing was charged.")
+	case stageMaking:
+		m.stage, m.job = stageIdle, nil
+		return m, m.note("Stopped watching — the video keeps being made. Follow it with `zebracat video status " + j.taskID + " --wait`.")
 	}
-	return bye("")
+	return m, nil
+}
+
+// interrupt is Ctrl-C: it clears a half-typed line; otherwise the first press
+// warns and a second within two seconds leaves. It never cancels anything.
+func (m *model) interrupt() (tea.Model, tea.Cmd) {
+	if strings.TrimSpace(m.in.Value()) != "" && !m.askKey {
+		m.in.Reset()
+		m.matches = nil
+		return m, nil
+	}
+	if m.askKey {
+		m.askKey = false
+		m.key.Reset()
+		m.in.Focus()
+		return m, m.note("Cancelled.")
+	}
+	if m.stage == stageMaking && !m.leaveArmed {
+		m.leaveArmed = true
+		m.quitAt = m.now()
+		return m, m.say(stWorking.Render("! ") + "Your video keeps being made on our servers; nothing is cancelled.")
+	}
+	if !m.quitAt.IsZero() && m.now().Sub(m.quitAt) <= quitWindow {
+		return m.leave("")
+	}
+	m.quitAt = m.now()
+	return m, nil
+}
+
+// leave quits with a line on how to pick up where the person left off.
+func (m *model) leave(extra string) (tea.Model, tea.Cmd) {
+	var lines []string
+	if extra != "" {
+		lines = append(lines, extra)
+	}
+	if j := m.job; j != nil && j.taskID != "" {
+		switch m.stage {
+		case stageMaking:
+			lines = append(lines, stMuted.Render("Your video keeps being made. Follow it with ")+stKey.Render("zebracat video status "+j.taskID+" --wait"))
+		case stageReady, stageConfirm, stageEditing, stageAsking:
+			lines = append(lines, stMuted.Render("Your plan is saved. Generate it later with ")+stKey.Render("zebracat video generate "+j.taskID))
+		case stagePlanning:
+			lines = append(lines, stMuted.Render("The plan keeps being written. See it with ")+stKey.Render("zebracat video status "+j.taskID+" --wait"))
+		}
+	}
+	lines = append(lines, stMuted.Render("Bye 🦓"))
+	m.quitting = true
+	return m, tea.Sequence(m.say(strings.Join(lines, "\n")), tea.Quit)
 }
 
 // openVideo opens the finished video (or its studio page).
 func (m *model) openVideo() (tea.Model, tea.Cmd) {
 	if m.job == nil {
-		return m, tea.Println(stHint.Render("  Nothing to open yet."))
+		return m, m.note("Nothing to open yet.")
 	}
 	u := m.job.videoURL
 	if u == "" {
 		u = m.job.editorURL
 	}
 	if u == "" {
-		return m, tea.Println(stHint.Render("  Nothing to open yet."))
+		return m, m.note("Nothing to open yet.")
 	}
 	if err := openURL(u); err != nil {
-		return m, tea.Println(stErr.Render("✗ Couldn't open a browser: ") + stKey.Render(u))
+		return m, m.sayErr("Couldn't open a browser.", "Open it yourself: "+u)
 	}
-	return m, tea.Println(stMuted.Render("  Opened ") + stKey.Render(u))
+	return m, m.note("Opened " + u)
 }
 
-// ---- rendering ------------------------------------------------------------------
+// ---- the animated mark ------------------------------------------------------------
 
-var phaseLabels = map[string]string{
-	"pending":     "Starting",
-	"planning":    "Writing the plan",
-	"needs_input": "Waiting for your answer",
-	"plan_ready":  "Plan ready",
-	"generating":  "Making the scenes",
-	"processing":  "Making the scenes",
-	"rendering":   "Exporting the MP4",
-	"completed":   "Done",
+// verbs: what the server says is happening, in words (no made-up steps).
+var verbs = map[string]string{
+	"pending":    "Starting",
+	"planning":   "Writing the screenplay",
+	"plan_ready": "Reading the plan",
+	"generating": "Making the scenes",
+	"processing": "Making the scenes",
+	"rendering":  "Exporting the MP4",
 }
 
-// progressLine is the live line under the input while something runs:
-// "⠋ Writing the plan · 0:42" (+ " · 37%" when the task reports one).
+// progressLine is the live line above the input while something runs:
+// "▓ Writing the screenplay… (0:42 · esc to interrupt)".
 func (m *model) progressLine() string {
 	j := m.job
 	if j == nil {
 		return ""
 	}
-	label := phaseLabels[j.phase]
-	if label == "" {
-		label = j.phase
+	var verb string
+	switch m.stage {
+	case stagePlanning, stageMaking:
+		verb = verbs[j.phase]
+		if verb == "" {
+			verb = "Working"
+		}
+	case stageEditing:
+		verb = "Changing the plan"
+	default:
+		return ""
 	}
-	if m.stage == stageEditing {
-		label = "Changing the plan"
-	}
-	line := m.sp.View() + " " + stTitle.Render(label) + stMuted.Render(" · "+clock(m.now().Sub(j.started)))
+	tail := clock(m.now().Sub(j.started))
 	if p, ok := j.task["progress"].(float64); ok && p > 0 && m.stage == stageMaking {
 		if p <= 1 {
 			p *= 100
 		}
-		line += stMuted.Render(fmt.Sprintf(" · %d%%", int(p)))
+		tail += " · " + strconv.Itoa(int(p)) + "%"
 	}
-	return "  " + line
-}
-
-func clock(d time.Duration) string {
-	if d < 0 {
-		d = 0
+	if m.stage != stageEditing {
+		tail += " · esc to interrupt"
 	}
-	s := int(d.Seconds())
-	return fmt.Sprintf("%d:%02d", s/60, s%60)
-}
-
-// planCard is the plan as a bordered card: title, the facts line, the scenes,
-// the voices, the price, then what the person can do next.
-func planCard(j *job, width int) string {
-	src := j.plan
-	if src == nil {
-		src = j.task
+	if j.offline {
+		tail += " · reconnecting"
 	}
-	sp, _ := src["screenplay"].(map[string]any)
-	title, _ := sp["title"].(string)
-	if title == "" {
-		if s, ok := j.task["plan_summary"].(map[string]any); ok {
-			title, _ = s["title"].(string)
-		}
-	}
-	if title == "" {
-		title = "Your plan"
-	}
-	var b strings.Builder
-	b.WriteString(stTitle.Render("🎬 "+clean(title)) + "\n")
-	if facts := planFacts(sp, j.task); facts != "" {
-		b.WriteString(stMuted.Render(clean(facts)) + "\n")
-	}
-	if beats := videos.Beats(src); len(beats) > 0 {
-		b.WriteString("\n")
-		for _, l := range beats {
-			b.WriteString(wrapBeat(clean(l), width) + "\n")
-		}
-	} else {
-		for _, l := range videos.SummaryLines(src) {
-			b.WriteString(clean(l) + "\n")
-		}
-	}
-	b.WriteString("\n")
-	if v := voices(sp); v != "" {
-		b.WriteString(stMuted.Render("Voice  ") + clean(v) + "\n")
-	}
-	if q := videos.QuoteLine(j.quote); q != "" {
-		b.WriteString(stMuted.Render("Price  ") + stKey.Render(clean(q)) + "\n")
-	}
-	if j.editorURL != "" {
-		b.WriteString(stMuted.Render("Studio ") + stKey.Render(clean(j.editorURL)) + "\n")
-	}
-	w := width - 2
-	if w < 40 || w > 100 {
-		w = 80
-	}
-	card := stBox.Width(w).Render(strings.TrimRight(b.String(), "\n"))
-	return card + "\n" + stHint.Render("  Tell me what to change in plain words · Ctrl+G or /generate to make it · /new to start over")
-}
-
-// planFacts is "20 s · vertical · ai_video · narration · english".
-func planFacts(sp, task map[string]any) string {
-	var parts []string
-	secs := 0.0
-	beats, _ := sp["beats"].([]any)
-	for _, b := range beats {
-		if bm, ok := b.(map[string]any); ok {
-			s, _ := bm["seconds"].(float64)
-			secs += s
-		}
-	}
-	if secs == 0 {
-		if s, ok := task["plan_summary"].(map[string]any); ok {
-			secs, _ = s["seconds"].(float64)
-		}
-	}
-	if secs > 0 {
-		parts = append(parts, strconv.FormatFloat(secs, 'f', -1, 64)+" s")
-	}
-	if len(beats) > 0 {
-		parts = append(parts, fmt.Sprintf("%d scenes", len(beats)))
-	}
-	for _, k := range []string{"aspect", "media_type", "language"} {
-		if s, _ := sp[k].(string); s != "" {
-			parts = append(parts, strings.ReplaceAll(s, "_", " "))
-		}
-	}
-	if a, ok := sp["audio"].(map[string]any); ok {
-		if s, _ := a["mode"].(string); s != "" {
-			parts = append(parts, s)
-		}
-	}
-	return strings.Join(parts, " · ")
-}
-
-// voices lists the cast's voices: "Narrator (Rachel) · Sam".
-func voices(sp map[string]any) string {
-	cast, _ := sp["cast"].([]any)
-	var out []string
-	for _, c := range cast {
-		cm, _ := c.(map[string]any)
-		name, _ := cm["name"].(string)
-		if name == "" {
-			continue
-		}
-		if v, ok := cm["voice"].(map[string]any); ok {
-			for _, k := range []string{"name", "label", "voice_name"} {
-				if s, _ := v[k].(string); s != "" {
-					name += " (" + s + ")"
-					break
-				}
-			}
-		}
-		out = append(out, name)
-	}
-	return strings.Join(out, " · ")
-}
-
-// wrapBeat wraps one "n. (Ns) words" line under its number.
-func wrapBeat(l string, width int) string {
-	w := width - 10
-	if w < 30 || w > 92 {
-		w = 72
-	}
-	return lipgloss.NewStyle().Width(w).Render(l)
-}
-
-// doneCard is the finished video: its link, the studio link and how to open it.
-func doneCard(j *job) string {
-	var b strings.Builder
-	b.WriteString(stOK.Render("✓ Your video is ready") + stMuted.Render(" · "+clock(time.Since(j.started))) + "\n")
-	if j.videoURL != "" {
-		b.WriteString(stMuted.Render("  Video  ") + stKey.Render(clean(j.videoURL)) + "\n")
-	}
-	if j.editorURL != "" {
-		b.WriteString(stMuted.Render("  Studio ") + stKey.Render(clean(j.editorURL)) + "\n")
-	}
-	b.WriteString(stHint.Render("  Ctrl+O or /open to watch it · type a new idea to make another"))
-	return b.String()
-}
-
-// footer is the hint line for the current stage.
-func (m *model) footer() string {
-	switch m.stage {
-	case stagePlanning, stageEditing, stageMaking:
-		return m.progressLine()
-	case stageAsking:
-		return stHint.Render("  Type your answer (or its number) and press Enter")
-	case stageReady:
-		return stHint.Render("  Type a change · Ctrl+G generate · /new start over")
-	case stageDone:
-		return stHint.Render("  Ctrl+O open · type a new idea")
-	}
-	return ""
-}
-
-// confirmView is the spend question.
-func (m *model) confirmView() string {
-	q := videos.QuoteLine(m.job.quote)
-	price := "this video"
-	if q != "" {
-		price = strings.SplitN(q, " — ", 2)[0]
-	}
-	return "\n" + stTitle.Render("  Generate it for "+clean(price)+"?") + stMuted.Render("  y / n") + "\n" +
-		stHint.Render("  This spends credits. n or Esc keeps the plan.")
+	return m.sp.View() + " " + stTitle.Render(verb+"…") + stMuted.Render(" ("+tail+")")
 }

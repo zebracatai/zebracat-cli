@@ -1,6 +1,6 @@
 ---
 name: zebracat-cli
-version: 0.3.0
+version: 0.4.0
 description: |
   Make AI videos from the terminal with the Zebracat CLI. Use when the user wants to
   generate, plan, edit, price, translate, clone, list or download Zebracat videos, write
@@ -42,7 +42,10 @@ plan decides whether to clone it or use it as the topic. `--yes` on `create` pla
 generates (spends) — only when the user already agreed.
 
 Don't run bare `zebracat` from an agent: it is the human conversation and, without a
-terminal, exits 2 (`needs_terminal`).
+terminal, exits 2 (`needs_terminal`). A brief with nothing to film ("hi") ends with
+`phase: "failed"`, `error.code: "plan_blocked"` and the plan's question in
+`error.message`: ask the user that question and send their answer (with the first
+message) as a new `zebracat create`. `zebracat doctor --json` shows which binary runs.
 
 ## Make a video: one line
 

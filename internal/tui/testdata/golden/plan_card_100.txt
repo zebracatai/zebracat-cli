@@ -1,0 +1,13 @@
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ 🎬 Why cats knock things off tables                                                            │
+│ 5 s · 1 scene · vertical · ai video · english · narration                                      │
+│                                                                                                │
+│ 1. (5s) Ever wondered why your cat swipes your mug off the table? It starts with instinct:     │
+│    cats test what moves, and a falling cup always gets you running.                            │
+│                                                                                                │
+│ Voice  Narrator (Rachel)                                                                       │
+│ Price  96 credits ($4.80) from your API balance — 4 AI-video scenes of 5 s at balanced         │
+│        quality.                                                                                │
+│ Studio https://studio.zebracat.ai/storyboard/48213                                             │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+  Change it in plain words · Ctrl+G generate · /new start over

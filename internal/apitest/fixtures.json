@@ -258,6 +258,42 @@
         "video_type": "idea",
         "created_at": "2026-10-19T12:00:00+00:00",
         "updated_at": "2026-10-19T12:01:00+00:00"
+      },
+      "plan_blocked": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "failed",
+        "phase": "failed",
+        "engine": "director_v2",
+        "project_id": null,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+        },
+        "error": {
+          "code": "plan_blocked",
+          "message": "Hi! What should your video be about? Tell me the idea, a product, a story, or a topic, and I'll write the screenplay."
+        },
+        "video_type": "idea",
+        "created_at": "2026-10-19T12:00:00+00:00",
+        "updated_at": "2026-10-19T12:01:00+00:00"
+      },
+      "translate_request": {
+        "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
+        "status": "failed",
+        "phase": "failed",
+        "engine": "director_v2",
+        "project_id": null,
+        "run_id": "run_5f2a91c0d3",
+        "links": {
+          "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
+        },
+        "error": {
+          "code": "translate_video_request",
+          "message": "The brief asks to translate a video: use POST /video/translate."
+        },
+        "video_type": "idea",
+        "created_at": "2026-10-19T12:00:00+00:00",
+        "updated_at": "2026-10-19T12:01:00+00:00"
       }
     }
   },

@@ -154,7 +154,9 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body any, head
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, nil, clierr.Timeout("request timed out")
 		}
-		return nil, nil, clierr.API("network error: %v", err)
+		e := clierr.API("network error: %v", err)
+		e.Code = "network_error"
+		return nil, nil, e
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)

@@ -1,0 +1,41 @@
+{
+  "name": "@zebracat/cli",
+  "version": "0.4.0",
+  "description": "Zebracat CLI — make AI videos by talking to your terminal: describe a video, paste a script or a link, change the plan in plain words, generate.",
+  "bin": {
+    "zebracat": "bin/zebracat.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "bin/zebracat.js",
+    "install.js",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "zebracat",
+    "cli",
+    "ai-video",
+    "video-generation",
+    "text-to-video",
+    "avatar",
+    "voice-clone",
+    "brainrot",
+    "translate",
+    "dubbing"
+  ],
+  "homepage": "https://zebracat.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zebracatai/zebracat-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zebracatai/zebracat-cli/issues"
+  },
+  "author": "Zebracat",
+  "license": "MIT"
+}

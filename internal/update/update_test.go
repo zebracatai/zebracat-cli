@@ -232,3 +232,27 @@ func TestApplyToReplacesTheBinaryAndChecksTheSum(t *testing.T) {
 		t.Fatal("a refused download leaves the old binary")
 	}
 }
+
+// Relaunch execs the new binary with the same args and says what it replaced.
+func TestRelaunchExecsTheNewBinary(t *testing.T) {
+	var gotPath string
+	var gotArgs, gotEnv []string
+	old := execFn
+	execFn = func(p string, a, e []string) error { gotPath, gotArgs, gotEnv = p, a, e; return nil }
+	defer func() { execFn = old }()
+	if err := Relaunch("/opt/zebracat", "v0.3.0", []string{"create", "a cat"}); err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/opt/zebracat" || strings.Join(gotArgs, " ") != "/opt/zebracat create a cat" {
+		t.Fatalf("exec %s %v", gotPath, gotArgs)
+	}
+	found := false
+	for _, e := range gotEnv {
+		if e == UpdatedFromEnv+"=v0.3.0" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("the new binary is told the old version")
+	}
+}

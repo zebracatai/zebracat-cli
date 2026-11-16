@@ -31,8 +31,14 @@ import (
 // Repo is the GitHub repo releases are published to.
 const Repo = "zebracatai/zebracat-cli"
 
-// GitHub is the host releases are read from (a test points it at a fake server).
-var GitHub = "https://github.com"
+// GitHub is the host releases are read from. A test points it at a fake server;
+// ZEBRACAT_RELEASES_URL does the same for a manual smoke test.
+var GitHub = func() string {
+	if u := os.Getenv("ZEBRACAT_RELEASES_URL"); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	return "https://github.com"
+}()
 
 // CheckTimeout bounds the launch check: it never delays a command by more.
 const CheckTimeout = 1500 * time.Millisecond
@@ -232,18 +238,40 @@ func (e *ErrManaged) Error() string {
 // Apply downloads the release `tag` for this OS/arch, checks it against the
 // release's checksums.txt, and replaces the running executable in place.
 // Linux/macOS only; an npm/brew/go install is left to its package manager.
-func Apply(ctx context.Context, tag string) error {
+// It returns the path it replaced, to relaunch.
+func Apply(ctx context.Context, tag string) (string, error) {
 	if m := Method(); m != "binary" {
-		return &ErrManaged{Method: m, Command: UpgradeCommand()}
+		return "", &ErrManaged{Method: m, Command: UpgradeCommand()}
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("could not locate the current binary: %w", err)
+		return "", fmt.Errorf("could not locate the current binary: %w", err)
 	}
 	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 		exe = resolved
 	}
-	return ApplyTo(ctx, tag, exe, runtime.GOOS, runtime.GOARCH)
+	return exe, ApplyTo(ctx, tag, exe, runtime.GOOS, runtime.GOARCH)
+}
+
+// UpdatedFromEnv is set on a relaunched binary to the version it replaced.
+const UpdatedFromEnv = "ZEBRACAT_UPDATED_FROM"
+
+// Relaunch replaces this process with the binary at path, running args, and
+// tells it which version it replaced. It only returns on failure.
+func Relaunch(path, from string, args []string) error {
+	if runtime.GOOS == "windows" {
+		return fmt.Errorf("relaunch isn't supported on Windows: start zebracat again")
+	}
+	env := append(os.Environ(), UpdatedFromEnv+"="+from)
+	return execFn(path, append([]string{path}, args...), env)
+}
+
+// TakeUpdatedFrom reads (and clears, so children don't inherit it) the version
+// a relaunch replaced; "" when this run is not a relaunch.
+func TakeUpdatedFrom() string {
+	v := os.Getenv(UpdatedFromEnv)
+	os.Unsetenv(UpdatedFromEnv)
+	return v
 }
 
 // ApplyTo installs release `tag` for goos/goarch over the file at exe.
