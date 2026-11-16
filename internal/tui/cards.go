@@ -67,14 +67,18 @@ func planCard(j *job, width int) string {
 	wrap := func(s string) string { return ansi.Wrap(s, inner, "") }
 
 	var b strings.Builder
-	b.WriteString(wrap(stTitle.Render("🎬 "+clean(title))) + "\n")
+	b.WriteString(wrap(stTitle.Render(clean(title))) + "\n")
 	if facts := planFacts(sp, j.task); facts != "" {
 		b.WriteString(wrap(stMuted.Render(clean(facts))) + "\n")
 	}
 	if beats := videos.Beats(src); len(beats) > 0 {
 		b.WriteString("\n")
 		for _, l := range beats {
-			b.WriteString(hangText(clean(l), inner, 3) + "\n")
+			l = clean(l)
+			if i := strings.Index(l, ") "); i > 0 && i < 12 { // "1. (5s) words": number and length dim
+				l = stMuted.Render(l[:i+1]) + l[i+1:]
+			}
+			b.WriteString(hangText(l, inner, 3) + "\n")
 		}
 	} else {
 		for _, l := range videos.SummaryLines(src) {
@@ -86,13 +90,13 @@ func planCard(j *job, width int) string {
 		b.WriteString(hangText(stMuted.Render("Voice  ")+clean(v), inner, 7) + "\n")
 	}
 	if q := videos.QuoteLine(j.quote); q != "" {
-		b.WriteString(hangText(stMuted.Render("Price  ")+stKey.Render(clean(q)), inner, 7) + "\n")
+		b.WriteString(hangText(stMuted.Render("Price  ")+clean(q), inner, 7) + "\n")
 	}
 	if j.editorURL != "" {
-		b.WriteString(hangText(stMuted.Render("Studio ")+stKey.Render(clean(j.editorURL)), inner, 7) + "\n")
+		b.WriteString(hangText(stMuted.Render("Studio ")+stMuted.Render(clean(j.editorURL)), inner, 7) + "\n")
 	}
 	card := stBox.Width(w - 2).Render(strings.TrimRight(b.String(), "\n")) // Width excludes the border
-	hint := ansi.Wrap(stHint.Render("  Change it in plain words · Ctrl+G generate · /new start over"), w, "")
+	hint := ansi.Wrap(stHint.Render("  Change it in plain words · ctrl+g to generate"), w, "")
 	return card + "\n" + hint
 }
 
@@ -176,14 +180,14 @@ func voices(sp map[string]any) string {
 // doneCard is the finished video: its link, the studio link and how to open it.
 func doneCard(j *job, elapsed time.Duration) string {
 	var b strings.Builder
-	b.WriteString(stOK.Render("✓ Your video is ready") + stMuted.Render(" · "+clock(elapsed)) + "\n")
+	b.WriteString(stKey.Render("● ") + "Your video is ready" + stMuted.Render(" · "+clock(elapsed)) + "\n")
 	if j.videoURL != "" {
 		b.WriteString(stMuted.Render("  Video  ") + stKey.Render(clean(j.videoURL)) + "\n")
 	}
 	if j.editorURL != "" {
-		b.WriteString(stMuted.Render("  Studio ") + stKey.Render(clean(j.editorURL)) + "\n")
+		b.WriteString(stMuted.Render("  Studio "+clean(j.editorURL)) + "\n")
 	}
-	b.WriteString(stHint.Render("  Ctrl+O or /open to watch it · type a new idea to make another"))
+	b.WriteString(stHint.Render("  ctrl+o to watch it · type a new idea to make another"))
 	return b.String()
 }
 
@@ -205,10 +209,10 @@ func (m *model) confirmView() string {
 	if q != "" {
 		price = strings.SplitN(q, " — ", 2)[0]
 	}
-	box := stBox.Width(boxWidth(m.width) - 2).Render(
+	box := stAsk.Width(boxWidth(m.width) - 2).Render(
 		stTitle.Render("Generate it for "+clean(price)+"?") + "\n" +
 			stMuted.Render("This spends credits. The plan stays as it is either way.") + "\n\n" +
-			stKey.Render("y") + stMuted.Render(" generate   ") + stKey.Render("n") + stMuted.Render(" / esc not now"))
+			stKey.Render("y") + " generate   " + stKey.Render("n") + stMuted.Render(" or ") + stKey.Render("esc") + " not now")
 	return m.fit(box)
 }
 

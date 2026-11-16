@@ -392,7 +392,7 @@ func (m *model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // fitInput sizes the input to the terminal and to its text (1–8 rows).
 func (m *model) fitInput() {
-	w := m.inputWidth() - 4 - 2 // box border+padding, then the "› " prompt
+	w := m.inputWidth() - 2 // the "› " prompt
 	if w < 10 {
 		w = 10
 	}
