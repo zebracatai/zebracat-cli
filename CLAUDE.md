@@ -83,6 +83,10 @@ make openapi    # refresh openapi.json from $(API)/docs/openapi.json, then gener
 
 - Releases: push a `vX.Y.Z` tag → `.github/workflows/release.yml` runs goreleaser and
   publishes archives named `zebracat_<os>_<arch>.(tar.gz|zip)` (consumed by `install.sh`).
+  The same workflow then publishes `npm/` as `@zebracat/cli` through npm Trusted Publishing
+  (GitHub OIDC, no token or OTP), so bump `npm/package.json` to the same version before tagging:
+  the job refuses a mismatch, because `npm/install.js` downloads the release named after it.
+  Re-publish an existing release: `gh workflow run release.yml -f tag=vX.Y.Z`.
 - Keep deps minimal — `spf13/cobra` plus charmbracelet (bubbletea/bubbles/lipgloss) for the TUI.
 
 ## Conventions
