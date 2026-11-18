@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -110,8 +111,7 @@ API keys pay from the API balance.`,
 		}
 		jobID, _ := out["job_id"].(string)
 		if swWait && jobID != "" {
-			stTimeout = swTimeout
-			final, err := waitStudioJob(c, studioJobPath("swap", jobID), swTimeout)
+			final, err := waitJob(c, swapJobPath(jobID), swTimeout)
 			if err != nil {
 				return err
 			}
@@ -141,8 +141,33 @@ func mainPerson(analysis map[string]any) string {
 	return first
 }
 
+// swapJobPath is a swap job's route.
+func swapJobPath(jobID string) string { return swapBase + "/" + url.PathEscape(jobID) }
+
+var swapStatusCmd = &cobra.Command{
+	Use:   "status <job_id>",
+	Short: "Show a swap job (--wait blocks until it finishes)",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := newClient()
+		if err != nil {
+			return err
+		}
+		var out map[string]any
+		if swWait {
+			out, err = waitJob(c, swapJobPath(args[0]), swTimeout)
+		} else {
+			out, err = getMap(c, swapJobPath(args[0]))
+		}
+		if err != nil {
+			return err
+		}
+		return emit(out, func() { printSwapHuman(out) })
+	},
+}
+
 func printSwapHuman(out map[string]any) {
-	printStudioJobHuman(out)
+	printJobHuman(out, "zebracat swap status")
 	res, _ := out["result"].(map[string]any)
 	if u, _ := res["video_url"].(string); u != "" {
 		ui.Link("▶ Video:", u)
@@ -163,5 +188,9 @@ func init() {
 	f.BoolVar(&swWait, "wait", false, "Block until the swap is finished")
 	f.StringVar(&swIdemKey, "idempotency-key", "", "Idempotency-Key header (default: a new UUID, printed in the output)")
 	f.DurationVar(&swTimeout, "timeout", 30*time.Minute, "Max time to wait with --wait")
+	sf := swapStatusCmd.Flags()
+	sf.BoolVar(&swWait, "wait", false, "Block until the swap is finished")
+	sf.DurationVar(&swTimeout, "timeout", 30*time.Minute, "Max time to wait with --wait")
+	swapCmd.AddCommand(swapStatusCmd)
 	rootCmd.AddCommand(swapCmd)
 }

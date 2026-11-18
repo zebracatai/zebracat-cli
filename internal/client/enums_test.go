@@ -49,7 +49,7 @@ func TestEnumsCarryTheEngineVocabularies(t *testing.T) {
 			}
 		}
 	}
-	for _, key := range []string{"create.preset", "plan_edit.tool", "studio_image.aspect", "studio_clip.aspect", "studio_hooks.platform"} {
+	for _, key := range []string{"create.preset", "plan_edit.tool"} {
 		if len(Enum(key)) == 0 {
 			t.Fatalf("%s has no values", key)
 		}

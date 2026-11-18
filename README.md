@@ -220,18 +220,12 @@ zebracat video clone --url https://www.tiktok.com/@x/video/1 --mode generate_sim
 zebracat video translate --url https://…/in.mp4 --to spanish --render --wait
 ```
 
-Studio tools, one call each:
+Character swap:
 
 ```bash
-zebracat studio script "3 tips for better sleep" --seconds 30 --wait   # free, daily allowance
-zebracat studio hooks --script script.txt                             # free
-zebracat studio voice --text script.txt --voice <id> -o vo.mp3        # paid (voice credits)
-zebracat studio image "a neon city at dusk" --aspect vertical --count 2
-zebracat studio clip "a cat surfing a wave" --seconds 5 --dry-run     # paid per started 5 s
-zebracat swap --video https://…/clip.mp4 --character https://…/face.jpg --consent --dry-run   # character swap, paid per second
+zebracat swap --video https://…/clip.mp4 --character https://…/face.jpg --consent --dry-run   # paid per second
+zebracat swap status <job_id> --wait                                                         # follow a swap
 ```
-
-`--aspect` on Studio images and clips takes `9:16|16:9|1:1` (or `vertical|horizontal|square`).
 
 ### Phases
 
@@ -249,8 +243,7 @@ v1 task ids (older videos) keep their v1 `status`.
 
 ### Money
 
-- `--dry-run` (on `video create`, `video generate`, `studio voice`, `studio image`,
-  `studio clip`, `swap`) answers the quote and spends nothing.
+- `--dry-run` (on `video create`, `video generate`, `swap`) answers the quote and spends nothing.
 - `video generate` and `swap` on a terminal show the quote and ask; scripts and agents
   are never asked and must pass `--yes`. `swap` also needs `--consent`: you state you
   have the right to use the face.
@@ -267,12 +260,11 @@ zebracat auth        login | logout | status | whoami
 zebracat video       create | list | get | status | quote | generate | answer | cancel
                      download | clone | translate | prompt-styles | languages
 zebracat plan        show | edit | chat | undo
-zebracat studio      script | hooks | voice | image | clip | job
-zebracat swap        --video <url> --character <image-url> --consent  # character swap
+zebracat swap        --video <url> --character <image-url> --consent  # character swap; `swap status <job_id>`
 zebracat models      list                       # qualities, models, credits per 5 s
 zebracat presets     list                       # street interview, podcast, UGC ad, …
-zebracat script      <idea>                     # alias of `studio script` when the server has Studio
-zebracat image       <prompt>                   # alias of `studio image` when the server has Studio
+zebracat script      <idea>                     # a voice-over script (`POST /script_generator`)
+zebracat image       <prompt>                   # an AI image (the classic image generator)
 zebracat voice       list | clone
 zebracat avatar      list
 zebracat style       list

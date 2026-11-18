@@ -12,8 +12,8 @@ on the backend). It does no generation itself: every command is a thin HTTP call
 | `cmd/video.go` | `video list/get/status/cancel/download/translate`, `waitTask`, the human task view |
 | `cmd/video_create.go` | `video create` (Director v2 `POST /videos`; legacy flag mapping; `--audio-file` → v1 `/video/audio`) |
 | `cmd/plan.go` | `plan show/edit/chat/undo`, `video quote/generate/answer/clone` |
-| `cmd/studio.go` | `studio script/hooks/voice/image/clip/job`, `models list`, `presets list` |
-| `cmd/swap.go` | `swap`: `POST /character-swap/analyze`, then `POST /character-swap` (consent, quoted credits, confirm) |
+| `cmd/jobs.go` | job polling (`waitJob`, used by `swap`), `models list`, `presets list` (`studio …` removed 2026-11-18) |
+| `cmd/swap.go` | `swap`: `POST /character-swap/analyze`, then `POST /character-swap` (consent, quoted credits, confirm); `swap status <job_id>` |
 | `cmd/common.go` | idempotency keys, `postIdempotent` (429 + Retry-After under `--wait`), file/stdin args, the Generate confirmation, the injectable clock |
 | `cmd/assets.go` | voices, avatars, styles, music, templates, characters, brand kits, languages |
 | `cmd/account.go`, `cmd/auth.go`, `cmd/webhook.go`, `cmd/generate.go`, `cmd/misc.go` | account/pricing, API-key login/logout, webhooks, `script`/`image` (Studio aliases when the server has the routes), config + version/update |

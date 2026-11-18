@@ -101,12 +101,9 @@ Only pass what the user said; Director v2 decides the rest from the brief.
 zebracat video status <task_id> --wait        # .phase
 zebracat video clone --url <video> --mode remix|generate_similar|recreate_script [--topic] --wait
 zebracat video translate --url <mp4-url> --to spanish --render --wait
-zebracat studio script "<idea>" --seconds 30 --wait      # .result.narration_text
-zebracat studio hooks --script script.txt                # .hooks[].line
-zebracat studio voice --text script.txt --voice <id> --dry-run   # paid: quote first
-zebracat studio image "<prompt>" --aspect vertical --count 2 --wait
-zebracat studio clip "<prompt>" --seconds 5 --dry-run           # paid: quote first
+zebracat script "<idea>" --duration 30                   # .script
 zebracat swap --video <clip-url> --character <face-url> --consent --dry-run   # paid: quote first
+zebracat swap status <job_id> --wait                     # follow a swap
 # --consent only when the user confirmed they may use that face; never add it yourself
 zebracat models list ; zebracat presets list ; zebracat voice list --language english
 zebracat account show                                    # balances
@@ -120,7 +117,6 @@ zebracat account show                                    # balances
   `3` → tell the user to set a valid API key; `1` with `type: insufficient_funds` → show
   the `hint` verbatim (it says where to top up); `1` with `retryable: true` → wait and
   retry; `4` → the job is still running, poll later with `zebracat video status`.
-- Tell the user the quote before any paid step (`video generate`, `studio voice`,
-  `studio clip`, `swap`); `video clone` has no quote, so confirm it with the user first.
-  Script, hooks, images, plans and plan edits are free.
+- Tell the user the quote before any paid step (`video generate`, `swap`); `video clone` has no
+  quote, so confirm it with the user first. Plans and plan edits are free.
 - Log finished videos to `zebracat-video-log.jsonl` (one JSON line: task_id, phase, video_url, topic).

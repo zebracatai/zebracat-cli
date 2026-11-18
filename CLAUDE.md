@@ -35,9 +35,9 @@ zebracat video download "$id" -o out.mp4
 ```
 
 Commands: `video create|list|get|status|quote|generate|answer|cancel|download|clone|translate`,
-`plan show|edit|chat|undo`, `studio script|hooks|voice|image|clip|job`, `swap`, `models list`,
-`presets list`, plus `script`/`image` (Studio aliases when the server's OpenAPI lists
-`/studio/*`, cached a day in `~/.zebracat/capabilities.json`), voices, avatars, styles,
+`plan show|edit|chat|undo`, `swap` (+ `swap status`), `models list`, `presets list`, plus
+`script`/`image` (the classic generators; `zebracat studio …` was removed with Studio,
+2026-11-18), voices, avatars, styles,
 music, templates, characters, brands, account, webhooks, config, update.
 
 ## Repo layout
@@ -46,7 +46,7 @@ Full module map and traces: `docs/ARCHITECTURE.md`.
 
 ```
 main.go                     # entrypoint -> cmd.Execute()
-cmd/                        # cobra commands (root, auth, video, video_create, plan, studio, assets, …)
+cmd/                        # cobra commands (root, auth, video, video_create, plan, jobs, swap, assets, …)
 internal/client/            # HTTP client, typed API errors, enums_gen.go, server capabilities
 internal/openapi/           # checked-in OpenAPI copy (openapi.json), enum extraction, enumgen
 internal/videos/            # v2 task lifecycle: fetch (v1 fallback), phases, wait, plan/quote text
