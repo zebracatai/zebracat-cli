@@ -99,6 +99,12 @@ func TestServerErrorsKeepTheServersWords(t *testing.T) {
 		{"m500", []string{"✗ Something went wrong on our side.", "Try again in a minute.", "Request id: req_stub123."}, nil, false},
 		{"m401", []string{"✗ Your API key was rejected", "/login"}, nil, true},
 	}
+	// A hint or request id with a terminal escape prints as plain text: the
+	// control bytes are dropped, so the rest survives printed()'s ANSI strip.
+	evil := &clierr.Error{Exit: 1, Code: "x", Type: "engine", Message: "m", Hint: "h\x1b]0;pwned\x07", RequestID: "r\x1b[2J", Status: 500}
+	if out := printed(msgs(m.sayAPIErr(evil, ""))); !strings.Contains(out, "h]0;pwned") || !strings.Contains(out, "r[2J") {
+		t.Fatalf("raw escape in the fix line: %q", out)
+	}
 	for _, c := range cases {
 		m.keyRejected = false
 		out := printed(msgs(m.sayAPIErr(apiErr(t, srv.URL, c.mode), "")))

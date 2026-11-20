@@ -120,12 +120,13 @@ func (m *model) note(text string) tea.Cmd {
 	return m.sayR(func() string { return m.hang(stProg.Render("  ⎿ "), stProg.Render(text)) })
 }
 
-// sayErr is a red line with what happened and one line with what to do.
+// sayErr is a red line with what happened and one line with what to do. Both
+// may carry server text (message, hint, request id), so both are cleaned.
 func (m *model) sayErr(what, fix string) tea.Cmd {
 	return m.sayR(func() string {
 		s := m.hang(stErr.Render("✗ "), stErr.Render(clean(what)))
 		if fix != "" {
-			s += "\n" + m.hang(stMuted.Render("  ⎿ "), stMuted.Render(fix))
+			s += "\n" + m.hang(stMuted.Render("  ⎿ "), stMuted.Render(clean(fix)))
 		}
 		return s
 	})
