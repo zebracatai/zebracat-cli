@@ -302,9 +302,12 @@ func (m *model) onGenerated(msg generatedMsg) (tea.Model, tea.Cmd) {
 		m.pollCmd(m.job.taskID, true), m.refreshAccount())
 }
 
-// sayAPIErr turns a call's error into a plain sentence and one fix line. A
-// typed error shows the server's own words (message, then hint); the shell only
-// words what the server didn't: a rejected key, no connection, a gateway page.
+// sayAPIErr turns a call's error into a plain sentence and one fix line. The
+// sentence is the server's own message from the CLI's error envelope (without
+// the "API error (NNN):" prefix the envelope keeps for agents); the fix line is
+// the server's hint, else one chosen by the envelope's type. The shell only
+// words what the server didn't: a rejected key, no connection, a 5xx without
+// the server's own type (a gateway page or a crash).
 func (m *model) sayAPIErr(err error, after string) tea.Cmd {
 	ce, ok := err.(*clierr.Error)
 	if !ok {
@@ -315,39 +318,37 @@ func (m *model) sayAPIErr(err error, after string) tea.Cmd {
 		return m.sayErr("Can't reach Zebracat right now.", joinFix("Check your internet connection.", after))
 	case forbidden(ce):
 		fix := ce.Hint
-		if ce.Type == "" { // the generic "auth login" hint means nothing here
+		if fix == "" {
 			fix = "Your key works but isn't allowed to do this. Check it at https://studio.zebracat.ai → API Keys, or /login with another key."
 		}
-		return m.sayErr(ce.Message, joinFix(fix, after))
+		return m.sayErr(serverWords(ce), joinFix(fix, after))
 	case ce.Exit == clierr.CodeAuth:
 		m.keyRejected = true
 		return m.sayErr("Your API key was rejected (expired or removed).", "Type /login to add a new one.")
-	case ce.Type == "" && ce.Status >= 500: // a gateway page or an untyped crash: no words of the server's to show
+	case ce.Code == "server_error": // the client's code for a 5xx the server didn't type
 		return m.sayErr("Zebracat is having trouble right now.", joinFix("Try again in a minute.", after, requestLine(ce)))
-	case ce.Type == "" && ce.Status == 429:
-		return m.sayErr("Too many requests just now.", joinFix(waitFix(ce.RetryAfter), after))
-	case ce.Type == "" && ce.Code == "insufficient_funds":
-		fix := ce.Hint
-		if fix == "" {
-			fix = "Top up at https://studio.zebracat.ai, then try again."
-		}
-		return m.sayErr("Your balance doesn't cover this.", joinFix(fix, after))
 	}
 	fix := ce.Hint
 	if fix == "" {
 		switch {
-		case ce.Code == "insufficient_funds" || ce.Type == "insufficient_funds":
+		case ce.Type == "insufficient_funds":
 			fix = "Top up at https://studio.zebracat.ai, then try again."
-		case ce.Code == "rate_limited" || ce.Type == "rate_limited":
+		case ce.Type == "rate_limited":
 			fix = waitFix(ce.RetryAfter)
-		case ce.Status >= 500:
+		case ce.Type == clierr.TypeUnavailable || ce.Status >= 500:
 			fix = "Try again in a minute."
 		}
 	}
 	if ce.Status >= 500 {
 		fix = joinFix(fix, requestLine(ce))
 	}
-	return m.sayErr(ce.Message, joinFix(fix, after))
+	return m.sayErr(serverWords(ce), joinFix(fix, after))
+}
+
+// serverWords is the error's message without the "API error (NNN): " prefix
+// the client adds for agents (people don't need the status code).
+func serverWords(ce *clierr.Error) string {
+	return strings.TrimPrefix(ce.Message, "API error ("+strconv.Itoa(ce.Status)+"): ")
 }
 
 // forbidden: the key was accepted but may not do this (403 / permission), which

@@ -232,9 +232,10 @@ func TestOfflinePollSaysItOnce(t *testing.T) {
 func TestErrorsArePlain(t *testing.T) {
 	m, _ := against(t)
 	cases := map[string]*clierr.Error{
-		"Your API key was rejected":  clierr.Auth("Invalid API key."),
-		"Can't reach Zebracat":       {Exit: 1, Code: "network_error", Message: "network error: x"},
-		"Your balance doesn't cover": {Exit: 1, Code: "insufficient_funds", Message: "x", Hint: "Top up at https://studio.zebracat.ai/billing"},
+		"Your API key was rejected": clierr.Auth("Invalid API key."),
+		"Can't reach Zebracat":      {Exit: 1, Code: "network_error", Message: "network error: x"},
+		"Your API balance doesn't cover this video": {Exit: 1, Code: "insufficient_funds", Type: "insufficient_funds", Status: 402,
+			Message: "Your API balance doesn't cover this video ($4.80).", Hint: "Top up at https://studio.zebracat.ai/billing"},
 	}
 	for want, e := range cases {
 		out := printed(msgs(m.sayAPIErr(e, "")))
