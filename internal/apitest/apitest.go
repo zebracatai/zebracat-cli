@@ -186,12 +186,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	case len(examples) > 0:
 		name := ans.Example
 		if name == "" {
-			names := make([]string, 0, len(examples))
-			for n := range examples {
-				names = append(names, n)
-			}
-			sort.Strings(names)
-			name = names[0]
+			name = defaultExample(r.Method+" "+tmpl, op, ans.Status)
 		}
 		if value = examples[name]; value == nil {
 			s.t.Errorf("apitest: %s %s %s has no example %q", r.Method, tmpl, ans.Status, name)
@@ -215,10 +210,19 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(value)
 }
 
-// examples are the named answers for one route and status: the schema's own
-// examples, else the test fixtures (fixtures.json) for routes the schema
-// documents without examples.
+// examples are the named answers for one route and status: the test fixtures
+// (fixtures.json), plus the schema's own examples under names the fixtures
+// don't use. Fixtures win, so a schema refresh that adds examples to a route
+// doesn't change what the tests' named states answer.
 func (s *Server) examples(key string, op *openapi.Operation, status string) map[string][]byte {
+	out := schemaExamples(op, status)
+	for n, v := range fixtures[key][status] {
+		out[n] = v
+	}
+	return out
+}
+
+func schemaExamples(op *openapi.Operation, status string) map[string][]byte {
 	out := map[string][]byte{}
 	if resp := op.Responses[status]; resp != nil {
 		if media := resp.Content["application/json"]; media != nil {
@@ -227,13 +231,24 @@ func (s *Server) examples(key string, op *openapi.Operation, status string) map[
 			}
 		}
 	}
-	if len(out) > 0 {
-		return out
-	}
-	for n, v := range fixtures[key][status] {
-		out[n] = v
-	}
 	return out
+}
+
+// defaultExample is the first fixture by name, else the schema's first example.
+func defaultExample(key string, op *openapi.Operation, status string) string {
+	pick := map[string][]byte{}
+	for n, v := range fixtures[key][status] {
+		pick[n] = v
+	}
+	if len(pick) == 0 {
+		pick = schemaExamples(op, status)
+	}
+	names := make([]string, 0, len(pick))
+	for n := range pick {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names[0]
 }
 
 func (s *Server) next(key string) Answer {

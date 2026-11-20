@@ -31,12 +31,12 @@ func TestEnumsGenMatchesSchema(t *testing.T) {
 func TestEnumsCarryTheEngineVocabularies(t *testing.T) {
 	cases := map[string][]string{
 		"create.input_kind":         {"idea", "script", "voiceover_script", "script_with_scenes", "url"},
-		"create.options.media_type": {"ai_video", "ai_image_video", "brainrot", "stock", "avatar"},
+		"create.options.media_type": {"ai_video", "ai_image_video", "brainrot", "stock", "motion_graphics", "animation_3d", "avatar"},
 		"create.options.audio_mode": {"narration", "dialogue", "silent"},
 		"create.options.aspect":     {"vertical", "horizontal", "square"},
 		"create.options.quality":    {"quick", "balanced", "cinematic", "auto"},
-		"create.uploads.kind":       {"person", "place", "product", "style", "other"},
-		"clone.mode":                {"remix", "generate_similar", "recreate_script"},
+		"create.uploads.kind":       {"person", "place", "product", "style", "other", "logo"},
+		"clone.mode":                {"generate_similar", "recreate_script", "remix", "remake_niche", "avatar_reaction", "face_swap"},
 	}
 	for key, want := range cases {
 		got := Enum(key)

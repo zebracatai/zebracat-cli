@@ -5,13 +5,16 @@ package client
 // Enums holds the allowed values the public API's schema declares, keyed by
 // "<operation>.<property path>". Refresh with `make openapi`.
 var Enums = map[string][]string{
-	"clone.mode":                {"remix", "generate_similar", "recreate_script"},
+	"clone.mode":                {"generate_similar", "recreate_script", "remix", "remake_niche", "avatar_reaction", "face_swap"},
 	"create.input_kind":         {"idea", "script", "voiceover_script", "script_with_scenes", "url"},
 	"create.options.aspect":     {"vertical", "horizontal", "square"},
 	"create.options.audio_mode": {"narration", "dialogue", "silent"},
-	"create.options.media_type": {"ai_video", "ai_image_video", "brainrot", "stock", "avatar"},
+	"create.options.media_type": {"ai_video", "ai_image_video", "brainrot", "stock", "motion_graphics", "animation_3d", "avatar"},
 	"create.options.quality":    {"quick", "balanced", "cinematic", "auto"},
 	"create.preset":             {"street_interview", "video_podcast", "ugc_ad", "ai_movie", "ai_debate", "fruit_drama", "pov_video", "product_showcase", "travel_video", "prompt-to-video", "ai-cartoon-video-generator", "ai-anime-video-generator", "ghibli-ai", "italian-brainrot-generator", "ai-animal-video-generator", "ai-cat-video-generator", "brainrot-video-generator", "subway-surfers-video-generator", "minecraft-parkour-generator"},
-	"create.uploads.kind":       {"person", "place", "product", "style", "other"},
-	"plan_edit.tool":            {"add_scene", "attach_upload", "move_scene", "reassign_speaker", "remove_asset", "remove_cast", "remove_scene", "replace_reference", "rewrite_line", "set_aspect", "set_audio_mode", "set_captions", "set_duration", "set_language", "set_model", "set_music", "set_quality", "set_style", "set_visual", "set_voice"},
+	"create.uploads.kind":       {"person", "place", "product", "style", "other", "logo"},
+	"plan_edit.tool":            {"add_scene", "attach_upload", "move_scene", "reassign_speaker", "remove_asset", "remove_cast", "remove_picture", "remove_scene", "replace_reference", "rewrite_line", "set_aspect", "set_audio_mode", "set_background", "set_captions", "set_duration", "set_language", "set_model", "set_music", "set_quality", "set_style", "set_visual", "set_voice"},
+	"video.phase":               {"planning", "needs_input", "plan_ready", "generating", "rendering", "completed", "failed", "cancelled"},
+	"video.quote.basis":         {"plan", "estimate"},
+	"video.quote.pool":          {"api_dollar", "account"},
 }
