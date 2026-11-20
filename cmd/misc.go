@@ -14,11 +14,13 @@ import (
 )
 
 // ---- config ----
-var configCmd = &cobra.Command{Use: "config", Short: "Read and write CLI settings"}
+var configCmd = &cobra.Command{Use: "config", Short: "Read and write CLI settings", Example: "  zebracat config list\n  zebracat config set output human"}
 
 var configListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "Show current settings",
+	Use:     "list",
+	Short:   "Show current settings",
+	Example: "  zebracat config list --json",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := config.LoadSettings()
 		if err != nil {
@@ -38,7 +40,9 @@ var configListCmd = &cobra.Command{
 var configSetCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Set a setting (base_url | mcp_url | output)",
-	Args:  cobra.ExactArgs(2),
+	Example: `  zebracat config set output human
+  zebracat config set base_url https://bc-dev.zebracat.ai`,
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		s, err := config.LoadSettings()
 		if err != nil {
@@ -60,15 +64,16 @@ var configSetCmd = &cobra.Command{
 		if err := config.SaveSettings(s); err != nil {
 			return clierr.API("%v", err)
 		}
-		ui.Success("Set %s = %s", args[0], args[1])
-		return emit(map[string]any{args[0]: args[1]}, func() {})
+		return emit(map[string]any{args[0]: args[1]}, func() { ui.Success("Set %s = %s", args[0], args[1]) })
 	},
 }
 
 // ---- version ----
 var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print the CLI version",
+	Use:     "version",
+	Short:   "Print the CLI version, commit and install path",
+	Example: "  zebracat version --json\n  zebracat --version     # one line",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		out := map[string]any{"version": version.Version, "commit": version.Commit, "date": version.Date,
 			"path": update.CurrentPath(), "install_method": update.Method()}
@@ -89,12 +94,15 @@ var updateCmd = &cobra.Command{
 
 Use --check to only report whether an update is available, without installing.
 On a terminal the new version starts right away (the conversation, saying
-"Updated from …"); --no-relaunch, --json and scripts just update. An npm,
-Homebrew or "go install" copy is left to its package manager: the command
-prints the line to run instead.
+"Updated from …"); --no-relaunch, --json and scripts just update. An npm or
+"go install" copy is left to its package manager: the command prints the line
+to run instead.
 
 The launch check (once a day, 1.5 s at most, never blocking) is off with
 ZEBRACAT_NO_UPDATE_CHECK=1 and in CI.`,
+	Example: `  zebracat update --check --json
+  zebracat update`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, cancel := ctxTimeout(60 * time.Second)
 		defer cancel()
@@ -106,7 +114,7 @@ ZEBRACAT_NO_UPDATE_CHECK=1 and in CI.`,
 		current := "v" + version.Version
 
 		if !update.Newer(current, latest) {
-			out := map[string]any{"current": current, "latest": latest, "updated": false}
+			out := map[string]any{"current": current, "latest": latest, "updated": false, "update_available": false}
 			return emit(out, func() { ui.Success("You're on the latest version (%s).", current) })
 		}
 		if flagUpdateCheck {
@@ -134,7 +142,7 @@ ZEBRACAT_NO_UPDATE_CHECK=1 and in CI.`,
 			return clierr.API("%v", err)
 		}
 		relaunch := !flagUpdateNoRelaunch && !flagJSON && interactive()
-		out := map[string]any{"current": current, "latest": latest, "updated": true, "path": path, "relaunched": relaunch}
+		out := map[string]any{"current": current, "latest": latest, "updated": true, "update_available": false, "path": path, "relaunched": relaunch}
 		if !relaunch {
 			return emit(out, func() {
 				ui.Success("Updated %s → %s", current, latest)

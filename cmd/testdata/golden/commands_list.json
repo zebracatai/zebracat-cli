@@ -1,0 +1,308 @@
+[
+  {
+    "name": "account pricing",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "account show",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "account usage",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "auth login",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "auth logout",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "auth status",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "auth whoami",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "avatar list",
+    "group": "assets",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "brand list",
+    "group": "assets",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character create",
+    "group": "assets",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character list",
+    "group": "assets",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "chat",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "commands",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "config list",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "config set",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "create",
+    "group": "make",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "doctor",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "image",
+    "group": "make",
+    "paid": true,
+    "needs_yes": false
+  },
+  {
+    "name": "login",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "models list",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "music list",
+    "group": "assets",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "plan chat",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "plan edit",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "plan show",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "plan undo",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "presets list",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "script",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "style list",
+    "group": "assets",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "swap",
+    "group": "make",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "swap status",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "template list",
+    "group": "assets",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "update",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "version",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video answer",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video cancel",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video clone",
+    "group": "make",
+    "paid": true,
+    "needs_yes": false
+  },
+  {
+    "name": "video create",
+    "group": "make",
+    "paid": true,
+    "needs_yes": false
+  },
+  {
+    "name": "video download",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video generate",
+    "group": "make",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "video get",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video languages",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video list",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video prompt-styles",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video quote",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video status",
+    "group": "make",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video translate",
+    "group": "make",
+    "paid": true,
+    "needs_yes": false
+  },
+  {
+    "name": "voice clone",
+    "group": "assets",
+    "paid": true,
+    "needs_yes": false
+  },
+  {
+    "name": "voice list",
+    "group": "assets",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook create",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook delete",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook list",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  }
+]

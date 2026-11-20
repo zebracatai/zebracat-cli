@@ -29,11 +29,8 @@ type pathBinary struct {
 
 // removeCommand is how to uninstall a copy, by how it was installed.
 func removeCommand(b pathBinary) string {
-	switch b.Method {
-	case "npm":
+	if b.Method == "npm" {
 		return "npm uninstall -g @zebracat/cli"
-	case "brew":
-		return "brew uninstall zebracat"
 	}
 	return "rm " + b.Path
 }
@@ -76,12 +73,8 @@ func zebracatsOnPath() []pathBinary {
 }
 
 func methodOfPath(p string) string {
-	s := filepath.ToSlash(p)
-	switch {
-	case strings.Contains(s, "/node_modules/"):
+	if strings.Contains(filepath.ToSlash(p), "/node_modules/") {
 		return "npm"
-	case strings.Contains(s, "/Cellar/") || strings.Contains(s, "/homebrew/") || strings.Contains(s, "/linuxbrew/"):
-		return "brew"
 	}
 	return "binary"
 }
@@ -114,9 +107,12 @@ func versionOf(path string) string {
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Check this install: which zebracat runs, other copies on PATH, sign-in, updates",
+	Example: `  zebracat doctor
+  zebracat doctor --json | jq .problems`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		bins := zebracatsOnPath()
-		var problems []string
+		problems := []string{}
 		for i := range bins {
 			if !bins[i].This {
 				bins[i].Remove = removeCommand(bins[i])
@@ -176,7 +172,7 @@ var doctorCmd = &cobra.Command{
 			if auth["signed_in"] == true {
 				ui.Success("Signed in (%v) as %v", auth["mode"], auth["email"])
 			} else if _, failed := auth["error"]; !failed {
-				ui.Warn("Not signed in — run `zebracat login`")
+				ui.Warn("Not signed in — run `zebracat auth login`")
 			}
 			if len(problems) == 0 {
 				ui.Success("All good.")

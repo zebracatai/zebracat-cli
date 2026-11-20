@@ -8,12 +8,18 @@
 package ui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/term"
+
+	"github.com/zebracatai/zebracat-cli/internal/clierr"
 )
 
 // Brand colors (Zebracat purple) + basics. Empty when color is disabled.
@@ -33,24 +39,32 @@ func init() {
 	}
 }
 
+// colorEnabled: no colour with NO_COLOR, TERM=dumb, or when stdout is not a
+// terminal. --no-color turns it off later (DisableColor).
 func colorEnabled() bool {
-	if os.Getenv("NO_COLOR") != "" {
+	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
 		return false
 	}
 	return isTTY(os.Stdout)
 }
 
-// isTTY reports whether f is a character device (a real terminal).
+// DisableColor turns every colour code off for the rest of the run (--no-color).
+func DisableColor() {
+	purple, bold, dim, green, red, yellow, reset = "", "", "", "", "", "", ""
+}
+
+// isTTY reports whether f is a terminal. It asks the terminal driver (an ioctl
+// on Unix, the console mode on Windows): /dev/null is a character device but
+// not a terminal, so a run with </dev/null or 2>/dev/null is not interactive.
 func isTTY(f *os.File) bool {
-	fi, err := f.Stat()
-	if err != nil {
+	if f == nil {
 		return false
 	}
-	return fi.Mode()&os.ModeCharDevice != 0
+	return term.IsTerminal(f.Fd())
 }
 
 // IsTTY reports whether f is an interactive terminal (exported for callers that
-// want to gate human-only output, e.g. the update notice).
+// want to gate human-only output or prompts).
 func IsTTY(f *os.File) bool { return isTTY(f) }
 
 // Logo is the Zebracat wordmark + zebra, shown on `--help` and `version`.
@@ -72,20 +86,59 @@ func PrintJSON(v any) error {
 	return enc.Encode(v)
 }
 
-// PrintError writes the structured error envelope to stderr.
-// PrintErrorEnvelope writes a ready-made envelope (see clierr.Error.Envelope) to stderr.
+// PrintErrorEnvelope writes a ready-made envelope (see clierr.Error.Envelope)
+// to stderr as indented JSON. Text is not HTML-escaped: "<idea>" stays "<idea>".
 func PrintErrorEnvelope(env any) {
-	b, _ := json.MarshalIndent(env, "", "  ")
-	fmt.Fprintln(os.Stderr, string(b))
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(env)
+	_, _ = os.Stderr.Write(buf.Bytes())
 }
 
+// PrintError writes a plain error envelope (code, message, hint) to stderr.
 func PrintError(code, message, hint string) {
-	env := map[string]any{"error": map[string]string{"code": code, "message": message}}
-	if hint != "" {
-		env["error"].(map[string]string)["hint"] = hint
+	e := clierr.API("%s", message)
+	e.Code, e.Hint = code, hint
+	PrintErrorEnvelope(e.Envelope())
+}
+
+// PrintHumanError writes an error for a person on a terminal: "✗ message",
+// then the hint, the offending field and its allowed values, the docs link and
+// the request id, each on its own line. Agents and pipes get the JSON envelope.
+func PrintHumanError(e *clierr.Error) {
+	fmt.Fprintf(os.Stderr, "%s✗%s %s\n", red, reset, e.Message)
+	if e.Hint != "" {
+		fmt.Fprintf(os.Stderr, "  %s\n", e.Hint)
 	}
-	b, _ := json.MarshalIndent(env, "", "  ")
-	fmt.Fprintln(os.Stderr, string(b))
+	if e.Field != "" {
+		fmt.Fprintf(os.Stderr, "  %sfield:%s %s\n", dim, reset, e.Field)
+	}
+	if len(e.AllowedValues) > 0 {
+		vals := make([]string, len(e.AllowedValues))
+		for i, v := range e.AllowedValues {
+			vals[i] = fmt.Sprint(v)
+		}
+		fmt.Fprintf(os.Stderr, "  %sallowed:%s %s\n", dim, reset, strings.Join(vals, ", "))
+	}
+	for _, sub := range e.Errors {
+		if m, ok := sub.(map[string]any); ok {
+			msg, _ := m["error"].(string)
+			if msg == "" {
+				msg, _ = m["message"].(string)
+			}
+			if msg != "" {
+				fmt.Fprintf(os.Stderr, "  • %s\n", msg)
+			}
+		}
+	}
+	if e.DocsURL != "" {
+		fmt.Fprintf(os.Stderr, "  %sdocs:%s %s\n", dim, reset, e.DocsURL)
+	}
+	if e.RequestID != "" {
+		fmt.Fprintf(os.Stderr, "  %srequest id: %s%s\n", dim, e.RequestID, reset)
+	}
 }
 
 // Success prints a green check line (human mode) to stderr so it never pollutes
@@ -113,12 +166,12 @@ func Heading(s string) {
 func KV(pairs [][2]string) {
 	w := 0
 	for _, p := range pairs {
-		if len(p[0]) > w {
-			w = len(p[0])
+		if n := Width(p[0]); n > w {
+			w = n
 		}
 	}
 	for _, p := range pairs {
-		fmt.Printf("  %s%-*s%s  %s\n", purple, w, p[0], reset, p[1])
+		fmt.Printf("  %s%s%s  %s\n", purple, pad(p[0], w), reset, p[1])
 	}
 }
 
@@ -288,29 +341,50 @@ func scalarStr(v any) (string, bool) {
 }
 
 func truncate(s string, n int) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) <= n {
-		return s
-	}
-	return s[:n-1] + "…"
+	return Truncate(strings.ReplaceAll(s, "\n", " "), n)
 }
 
-// Table prints a simple aligned table (human mode). headers + rows of strings.
+// Width is how many terminal columns s takes: a CJK character or an emoji
+// counts 2, a combining mark 0, colour codes 0.
+func Width(s string) int { return ansi.StringWidth(s) }
+
+// Truncate cuts s to at most n columns, ending with "…" when it cut. It never
+// splits a UTF-8 character or a grapheme.
+func Truncate(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if Width(s) <= n {
+		return s
+	}
+	return ansi.Truncate(s, n, "…")
+}
+
+// pad right-pads s with spaces to w columns.
+func pad(s string, w int) string {
+	if n := Width(s); n < w {
+		return s + strings.Repeat(" ", w-n)
+	}
+	return s
+}
+
+// Table prints an aligned table (human mode): headers + rows of strings.
+// Columns are measured in terminal columns, so non-Latin text lines up.
 func Table(headers []string, rows [][]string) {
 	widths := make([]int, len(headers))
 	for i, h := range headers {
-		widths[i] = len(h)
+		widths[i] = Width(h)
 	}
 	for _, row := range rows {
 		for i, c := range row {
-			if i < len(widths) && len(c) > widths[i] {
-				widths[i] = len(c)
+			if i < len(widths) && Width(c) > widths[i] {
+				widths[i] = Width(c)
 			}
 		}
 	}
 	var sb strings.Builder
 	for i, h := range headers {
-		sb.WriteString(fmt.Sprintf("%s%-*s%s  ", purple+bold, widths[i], strings.ToUpper(h), reset))
+		sb.WriteString(purple + bold + pad(strings.ToUpper(h), widths[i]) + reset + "  ")
 	}
 	fmt.Println(strings.TrimRight(sb.String(), " "))
 	for _, row := range rows {
@@ -320,7 +394,7 @@ func Table(headers []string, rows [][]string) {
 			if i < len(row) {
 				c = row[i]
 			}
-			line.WriteString(fmt.Sprintf("%-*s  ", widths[i], c))
+			line.WriteString(pad(c, widths[i]) + "  ")
 		}
 		fmt.Println(strings.TrimRight(line.String(), " "))
 	}
