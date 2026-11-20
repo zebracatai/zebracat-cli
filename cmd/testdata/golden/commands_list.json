@@ -54,14 +54,14 @@
     "needs_yes": false
   },
   {
-    "name": "avatar list",
-    "group": "catalogs",
+    "name": "avatar clone status",
+    "group": "library",
     "paid": false,
     "needs_yes": false
   },
   {
-    "name": "avatar status",
-    "group": "library",
+    "name": "avatar list",
+    "group": "catalogs",
     "paid": false,
     "needs_yes": false
   },

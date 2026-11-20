@@ -466,7 +466,7 @@ var avatarCloneCmd = &cobra.Command{
 	Short: "Make your own avatar from a photo or a video",
 	Long: `Make an avatar from a photo (the photo is the avatar) or a short video (its
 first clean frame is used). Each takes a local file or a public URL. Read its
-state with ` + "`zebracat avatar status <avatar_id>`" + `.`,
+state with ` + "`zebracat avatar clone status <avatar_id>`" + `.`,
 	Example: `  zebracat avatar clone --image me.jpg --name "Me" --gender female`,
 	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -503,7 +503,7 @@ state with ` + "`zebracat avatar status <avatar_id>`" + `.`,
 var avatarStatusCmd = &cobra.Command{
 	Use:     "status <avatar_id>",
 	Short:   "Show whether your avatar is ready",
-	Example: `  zebracat avatar status 812`,
+	Example: `  zebracat avatar clone status 812`,
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return getAndEmit(pub + "/avatars/clone/" + esc(args[0]))
@@ -845,7 +845,8 @@ func init() {
 	ac.StringVar(&avName, "name", "", "The avatar's name")
 	ac.StringVar(&avGender, "gender", "", "male|female")
 	ac.StringVar(&avDesc, "description", "", "A description")
-	avatarCmd.AddCommand(avatarListCmd, avatarCloneCmd, avatarStatusCmd)
+	avatarCloneCmd.AddCommand(avatarStatusCmd)
+	avatarCmd.AddCommand(avatarListCmd, avatarCloneCmd)
 
 	styleCmd.AddCommand(styleListCmd)
 

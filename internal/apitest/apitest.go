@@ -164,6 +164,9 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		ans = s.next(r.Method + " " + tmpl)
 	}
 	if ans.Raw != "" {
+		for k, v := range ans.Header {
+			w.Header().Set(k, v)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		code := 200
 		_ = json.Unmarshal([]byte(ans.Status), &code)

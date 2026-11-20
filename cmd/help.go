@@ -76,7 +76,7 @@ var commandTable = []struct {
 	{Command: "voice rename", Group: "library"},
 	{Command: "voice delete", Group: "library"},
 	{Command: "avatar clone", Group: "library"},
-	{Command: "avatar status", Group: "library"},
+	{Command: "avatar clone status", Group: "library"},
 
 	// Publish
 	{Command: "post", Group: "publish"},

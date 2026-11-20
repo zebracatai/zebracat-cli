@@ -263,13 +263,9 @@ and agents pass --yes. --dry-run answers the price and spends nothing.`,
 		if err != nil {
 			return err
 		}
-		lang, err := translateCode(c, vTo)
-		if err != nil {
-			return err
-		}
-		if !vDryRun {
+		if !vDryRun { // asked (or refused) before any call
 			ok, err := confirmSpend(vYes, "translate", func() (string, error) {
-				return fmt.Sprintf("Translate this video into %s? It spends credits.", lang), nil
+				return fmt.Sprintf("Translate this video into %s? It spends credits.", vTo), nil
 			})
 			if err != nil {
 				return err
@@ -277,6 +273,10 @@ and agents pass --yes. --dry-run answers the price and spends nothing.`,
 			if !ok {
 				return emit(map[string]any{"translated": false}, func() { ui.Info("Not translated. Nothing was charged.") })
 			}
+		}
+		lang, err := translateCode(c, vTo)
+		if err != nil {
+			return err
 		}
 		src, err := mediaURL(c, "--url", vURL, "")
 		if err != nil {

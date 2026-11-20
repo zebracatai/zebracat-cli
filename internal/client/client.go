@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -48,10 +49,23 @@ func New(baseURL string, creds *config.Credentials, apiKeyFlag string) *Client {
 	tr.TLSHandshakeTimeout = 15 * time.Second
 	return &Client{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTP:       &http.Client{Transport: tr},
+		HTTP:       &http.Client{Transport: tr, CheckRedirect: keepKeyOnHost},
 		creds:      creds,
 		apiKeyFlag: apiKeyFlag,
 	}
+}
+
+// keepKeyOnHost follows a redirect, but the API key goes only to the API's own
+// host: Go forwards custom headers like X-API-KEY to any host by default.
+func keepKeyOnHost(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	if req.URL.Host != via[0].URL.Host {
+		req.Header.Del("X-API-KEY")
+		req.Header.Del("Authorization")
+	}
+	return nil
 }
 
 func envAPIKey() string { return strings.TrimSpace(os.Getenv("ZEBRACAT_API_KEY")) }

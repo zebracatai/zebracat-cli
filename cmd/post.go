@@ -109,6 +109,19 @@ Posting is public: on a terminal you are asked first; scripts and agents pass --
 			}
 			at = t
 		}
+		when := "now"
+		if !at.IsZero() {
+			when = "at " + at.UTC().Format(time.RFC3339)
+		}
+		ok, err := confirmSpend(postYes, "post schedule", func() (string, error) {
+			return fmt.Sprintf("Post this video publicly to %s %s?", strings.Join(postPlatforms, ", "), when), nil
+		})
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return emit(map[string]any{"posted": false}, func() { ui.Info("Not posted.") })
+		}
 		c, err := newClient()
 		if err != nil {
 			return err
@@ -148,19 +161,8 @@ Posting is public: on a terminal you are asked first; scripts and agents pass --
 		if len(postHashtags) > 0 {
 			body["hashtags"] = postHashtags
 		}
-		when := "now"
 		if !at.IsZero() {
 			body["schedule_time"] = at.UTC().Format(time.RFC3339)
-			when = "at " + at.UTC().Format(time.RFC3339)
-		}
-		ok, err := confirmSpend(postYes, "post schedule", func() (string, error) {
-			return fmt.Sprintf("Post this video publicly to %s %s?", strings.Join(postPlatforms, ", "), when), nil
-		})
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return emit(map[string]any{"posted": false}, func() { ui.Info("Not posted.") })
 		}
 		return postAndEmit(schedBase+"/posts", body)
 	},
