@@ -43,7 +43,16 @@ type pollMsg struct {
 }
 type acctMsg struct {
 	a     *account
+	err   error
 	quiet bool // a background refresh: update the footer, print nothing
+}
+
+// keyCheckedMsg is a pasted API key checked against GET /account before it is
+// saved: a key that fails never replaces the stored one.
+type keyCheckedMsg struct {
+	key string
+	a   *account
+	err error
 }
 type resizeMsg struct{ gen int } // a resize settled (debounced)
 
@@ -109,7 +118,9 @@ type model struct {
 	images  []attach.Image // pictures attached to the next message (chips in the input)
 	acct    *account
 	askKey  bool // waiting for the user to paste an API key
-	valid   bool // the next acctMsg is validating a just-entered key
+
+	keyRejected bool // the server refused the key in use (401): say so, never "signed in"
+	confirming  bool // Generate asked "Generate for N credits? y/N" and waits for the key
 
 	history []string
 	histAt  int // len(history) = the line being written
@@ -177,27 +188,40 @@ func Run(cl *client.Client, baseURL string, l Launch) (Result, error) {
 	m.shadow = shadowOnPath()
 
 	// Account and update check in parallel, capped, before the welcome box.
-	acctCh := make(chan *account, 1)
+	type launched struct {
+		a        *account
+		rejected bool
+	}
+	acctCh := make(chan launched, 1)
 	go func() {
-		if !cl.IsAuthenticated() {
-			acctCh <- nil
-			return
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		acctCh <- fetchAccount(ctx, cl)
+		a, rejected := launchAccount(ctx, cl)
+		acctCh <- launched{a, rejected}
 	}()
 	notice := update.Check("v" + version.Version)
 	if tag := notice(); tag != "" {
 		m.offer = update.LatestCached(context.Background())
 	}
-	m.acct = <-acctCh
+	first := <-acctCh
+	m.acct, m.keyRejected = first.a, first.rejected
 
 	final, err := tea.NewProgram(m).Run()
 	if fm, ok := final.(*model); ok {
 		return fm.result, err
 	}
 	return Result{}, err
+}
+
+// launchAccount is the check before the welcome: the account, and whether the
+// server rejected the key (so the shell never says "signed in" with a dead key).
+// A slow or unreachable server is not a rejection.
+func launchAccount(ctx context.Context, cl *client.Client) (*account, bool) {
+	if !cl.IsAuthenticated() {
+		return nil, false
+	}
+	a, err := fetchAccountErr(ctx, cl)
+	return a, keyRejected(err)
 }
 
 // shadowOnPath is the path of another zebracat that runs first from PATH, or "".
@@ -265,22 +289,24 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case acctMsg:
 		m.busy = false
+		if keyRejected(msg.err) {
+			m.keyRejected = true
+		}
 		if msg.a == nil {
-			if msg.quiet {
+			if msg.quiet || msg.err == nil {
 				return m, nil
 			}
-			if m.valid { // a key we just saved failed to authenticate
-				m.valid = false
-				return m, m.sayErr("That key didn't work.", "Check it and /login again.")
-			}
-			return m, nil
+			return m, m.sayAPIErr(msg.err, "")
 		}
-		m.valid = false
+		m.keyRejected = false
 		m.acct = msg.a
 		if msg.quiet {
 			return m, nil
 		}
 		return m, m.say(stOK.Render("✓ ") + "Signed in" + stMuted.Render(m.accountLine()))
+
+	case keyCheckedMsg:
+		return m.onKeyChecked(msg)
 
 	case projectsMsg:
 		m.busy = false
@@ -361,6 +387,9 @@ func (m *model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyCtrlC:
 		return m.interrupt()
 	case tea.KeyEsc:
+		if m.askKey { // Esc leaves the key field, like Ctrl-C
+			return m.interrupt()
+		}
 		if len(m.matches) > 0 {
 			m.matches = nil
 			return m, nil
@@ -398,6 +427,7 @@ func (m *model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	// A paste (or a drag-and-drop) that names picture files becomes chips.
 	if msg.Paste {
+		msg.Runes = oneNewline(msg.Runes)
 		imgs, err := attach.Paths(string(msg.Runes))
 		if err != nil {
 			return m, m.sayErr(err.Error(), "Pictures can be PNG, JPEG or WebP, up to "+attach.Size(attach.MaxBytes)+".")
@@ -494,6 +524,16 @@ func (m *model) refreshMatches() {
 			m.matches = append(m.matches, c)
 		}
 	}
+}
+
+// oneNewline makes a paste's Windows (\r\n) and old Mac (\r) line ends one
+// \n each, so a pasted script keeps its lines instead of doubling them.
+func oneNewline(r []rune) []rune {
+	if !strings.ContainsRune(string(r), '\r') {
+		return r
+	}
+	s := strings.ReplaceAll(string(r), "\r\n", "\n")
+	return []rune(strings.ReplaceAll(s, "\r", "\n"))
 }
 
 // remember adds a sent message to the Up-arrow history.
