@@ -147,7 +147,7 @@ func TestNoStudioCommands(t *testing.T) {
 	srv.Handle("/api/v1/public/script_generator", func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"script":"old script"}`))
 	})
-	r := run(t, "script", "better sleep", "--duration", "30", "--mood", "calm")
+	r := run(t, "script", "better sleep", "--duration", "30", "--mood", "calm", "--yes")
 	c, _ := srv.Last("POST", "/script_generator")
 	if r.exit() != 0 || c.Body["duration"] != float64(30) || c.Body["mood"] != "calm" {
 		t.Fatalf("script body %v (%s)", c.Body, r.stderr)

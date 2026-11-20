@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,9 +31,15 @@ var (
 	vNoCaption bool
 	vRender    bool
 	vOut       string
+	vForce     bool
+	vYes       bool
+	vDryRun    bool
+	vIdemKey   string
+	vWebhook   string
+	vLangs     bool
 )
 
-var videoCmd = &cobra.Command{Use: "video", Short: "Create, plan, generate, track and download videos"}
+var videoCmd = &cobra.Command{Use: "video", Short: "Make, track, download, clone and translate videos"}
 
 var videoListCmd = &cobra.Command{
 	Use:   "list",
@@ -41,10 +49,11 @@ var videoListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		path := fmt.Sprintf("/api/v1/public/projects?limit=%d", vLimit)
+		q := url.Values{"limit": {fmt.Sprint(vLimit)}}
 		if vStatus != "" {
-			path += "&status=" + vStatus
+			q.Set("status", vStatus)
 		}
+		path := withQuery("/api/v1/public/projects", q)
 		ctx, cancel := ctxTimeout(60 * time.Second)
 		defer cancel()
 		var out map[string]any
@@ -79,7 +88,7 @@ var videoStatusCmd = &cobra.Command{
 	Short: "Get a video's phase/status (optionally --wait)",
 	Long: `Get a video's phase and status. With --wait, block until it needs you
 (plan_ready, needs_input) or is finished (completed, failed, cancelled).
-Director v2 tasks report a phase; v1 task ids keep the v1 status.`,
+Videos report a phase; task ids of the old v1 calls keep their v1 status.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := newClient()
@@ -119,7 +128,7 @@ var videoCancelCmd = &cobra.Command{
 		var ce *clierr.Error
 		if errors.As(err, &ce) && ce.Status == 404 { // a v1 task id
 			out = nil
-			_, err = c.Do(ctx, "POST", "/api/v1/public/video/"+url.PathEscape(args[0])+"/cancel", nil, &out)
+			_, err = c.Do(ctx, "POST", videos.Base+"/video/"+url.PathEscape(args[0])+"/cancel", nil, &out)
 		}
 		if err != nil {
 			return err
@@ -129,66 +138,176 @@ var videoCancelCmd = &cobra.Command{
 }
 
 var videoDownloadCmd = &cobra.Command{
-	Use:   "download <task_id>",
+	Use:   "download <task_id> [-o file]",
 	Short: "Download a finished video (or print its URL)",
-	Args:  cobra.ExactArgs(1),
+	Long: `Download a finished video's MP4. Without -o it prints the URL. With -o the
+file is written to a temporary name and renamed when complete, so a broken
+download never leaves half a file; an existing file is kept unless --force.
+Pass -o . (or a folder) to save it as <task_id>.mp4 there.
+
+JSON answer: {task_id, path, bytes} (or {task_id, video_url} without -o).`,
+	Example: `  zebracat video download 6f1c0d2e -o video.mp4
+  zebracat video download 6f1c0d2e -o .`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := newClient()
 		if err != nil {
 			return err
 		}
-		ctx, cancel := ctxTimeout(5 * time.Minute)
-		defer cancel()
-		st, err := videos.Fetch(ctx, c, args[0])
+		id := args[0]
+		mp4, st, err := resolveDownload(c, id)
 		if err != nil {
 			return err
 		}
-		mp4 := renderedMP4(st)
 		if mp4 == "" {
-			// Not a rendered file yet (e.g. an editable draft) — send them to studio.
+			// Not a rendered file yet (e.g. an editable draft) — send them to the editor.
 			if s := videos.EditorURL(st); s != "" {
-				return emit(map[string]any{"task_id": args[0], "studio_url": s, "status": st["status"], "phase": st["phase"]}, func() {
-					ui.Info("No rendered MP4 (%s) — open it in the studio instead:", videos.PhaseOrStatus(st))
+				return emit(map[string]any{"task_id": id, "studio_url": s, "status": st["status"], "phase": st["phase"]}, func() {
+					ui.Info("No rendered MP4 (%s) — open it in the editor instead:", videos.PhaseOrStatus(st))
 					ui.Link("✎", s)
 				})
 			}
-			return clierr.API("video is not ready (%s)", videos.PhaseOrStatus(st))
+			e := clierr.API("video is not ready (%s)", videos.PhaseOrStatus(st))
+			e.Code = "not_ready"
+			return e
 		}
 		if vOut == "" {
-			return emit(map[string]any{"task_id": args[0], "video_url": mp4}, func() {
-				fmt.Println(mp4)
-			})
+			return emit(map[string]any{"task_id": id, "video_url": mp4}, func() { fmt.Println(mp4) })
 		}
-		if err := downloadFile(mp4, vOut); err != nil {
+		dest := vOut
+		if fi, err := os.Stat(dest); err == nil && fi.IsDir() {
+			dest = filepath.Join(dest, id+".mp4")
+		}
+		if _, err := os.Stat(dest); err == nil && !vForce {
+			e := clierr.Usage("%s exists: pass --force to overwrite it", dest)
+			e.Code = "file_exists"
+			return e
+		}
+		n, err := downloadFile(mp4, dest)
+		if err != nil {
 			return err
 		}
-		ui.Success("Saved %s", vOut)
-		return emit(map[string]any{"task_id": args[0], "saved": vOut}, func() {})
+		return emit(map[string]any{"task_id": id, "path": dest, "bytes": n}, func() { ui.Success("Saved %s (%d bytes)", dest, n) })
 	},
 }
 
+// resolveDownload finds the MP4: the /videos/{id}/download route (a redirect
+// to the file), else the old /video/{id}/download, else the task's video_url.
+// The redirect is read, not followed, so the API key never goes to the file
+// host. st is the task when the route could not say (nil otherwise).
+func resolveDownload(c *client.Client, id string) (string, map[string]any, error) {
+	for _, p := range []string{videos.Path(id, "download"), videos.Base + "/video/" + url.PathEscape(id) + "/download"} {
+		loc, err := redirectTarget(c, p)
+		if loc != "" {
+			return loc, nil, nil
+		}
+		var ce *clierr.Error
+		if errors.As(err, &ce) && (ce.Status == 404 || ce.Status == 405) {
+			continue // this server has no such route (or not for this task): try the next
+		}
+		break // 409 not ready, or an answer without a redirect: read the task
+	}
+	ctx, cancel := ctxTimeout(60 * time.Second)
+	defer cancel()
+	st, err := videos.Fetch(ctx, c, id)
+	if err != nil {
+		return "", nil, err
+	}
+	return renderedMP4(st), st, nil
+}
+
+// redirectTarget GETs path without following a redirect and returns its
+// Location ("" when the answer is not a redirect).
+func redirectTarget(c *client.Client, path string) (string, error) {
+	nc := *c
+	hc := *c.HTTP
+	var loc string
+	hc.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		loc = req.URL.String()
+		return http.ErrUseLastResponse
+	}
+	nc.HTTP = &hc
+	ctx, cancel := ctxTimeout(60 * time.Second)
+	defer cancel()
+	_, err := nc.Do(ctx, "GET", path, nil, nil)
+	if loc != "" {
+		return loc, nil
+	}
+	return "", err
+}
+
 var videoTranslateCmd = &cobra.Command{
-	Use:   "translate",
-	Short: "Translate/dub an existing video into another language",
+	Use:   "translate --url <video> --to <language>",
+	Short: "Translate and dub a video into another language (spends credits)",
+	Long: `Translate and dub a video (a link or a local file, uploaded first) into
+another language. --to takes a code (es) or a name (spanish); --languages lists
+them. A translation spends credits: on a terminal you are asked first; scripts
+and agents pass --yes. --dry-run answers the price and spends nothing.`,
+	Example: `  zebracat video translate --languages
+  zebracat video translate --url clip.mp4 --to spanish --yes --wait`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if vLangs {
+			return listLanguages(true)
+		}
+		if vURL == "" || vTo == "" {
+			return clierr.Usage("--url and --to are required (--languages lists the languages)")
+		}
+		if err := checkMedia("--url", vURL); err != nil {
+			return err
+		}
+		if err := checkWebhookURL(vWebhook); err != nil {
+			return err
+		}
 		c, err := newClient()
 		if err != nil {
 			return err
 		}
-		if vURL == "" || vTo == "" {
-			return clierr.Usage("--url and --to are required")
+		lang, err := translateCode(c, vTo)
+		if err != nil {
+			return err
+		}
+		if !vDryRun {
+			ok, err := confirmSpend(vYes, "translate", func() (string, error) {
+				return fmt.Sprintf("Translate this video into %s? It spends credits.", lang), nil
+			})
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return emit(map[string]any{"translated": false}, func() { ui.Info("Not translated. Nothing was charged.") })
+			}
+		}
+		src, err := mediaURL(c, "--url", vURL, "")
+		if err != nil {
+			return err
 		}
 		payload := map[string]any{
-			"video_url":       vURL,
-			"target_language": toLangCode(vTo),
+			"video_url":       src,
+			"target_language": lang,
 			"enable_caption":  !vNoCaption,
 			"should_render":   vRender,
 		}
-		ctx, cancel := ctxTimeout(2 * time.Minute)
-		defer cancel()
+		if vDryRun {
+			payload["dry_run"] = true
+		}
+		if vWebhook != "" {
+			payload["webhook_url"] = vWebhook
+		}
+		key := vIdemKey
+		if key == "" {
+			key = newIdempotencyKey()
+		}
 		var created map[string]any
-		if _, err := c.Do(ctx, "POST", "/api/v1/public/video/translate", payload, &created); err != nil {
+		if err := postIdempotent(c, videos.Base+"/video/translate", payload, key, vWait, vTimeout, &created); err != nil {
 			return err
+		}
+		if created == nil {
+			created = map[string]any{}
+		}
+		created["idempotency_key"] = key
+		if dry, _ := created["dry_run"].(bool); dry {
+			return emit(created, func() { printDryRunHuman(created) })
 		}
 		taskID, _ := created["task_id"].(string)
 		if !vWait || taskID == "" {
@@ -208,8 +327,14 @@ var videoTranslateCmd = &cobra.Command{
 func waitTask(c *client.Client, taskID string, timeout time.Duration, untilDone bool) (map[string]any, error) {
 	label := "Working… (a plan takes about a minute; a video a few)"
 	sp := ui.StartSpinner(label)
-	defer sp.Stop()
+	stopOnInterrupt := onInterrupt(func() {
+		sp.Stop()
+		fmt.Fprintf(os.Stderr, "\nStopped waiting. The video keeps going on Zebracat; follow it with: zebracat video status %s --wait\n", taskID)
+		os.Exit(130)
+	})
 	out, err := videos.Wait(c, taskID, videos.WaitOptions{Timeout: timeout, UntilDone: untilDone, Clock: clock, Interval: pollInterval})
+	stopOnInterrupt()
+	sp.Stop() // before anything is printed, so JSON never starts on the spinner's line
 	if err != nil && out != nil {
 		// A timeout still prints the last state on stdout for scripts.
 		_ = emit(out, func() {})
@@ -290,23 +415,33 @@ func renderedMP4(m map[string]any) string {
 	return ""
 }
 
-// langCodes maps friendly language names to the 2-letter codes /video/translate
-// expects. Anything already a code passes through.
-var langCodes = map[string]string{
-	"english": "en", "hindi": "hi", "portuguese": "pt", "chinese": "zh", "mandarin": "zh",
-	"spanish": "es", "french": "fr", "german": "de", "japanese": "ja", "arabic": "ar",
-	"russian": "ru", "korean": "ko", "indonesian": "id", "italian": "it", "dutch": "nl",
-	"turkish": "tr", "polish": "pl", "swedish": "sv", "malay": "ms", "romanian": "ro",
-	"ukrainian": "uk", "greek": "el", "czech": "cs", "danish": "da", "finnish": "fi",
-	"bulgarian": "bg", "croatian": "hr", "slovak": "sk", "tamil": "ta",
-}
-
-func toLangCode(s string) string {
-	s = strings.ToLower(strings.TrimSpace(s))
-	if c, ok := langCodes[s]; ok {
-		return c
+// translateCode turns --to into the code /video/translate takes: a code or a
+// language name from the server's own list (GET /video/translate/languages).
+// When the list can't be read the value is sent as given and the server answers.
+func translateCode(c *client.Client, to string) (string, error) {
+	want := strings.ToLower(strings.TrimSpace(to))
+	ctx, cancel := ctxTimeout(30 * time.Second)
+	defer cancel()
+	var out struct {
+		Languages []struct {
+			Code string `json:"code"`
+			Name string `json:"name"`
+		} `json:"languages"`
 	}
-	return s // assume it's already a 2-letter code
+	if _, err := c.Do(ctx, "GET", videos.Base+"/video/translate/languages", nil, &out); err != nil || len(out.Languages) == 0 {
+		return want, nil
+	}
+	var names []string
+	for _, l := range out.Languages {
+		if strings.EqualFold(l.Code, want) || strings.EqualFold(l.Name, want) {
+			return l.Code, nil
+		}
+		names = append(names, l.Code+" ("+l.Name+")")
+	}
+	e := clierr.Usage("--to %q is not a language videos can be translated into", to)
+	e.Code = "invalid_choice"
+	e.Hint = "One of: " + strings.Join(names, ", ")
+	return "", e
 }
 
 // submittedHuman prints the friendly "submitted" lines with a studio link.
@@ -367,24 +502,66 @@ func truncate(s string, n int) string {
 	return s[:n-1] + "…"
 }
 
-func downloadFile(url, dest string) error {
-	resp, err := http.Get(url) //nolint:gosec // user-provided result URL
+// downloadTimeout bounds one MP4 download.
+var downloadTimeout = 30 * time.Minute
+
+// downloadFile writes the MP4 at u to dest through a temporary file in the
+// same folder, renamed only when every byte (Content-Length) arrived. A cut
+// connection removes the temporary file and leaves dest untouched.
+func downloadFile(u, dest string) (int64, error) {
+	ctx, cancel := ctxTimeout(downloadTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
-		return clierr.API("download failed: %v", err)
+		return 0, clierr.API("bad video URL: %v", err)
+	}
+	req.Header.Set("User-Agent", client.UserAgent())
+	resp, err := http.DefaultClient.Do(req) // the file host: no API key
+	if err != nil {
+		return 0, clierr.Network("download failed: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return clierr.API("download failed (%d)", resp.StatusCode)
+		e := clierr.API("download failed (HTTP %d)", resp.StatusCode)
+		e.Status = resp.StatusCode
+		return 0, e
 	}
-	f, err := os.Create(dest)
+	tmp, err := os.CreateTemp(filepath.Dir(dest), "."+filepath.Base(dest)+".part-*")
 	if err != nil {
-		return clierr.Usage("cannot write %s: %v", dest, err)
+		return 0, clierr.Usage("cannot write next to %s: %v", dest, err)
 	}
-	defer f.Close()
-	if _, err := io.Copy(f, resp.Body); err != nil {
-		return clierr.API("download interrupted: %v", err)
+	n, err := io.Copy(tmp, resp.Body)
+	cerr := tmp.Close()
+	if err == nil && resp.ContentLength >= 0 && n != resp.ContentLength {
+		err = fmt.Errorf("got %d of %d bytes", n, resp.ContentLength)
 	}
-	return nil
+	if err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(tmp.Name())
+		return 0, clierr.Network("download interrupted: %v (nothing was saved)", err)
+	}
+	if err := os.Rename(tmp.Name(), dest); err != nil {
+		os.Remove(tmp.Name())
+		return 0, clierr.Usage("cannot write %s: %v", dest, err)
+	}
+	return n, nil
+}
+
+// onInterrupt runs fn on Ctrl-C until the returned stop is called.
+func onInterrupt(fn func()) (stop func()) {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ch:
+			fn()
+		case <-done:
+		}
+	}()
+	return func() { signal.Stop(ch); close(done) }
 }
 
 func init() {
@@ -394,11 +571,17 @@ func init() {
 	videoStatusCmd.Flags().BoolVar(&vWait, "wait", false, "Block until plan_ready, needs_input or finished")
 	videoStatusCmd.Flags().DurationVar(&vTimeout, "timeout", 30*time.Minute, "Max time to wait with --wait")
 
-	videoDownloadCmd.Flags().StringVarP(&vOut, "output", "o", "", "Save to this file instead of printing the URL")
+	videoDownloadCmd.Flags().StringVarP(&vOut, "output", "o", "", "Save to this file (or folder) instead of printing the URL")
+	videoDownloadCmd.Flags().BoolVar(&vForce, "force", false, "Overwrite the file if it exists")
 
 	tf := videoTranslateCmd.Flags()
-	tf.StringVar(&vURL, "url", "", "URL of the source video")
-	tf.StringVar(&vTo, "to", "", "Target language (e.g. spanish or es)")
+	tf.StringVar(&vURL, "url", "", "The video: a link or a local file")
+	tf.StringVar(&vTo, "to", "", "Target language: a code (es) or a name (spanish)")
+	tf.BoolVar(&vLangs, "languages", false, "List the languages a video can be translated into")
+	tf.BoolVar(&vYes, "yes", false, "Don't ask; required when not on a terminal")
+	tf.BoolVar(&vDryRun, "dry-run", false, "Answer the price; nothing is created or charged")
+	tf.StringVar(&vIdemKey, "idempotency-key", "", "Idempotency-Key header (default: a new UUID, printed in the output)")
+	tf.StringVar(&vWebhook, "webhook-url", "", "An https URL to call when this video finishes (signed like account webhooks)")
 	tf.BoolVar(&vNoCaption, "no-caption", false, "Disable captions")
 	tf.BoolVar(&vRender, "render", false, "Render a final MP4")
 	tf.BoolVar(&vWait, "wait", false, "Block until done")

@@ -49,7 +49,6 @@ func TestPlanEditStaleRevIsAConflict(t *testing.T) {
 
 func TestPlanEditUsageErrors(t *testing.T) {
 	for _, args := range [][]string{
-		{"plan", "edit", tid, "--tool", "make_it_pop"},
 		{"plan", "edit", tid, "--tool", "set_duration", "--args", "{seconds:15"},
 		{"plan", "edit", tid},
 	} {
@@ -162,7 +161,7 @@ func TestVideoAnswer(t *testing.T) {
 func TestVideoCloneAndCancel(t *testing.T) {
 	srv, _ := setup(t)
 	r := run(t, "video", "clone", "--url", "https://www.tiktok.com/@x/video/1", "--mode", "generate_similar",
-		"--topic", "home coffee", "--language", "english", "--idempotency-key", "c1")
+		"--topic", "home coffee", "--language", "english", "--idempotency-key", "c1", "--yes")
 	if r.exit() != 0 {
 		t.Fatal(r.stderr)
 	}
@@ -171,8 +170,17 @@ func TestVideoCloneAndCancel(t *testing.T) {
 	if c.Header.Get("Idempotency-Key") != "c1" {
 		t.Fatal("clone idempotency key missing")
 	}
-	if r := run(t, "video", "clone", "--url", "https://x.com/v", "--mode", "copy"); r.exit() != 2 {
-		t.Fatalf("bad mode exit %d", r.exit())
+	// D2: off a terminal a clone without --yes refuses before any call.
+	n := len(srv.Calls())
+	if r := run(t, "video", "clone", "--url", "https://x.com/v"); r.exit() != 2 || r.err.Code != "confirmation_required" || len(srv.Calls()) != n {
+		t.Fatalf("clone without --yes: exit %d %+v", r.exit(), r.err)
+	}
+	// #3: a mode this CLI's schema copy doesn't know is sent; the server decides.
+	if r := run(t, "video", "clone", "--url", "https://x.com/v", "--mode", "copy", "--yes"); r.exit() != 0 {
+		t.Fatalf("unknown mode exit %d", r.exit())
+	}
+	if c, _ := srv.Last("POST", "/video/clone"); c.Body["mode"] != "copy" {
+		t.Fatalf("mode not sent: %v", c.Body)
 	}
 	r = run(t, "video", "cancel", tid)
 	if r.exit() != 0 || r.JSON(t)["phase"] != "cancelled" {

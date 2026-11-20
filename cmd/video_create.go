@@ -1,13 +1,17 @@
 package cmd
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
+	"github.com/zebracatai/zebracat-cli/internal/attach"
+	brief_ "github.com/zebracatai/zebracat-cli/internal/brief"
 	"github.com/zebracatai/zebracat-cli/internal/client"
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/ui"
@@ -22,6 +26,9 @@ type createOpts struct {
 	seconds, style, brand                   int
 	uploads                                 []string
 	planOnly, noRender, dryRun, wait        bool
+	yes, noWait                             bool
+	images                                  []string
+	webhook                                 string
 	idemKey                                 string
 	timeout                                 time.Duration
 
@@ -49,71 +56,254 @@ var legacyMediaTypes = map[string]string{
 	"stock_footage":    "stock",
 }
 
-var videoCreateCmd = &cobra.Command{
-	Use:   "create [brief]",
-	Short: "Create a video with Director v2 (one call, or plan first with --plan-only)",
-	Long: `Create a video the way /chat on the dashboard does: Director v2 writes a plan
-(the screenplay), then generates it.
+// createLong is the help of `create` and `video create`: one command, one
+// behaviour (G9, owner O9 2026-11-20), registered under both names.
+const createLong = `Make a video from an idea, a script or a link: Zebracat writes a plan (the
+screenplay: scenes, words, voices, look) with its price, then generates it.
 
-One call (plan, then generate and render automatically):
-  zebracat video create "30s explainer on compound interest" --wait
+Plan first, generate on your word. Without --yes the command stops at the plan
+and prints it with its quote (JSON for scripts); on a terminal it then asks
+"Generate for N credits?". --yes plans and generates in one go and waits for
+the finished video. --dry-run answers the price and creates nothing.
+--no-wait returns as soon as the request is accepted.
 
-Plan first, review, then generate:
-  id=$(zebracat video create --brief "why cats knock things off tables" --plan-only --wait | jq -r .task_id)
-  zebracat plan show "$id"
-  zebracat video quote "$id"
-  zebracat video generate "$id" --yes --wait
-
-What would it cost? (spends nothing, creates nothing):
-  zebracat video create --brief "…" --seconds 30 --dry-run
+In a terminal, with only words (or --script / --image), it opens the
+conversation instead: change the plan in plain words, then Generate.
 
 Inputs: --input idea (default) | script | vo-script | script-scenes | url.
---script <file> and --url set it for you; --file reads the brief from a file.
+--script <file> and --url set it; --file reads the brief from a file. A video
+link as the brief (TikTok, YouTube, Reels) is used as the reference video.
+--upload takes a public URL or a local file (uploaded first); --image takes a
+local picture. Both take :kind (person, place, product, style, logo, other).
 
 Every create sends an Idempotency-Key (a fresh UUID unless you pass
 --idempotency-key) and prints it, so re-running with the same key never makes
-a second video.
+a second video. --audio-file <url> keeps the old audio-to-video call.`
 
---audio-file <url> keeps the v1 audio-to-video endpoint.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		path, payload, err := buildCreate(args)
-		if err != nil {
-			return err
-		}
-		c, err := newClient()
-		if err != nil {
-			return err
-		}
-		key := co.idemKey
-		if key == "" {
-			key = newIdempotencyKey()
-		}
-		var created map[string]any
-		if err := postIdempotent(c, path, payload, key, co.wait, co.timeout, &created); err != nil {
-			return err
-		}
-		if created == nil {
-			created = map[string]any{}
-		}
-		created["idempotency_key"] = key
-		if dry, _ := created["dry_run"].(bool); dry {
-			return emit(created, func() { printDryRunHuman(created) })
-		}
-		taskID, _ := created["task_id"].(string)
-		if !co.wait || taskID == "" {
-			return emit(created, func() { printCreatedHuman(created, taskID) })
-		}
-		untilDone := path != videos.Base+"/videos" || !co.planOnly
-		final, err := waitTask(c, taskID, co.timeout, untilDone)
-		if err != nil {
-			return err
-		}
-		final["idempotency_key"] = key
-		return emit(final, func() { printStatusHuman(final) })
-	},
+const createExample = `  zebracat create "30s explainer on compound interest"
+  zebracat create "why cats knock things off tables" --json        # plan + quote, spends nothing
+  zebracat create "a tea ad" --media-type ai_video --seconds 20 --yes  # plan AND generate
+  zebracat create "a launch video for this mug" --image mug.png:product
+  zebracat create https://www.tiktok.com/@someone/video/7300000000000000000
+  zebracat create --brief "…" --seconds 30 --dry-run                  # the price only
+  zebracat plan show <task_id>; zebracat video generate <task_id> --yes --wait`
+
+var (
+	createCmd      = newCreateCmd()
+	videoCreateCmd = newCreateCmd()
+)
+
+// newCreateCmd builds `create [brief]`; the same command is added at the root
+// and under `video`, so both print the same help and do the same thing.
+func newCreateCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:     "create [brief]",
+		Short:   "Make a video: writes the plan and its price; --yes also generates it",
+		Long:    createLong,
+		Example: createExample,
+		RunE:    runCreate,
+	}
+	addCreateFlags(c)
+	return c
 }
 
-// buildCreate turns the flags into the request: POST /videos (v2), or the v1
+// shellFlags are the flags the conversation can take: with only these, a
+// person at a terminal gets the conversation instead of a one-shot plan.
+var shellFlags = map[string]bool{"brief": true, "prompt": true, "script": true, "image": true}
+
+func runCreate(cmd *cobra.Command, args []string) error {
+	imgs, err := openImages(co.images)
+	if err != nil {
+		return err
+	}
+	if !co.yes && !co.dryRun && shellAllowed() && onlyShellFlags(cmd) {
+		launchImages = imgs
+		first := strings.TrimSpace(strings.Join(args, " "))
+		if co.brief != "" || co.prompt != "" {
+			first = strings.TrimSpace(co.brief + co.prompt)
+		}
+		if co.script != "" {
+			first = "/script " + co.script
+		}
+		return runInteractive(first)
+	}
+	path, payload, err := buildCreate(args)
+	if err != nil {
+		return err
+	}
+	if co.wait && !co.yes && !co.planOnly && path == videos.Base+"/videos" {
+		note("create stops at the plan now; add --yes to also generate it (spends credits)")
+	}
+	c, err := newClient()
+	if err != nil {
+		return err
+	}
+	if path != videos.Base+"/videos" { // the old audio-to-video call spends at once
+		return runAudioCreate(c, path, payload)
+	}
+	if err := resolveUploads(c, payload, imgs); err != nil {
+		return err
+	}
+	key := co.idemKey
+	if key == "" {
+		key = newIdempotencyKey()
+	}
+	wait := !co.noWait
+	var created map[string]any
+	if err := postIdempotent(c, path, payload, key, wait, co.timeout, &created); err != nil {
+		return err
+	}
+	if created == nil {
+		created = map[string]any{}
+	}
+	created["idempotency_key"] = key
+	if dry, _ := created["dry_run"].(bool); dry {
+		return emit(created, func() { printDryRunHuman(created) })
+	}
+	taskID, _ := created["task_id"].(string)
+	if !wait || taskID == "" {
+		return emit(created, func() { printCreatedHuman(created, taskID) })
+	}
+	generating := payload["auto_generate"] == true
+	task, err := waitTask(c, taskID, co.timeout, generating)
+	if err != nil {
+		return err
+	}
+	task["idempotency_key"] = key
+	if generating || videos.PhaseOrStatus(task) != "plan_ready" {
+		return emit(task, func() { printStatusHuman(task) }) // finished, needs_input, failed, …
+	}
+	return planReady(c, taskID, task, key)
+}
+
+// planReady prints the plan and its quote; on a terminal it asks once whether
+// to generate it (D1/D2), otherwise it names the command that does.
+func planReady(c *client.Client, id string, task map[string]any, key string) error {
+	plan, _ := getMap(c, videos.Path(id, "plan"))
+	quote, err := getMap(c, videos.Path(id, "quote"))
+	if err != nil {
+		quote, _ = task["quote"].(map[string]any)
+	}
+	res := map[string]any{"task_id": id, "phase": "plan_ready", "plan": plan, "quote": quote,
+		"editor_url": videos.EditorURL(task), "idempotency_key": key,
+		"next": fmt.Sprintf("zebracat video generate %s --yes --wait", id)}
+	show := func() {
+		if plan != nil {
+			printPlanHuman(plan)
+		}
+		if q := videos.QuoteLine(quote); q != "" {
+			ui.KV([][2]string{{"price", q}})
+		}
+	}
+	if co.planOnly || !interactive() {
+		return emit(res, func() {
+			show()
+			ui.Info("Generate it with: zebracat video generate %s", id)
+		})
+	}
+	show()
+	if !confirm("Generate this video for " + videos.QuoteLine(quote) + "?") {
+		ui.Info("Not generated. The plan is kept: zebracat video generate %s", id)
+		return nil
+	}
+	genKey := newIdempotencyKey()
+	var gen map[string]any
+	if err := postIdempotent(c, videos.Path(id, "generate"), map[string]any{"should_render": !co.noRender}, genKey, true, co.timeout, &gen); err != nil {
+		return err
+	}
+	final, err := waitTask(c, id, co.timeout, true)
+	if err != nil {
+		return err
+	}
+	final["quote"] = quote
+	final["idempotency_key"] = genKey
+	return emit(final, func() { printStatusHuman(final) })
+}
+
+// runAudioCreate is the old audio-to-video call: it spends at once, so D2.
+func runAudioCreate(c *client.Client, path string, payload map[string]any) error {
+	ok, err := confirmSpend(co.yes, "create --audio-file", func() (string, error) {
+		return "Make a video from this audio now? It spends credits.", nil
+	})
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return emit(map[string]any{"created": false}, func() { ui.Info("Not created. Nothing was charged.") })
+	}
+	key := co.idemKey
+	if key == "" {
+		key = newIdempotencyKey()
+	}
+	var created map[string]any
+	if err := postIdempotent(c, path, payload, key, co.wait, co.timeout, &created); err != nil {
+		return err
+	}
+	if created == nil {
+		created = map[string]any{}
+	}
+	created["idempotency_key"] = key
+	taskID, _ := created["task_id"].(string)
+	if !co.wait || taskID == "" {
+		return emit(created, func() { printCreatedHuman(created, taskID) })
+	}
+	final, err := waitTask(c, taskID, co.timeout, true)
+	if err != nil {
+		return err
+	}
+	return emit(final, func() { printStatusHuman(final) })
+}
+
+// onlyShellFlags reports whether every flag the user set is one the
+// conversation can take.
+func onlyShellFlags(cmd *cobra.Command) bool {
+	only := true
+	cmd.LocalNonPersistentFlags().Visit(func(f *pflag.Flag) {
+		if !shellFlags[f.Name] {
+			only = false
+		}
+	})
+	return only
+}
+
+// resolveUploads uploads the local files among the uploads (pictures from
+// --image, and --upload values that are paths) and puts their URLs in.
+func resolveUploads(c *client.Client, body map[string]any, imgs []attach.Image) error {
+	ups, _ := body["uploads"].([]map[string]any)
+	for _, u := range ups {
+		v, _ := u["url"].(string)
+		if isWebURL(v) {
+			continue
+		}
+		kind, _ := u["kind"].(string)
+		got, err := mediaURL(c, "--upload", v, kind)
+		if err != nil {
+			return err
+		}
+		u["url"] = got
+	}
+	if len(imgs) > 0 { // uploaded first (POST /uploads), then sent as the plan's uploads
+		ctx, cancel := ctxTimeout(uploadTimeout)
+		defer cancel()
+		var stored []attach.Stored
+		for _, im := range imgs {
+			st, err := attach.Upload(ctx, c, im)
+			if err != nil {
+				return err
+			}
+			stored = append(stored, st)
+		}
+		for _, u := range attach.Uploads(stored, imgs) {
+			ups = append(ups, u)
+		}
+	}
+	if len(ups) > 0 {
+		body["uploads"] = ups
+	}
+	return nil
+}
+
+// buildCreate turns the flags into the request: POST /videos, or the old v1
 // audio endpoint for --audio-file. Every value is a structured flag; nothing
 // is read out of the brief's text.
 func buildCreate(args []string) (string, map[string]any, error) {
@@ -178,7 +368,18 @@ func buildCreate(args []string) (string, map[string]any, error) {
 		}
 	}
 	if brief == "" {
-		return "", nil, clierr.Usage("a brief is required: pass it as an argument, --brief, --file, --script or --url")
+		return "", nil, clierr.Usage("say what the video is about: pass it as an argument, --brief, --file, --script or --url")
+	}
+	sourceVideo := ""
+	if input == "" {
+		// A lone link as the brief: a video link is the reference video, a
+		// page is read as the source (the conversation does the same).
+		switch k, link := brief_.Read(brief); k {
+		case brief_.KindVideo:
+			sourceVideo = link
+		case brief_.KindPage:
+			brief, input = link, "url"
+		}
 	}
 	if input == "" {
 		input = "idea"
@@ -186,28 +387,33 @@ func buildCreate(args []string) (string, map[string]any, error) {
 	if v, ok := inputAliases[input]; ok {
 		input = v
 	}
-	if !client.CheckEnum("create.input_kind", input) {
-		return "", nil, enumUsage("--input", input, "create.input_kind")
-	}
+	warnUnknown("--input", input, "create.input_kind")
 	if input == "url" {
 		if err := checkURL("--url", brief); err != nil {
 			return "", nil, err
 		}
 	}
 
+	if err := checkWebhookURL(co.webhook); err != nil {
+		return "", nil, err
+	}
 	body := map[string]any{
 		"brief":         brief,
 		"input_kind":    input,
-		"auto_generate": !co.planOnly,
+		"auto_generate": co.yes && !co.planOnly,
 		"should_render": !co.noRender,
+	}
+	if sourceVideo != "" {
+		body["source_video"] = sourceVideo
+	}
+	if co.webhook != "" {
+		body["webhook_url"] = co.webhook
 	}
 	if co.dryRun {
 		body["dry_run"] = true
 	}
 	if co.preset != "" {
-		if !client.CheckEnum("create.preset", co.preset) {
-			return "", nil, enumUsage("--preset", co.preset, "create.preset")
-		}
+		warnUnknown("--preset", co.preset, "create.preset")
 		body["preset"] = co.preset
 	}
 
@@ -242,9 +448,7 @@ func buildCreate(args []string) (string, map[string]any, error) {
 		if o.val == "" {
 			continue
 		}
-		if !client.CheckEnum("create.options."+o.key, o.val) {
-			return "", nil, enumUsage(o.flag, o.val, "create.options."+o.key)
-		}
+		warnUnknown(o.flag, o.val, "create.options."+o.key)
 		opts[o.key] = o.val
 	}
 	if co.language != "" {
@@ -277,7 +481,7 @@ func buildCreate(args []string) (string, map[string]any, error) {
 		body["brand_id"] = co.brand
 	}
 	if len(co.uploads) > 0 {
-		var ups []map[string]any
+		ups := []map[string]any{}
 		for _, raw := range co.uploads {
 			u, err := parseUpload(raw)
 			if err != nil {
@@ -288,7 +492,7 @@ func buildCreate(args []string) (string, map[string]any, error) {
 		body["uploads"] = ups
 	}
 	if co.mood != "" || co.promptStyle != "" {
-		note("--mood and --prompt-style have no Director v2 meaning and are ignored; ask for it in the brief or with `zebracat plan chat`")
+		note("--mood and --prompt-style are ignored now; ask for it in the brief or with `zebracat plan chat`")
 	}
 	if co.render {
 		note("--render is the default now; pass --no-render to keep an editable project only")
@@ -296,7 +500,7 @@ func buildCreate(args []string) (string, map[string]any, error) {
 	return videos.Base + "/videos", body, nil
 }
 
-// buildAudioCreate is the v1 audio-to-video request (v2 has no audio door).
+// buildAudioCreate is the old audio-to-video request (POST /videos has no audio input).
 func buildAudioCreate() (string, map[string]any, error) {
 	if err := checkURL("--audio-file", co.audioFile); err != nil {
 		return "", nil, err
@@ -322,19 +526,34 @@ func buildAudioCreate() (string, map[string]any, error) {
 	return videos.Base + "/video/audio", body, nil
 }
 
-// parseUpload reads "<url>[:kind]". The kind is split off only when the last
-// ":"-separated part is one of the API's upload kinds, so "https://…" stays whole.
+// parseUpload reads "<url or file>[:kind]". The kind is the part after the
+// last ":" when it is one word of letters and underscores, so "https://…",
+// "host:8080/x.png" and "C:\\x.png" stay whole and a kind this CLI's schema
+// copy doesn't list yet (e.g. logo before a refresh) still reaches the server.
+// A local file is uploaded later (resolveUploads).
 func parseUpload(raw string) (map[string]any, error) {
 	u, kind := strings.TrimSpace(raw), "other"
-	if i := strings.LastIndex(u, ":"); i > 0 {
-		if k := u[i+1:]; k != "" && len(client.Enum("create.uploads.kind")) > 0 && client.CheckEnum("create.uploads.kind", k) {
-			u, kind = u[:i], k
-		}
+	if i := strings.LastIndex(u, ":"); i > 0 && isWord(u[i+1:]) {
+		u, kind = u[:i], u[i+1:]
+		warnUnknown("--upload kind", kind, "create.uploads.kind")
 	}
-	if err := checkURL("--upload", u); err != nil {
+	if err := checkMedia("--upload", u); err != nil {
 		return nil, err
 	}
 	return map[string]any{"url": u, "kind": kind}, nil
+}
+
+// isWord: one or more lowercase letters or underscores.
+func isWord(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if (r < 'a' || r > 'z') && r != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 func checkURL(flag, v string) error {
@@ -343,6 +562,15 @@ func checkURL(flag, v string) error {
 		return clierr.Usage("%s needs a public http(s) URL, got %q", flag, v)
 	}
 	return nil
+}
+
+// warnUnknown notes (stderr) a value this CLI's schema copy doesn't list. The
+// value is still sent: the server may know it (a newer server than this copy),
+// and when it doesn't, its typed 400 names the allowed values (cli-audit #3).
+func warnUnknown(flag, got, key string) {
+	if !client.CheckEnum(key, got) {
+		note("%s %q is not in this CLI's list (%s); sending it, the server decides", flag, got, strings.Join(client.Enum(key), ", "))
+	}
 }
 
 // enumUsage is the exit-2 error for a value outside the schema's enum.
@@ -383,34 +611,39 @@ func asList(v any) []any {
 	return l
 }
 
-func init() {
-	f := videoCreateCmd.Flags()
+func addCreateFlags(c *cobra.Command) {
+	f := c.Flags()
 	f.StringVar(&co.brief, "brief", "", "What the video is about (or pass it as the argument)")
 	f.StringVar(&co.prompt, "prompt", "", "Alias of --brief")
 	f.StringVar(&co.file, "file", "", "Read the brief from a file (- for stdin)")
 	f.StringVar(&co.input, "input", "", "What the brief is: idea (default)|script|vo-script|script-scenes|url")
 	f.StringVar(&co.script, "script", "", "Read a script from a file (- for stdin); sets --input script")
 	f.StringVar(&co.url, "url", "", "Make the video from a web page; sets --input url")
-	f.StringVar(&co.preset, "preset", "", "A preset (see zebracat presets list)")
-	f.StringVar(&co.mediaType, "media-type", "", "Media type: "+client.EnumHelp("create.options.media_type"))
+	f.StringVar(&co.preset, "preset", "", "A preset (see zebracat preset list)")
+	f.StringVar(&co.mediaType, "media-type", "", "Video type: "+client.EnumHelp("create.options.media_type")+" (see zebracat video types)")
 	f.StringVar(&co.audio, "audio", "", "Audio: "+client.EnumHelp("create.options.audio_mode"))
 	f.StringVar(&co.aspect, "aspect", "", "Aspect: "+client.EnumHelp("create.options.aspect"))
-	f.StringVar(&co.language, "language", "", "Language (e.g. english; see zebracat video languages)")
+	f.StringVar(&co.language, "language", "", "Language (e.g. english; see zebracat language list)")
 	f.IntVar(&co.seconds, "seconds", 0, "Target length in seconds")
-	f.StringVar(&co.quality, "quality", "", "Quality: "+client.EnumHelp("create.options.quality")+" (see zebracat models list)")
+	f.StringVar(&co.quality, "quality", "", "Quality: "+client.EnumHelp("create.options.quality")+" (see zebracat model list)")
 	f.StringVar(&co.voice, "voice", "", "Voice ID (see zebracat voice list)")
 	f.IntVar(&co.style, "style", 0, "Visual style ID (see zebracat style list)")
-	f.StringVar(&co.background, "background", "", "Background video (a catalogue src) for split-screen presets")
-	f.StringArrayVar(&co.uploads, "upload", nil, "A picture to use: <url>[:"+client.EnumHelp("create.uploads.kind")+"] (repeatable)")
+	f.StringVar(&co.background, "background", "", "Background clip src for brainrot videos (see zebracat background list)")
+	f.StringArrayVar(&co.uploads, "upload", nil, "A picture or clip to use: <url or file>[:"+client.EnumHelp("create.uploads.kind")+"] (repeatable)")
+	f.StringArrayVar(&co.images, "image", nil, "A local picture: <path>[:kind] (PNG/JPEG/WebP, ≤12 MB; repeatable)")
 	f.IntVar(&co.brand, "brand", 0, "Brand kit ID (see zebracat brand list)")
-	f.BoolVar(&co.planOnly, "plan-only", false, "Stop at the plan (auto_generate=false); generate later with video generate")
+	f.BoolVar(&co.yes, "yes", false, "Also generate the plan (spends credits) and wait for the video; required to generate off a terminal")
 	f.BoolVar(&co.noRender, "no-render", false, "Keep an editable project; don't export the MP4")
 	f.BoolVar(&co.dryRun, "dry-run", false, "Validate and quote only: nothing is created or charged")
+	f.BoolVar(&co.noWait, "no-wait", false, "Return as soon as the request is accepted (follow with video status --wait)")
+	f.StringVar(&co.webhook, "webhook-url", "", "An https URL to call when this video changes phase (signed like account webhooks)")
 	f.StringVar(&co.idemKey, "idempotency-key", "", "Idempotency-Key header (default: a new UUID, printed in the output)")
-	f.BoolVar(&co.wait, "wait", false, "Block until plan_ready/needs_input (--plan-only) or the video is finished")
-	f.DurationVar(&co.timeout, "timeout", 30*time.Minute, "Max time to wait with --wait")
+	f.DurationVar(&co.timeout, "timeout", 30*time.Minute, "Max time to wait")
 
-	f.StringVar(&co.audioFile, "audio-file", "", "Make a video from an audio file URL (v1 audio-to-video)")
+	f.BoolVar(&co.planOnly, "plan-only", false, "Stop at the plan even with --yes (the default without --yes)")
+	f.BoolVar(&co.wait, "wait", false, "Kept for old scripts: create always waits now (see --no-wait)")
+	_ = f.MarkHidden("wait")
+	f.StringVar(&co.audioFile, "audio-file", "", "Make a video from an audio file URL (the old audio-to-video call; spends at once)")
 	f.StringVar(&co.audioFile, "audio-url", "", "Alias of --audio-file")
 	_ = f.MarkHidden("audio-url")
 	f.StringVar(&co.from, "from", "", "Old input selector")
@@ -422,9 +655,9 @@ func init() {
 	f.IntVar(&co.duration, "duration", 0, "Old length flag")
 	_ = f.MarkDeprecated("duration", "use --seconds")
 	f.StringVar(&co.mood, "mood", "", "Old mood flag")
-	_ = f.MarkDeprecated("mood", "ignored on Director v2; say it in the brief or use `zebracat plan chat`")
+	_ = f.MarkDeprecated("mood", "ignored; say it in the brief or use `zebracat plan chat`")
 	f.StringVar(&co.promptStyle, "prompt-style", "", "Old narration style flag")
-	_ = f.MarkDeprecated("prompt-style", "ignored on Director v2; say it in the brief or use `zebracat plan chat`")
+	_ = f.MarkDeprecated("prompt-style", "ignored; say it in the brief or use `zebracat plan chat`")
 	f.BoolVar(&co.render, "render", false, "Old render flag (rendering is now the default)")
 	_ = f.MarkHidden("render")
 }

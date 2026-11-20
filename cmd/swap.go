@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"time"
@@ -25,6 +24,7 @@ var (
 	swIdemKey   string
 	swTimeout   time.Duration
 	swJobWait   bool
+	swWebhook   string
 )
 
 const swapBase = videos.Base + "/character-swap"
@@ -49,12 +49,13 @@ func requireSwap(c *client.Client, cmd *cobra.Command) error {
 }
 
 var swapCmd = &cobra.Command{
-	Use:   "swap --video <url> --character <image-url> --consent",
+	Use:   "swap --video <clip> --character <face> --consent",
 	Short: "Character swap: put a face into a clip (paid per second; --dry-run for the quote)",
 	Long: `Put the face from --character into the person in --video, made like every
-video: the result is a project you can open in the editor and export.
+video: the result is a project you can open in the editor and export. Each
+takes a public URL or a local file (uploaded first).
 
-  zebracat swap --video https://…/clip.mp4 --character https://…/face.jpg --consent --dry-run
+  zebracat swap --video clip.mp4 --character face.jpg --consent --dry-run
   zebracat swap --video https://…/clip.mp4 --character https://…/face.jpg --consent --yes --wait
 
 The clip is analysed first (people in it, length, price). --person picks who is
@@ -63,12 +64,16 @@ use this face; the swap is refused without it. On a terminal the quote is shown
 and you are asked; scripts must pass --yes. Paid plans only on the dashboard;
 API keys pay from the API balance.
 
-Read a swap job later with ` + "`zebracat swap status <job_id> [--wait]`" + `.`,
+Read a swap job later with ` + "`zebracat swap status <job_id> [--wait]`" + `; the
+price per second and the length limits: ` + "`zebracat swap options`" + `.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := checkURL("--video", swVideo); err != nil {
+		if err := checkMedia("--video", swVideo); err != nil {
 			return err
 		}
-		if err := checkURL("--character", swCharacter); err != nil {
+		if err := checkMedia("--character", swCharacter); err != nil {
+			return err
+		}
+		if err := checkWebhookURL(swWebhook); err != nil {
 			return err
 		}
 		if !swConsent {
@@ -88,10 +93,18 @@ Read a swap job later with ` + "`zebracat swap status <job_id> [--wait]`" + `.`,
 		if err := requireSwap(c, cmd); err != nil {
 			return err
 		}
+		video, err := mediaURL(c, "--video", swVideo, "")
+		if err != nil {
+			return err
+		}
+		face, err := mediaURL(c, "--character", swCharacter, "person")
+		if err != nil {
+			return err
+		}
 		ctx, cancel := ctxTimeout(5 * time.Minute)
 		defer cancel()
 		var analysis map[string]any
-		if _, err := c.Do(ctx, "POST", swapBase+"/analyze", map[string]any{"video_url": swVideo}, &analysis); err != nil {
+		if _, err := c.Do(ctx, "POST", swapBase+"/analyze", map[string]any{"video_url": video}, &analysis); err != nil {
 			return err
 		}
 		person := swPerson
@@ -104,8 +117,11 @@ Read a swap job later with ` + "`zebracat swap status <job_id> [--wait]`" + `.`,
 		body := map[string]any{
 			"analysis_id":         analysis["analysis_id"],
 			"person":              person,
-			"character_image_url": swCharacter,
+			"character_image_url": face,
 			"consent":             true,
+		}
+		if swWebhook != "" {
+			body["webhook_url"] = swWebhook
 		}
 		quote, _ := analysis["quote"].(map[string]any)
 		if credits, ok := quote["credits"].(float64); ok {
@@ -199,18 +215,22 @@ func waitSwapJob(c *client.Client, path string, timeout time.Duration) (map[stri
 	defer sp.Stop()
 	deadline := clock.Now().Add(timeout)
 	var last map[string]any
+	fails := 0
 	for {
 		out, err := getMap(c, path)
 		sleep := pollInterval
 		if err != nil {
-			var ce *clierr.Error
-			if !(errors.As(err, &ce) && ce.Status == 429) {
+			retry, after := videos.Transient(err)
+			if !retry {
 				return nil, err
 			}
-			if ce.RetryAfter > 0 {
-				sleep = ce.RetryAfter
+			fails++
+			sleep = videos.Backoff(pollInterval, fails)
+			if after > 0 {
+				sleep = after
 			}
 		} else {
+			fails = 0
 			last = out
 			if s, _ := out["status"].(string); swapJobDone[s] {
 				return out, nil
@@ -221,6 +241,16 @@ func waitSwapJob(c *client.Client, path string, timeout time.Duration) (map[stri
 		}
 		clock.Sleep(sleep)
 	}
+}
+
+var swapOptionsCmd = &cobra.Command{
+	Use:     "options",
+	Short:   "Price per second, length limits and whether your account can swap",
+	Example: `  zebracat swap options`,
+	Args:    cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return getAndEmit(swapBase + "/options")
+	},
 }
 
 func printSwapHuman(out map[string]any) {
@@ -248,8 +278,9 @@ func printSwapHuman(out map[string]any) {
 
 func init() {
 	f := swapCmd.Flags()
-	f.StringVar(&swVideo, "video", "", "The clip's URL (required)")
-	f.StringVar(&swCharacter, "character", "", "The face image URL (required)")
+	f.StringVar(&swVideo, "video", "", "The clip: a public URL or a local file (required)")
+	f.StringVar(&swCharacter, "character", "", "The face picture: a public URL or a local file (required)")
+	f.StringVar(&swWebhook, "webhook-url", "", "An https URL to call when this swap finishes (signed like account webhooks)")
 	f.StringVar(&swPerson, "person", "", "Who to swap: a person id from the analysis (default: the main person)")
 	f.BoolVar(&swConsent, "consent", false, "Confirm you have the right to use this face (required)")
 	f.BoolVar(&swDryRun, "dry-run", false, "Validate and quote only: nothing is generated, held or charged")
@@ -260,6 +291,6 @@ func init() {
 	sf := swapStatusCmd.Flags()
 	sf.BoolVar(&swJobWait, "wait", false, "Block until the swap is finished")
 	sf.DurationVar(&swTimeout, "timeout", 30*time.Minute, "Max time to wait with --wait")
-	swapCmd.AddCommand(swapStatusCmd)
+	swapCmd.AddCommand(swapStatusCmd, swapOptionsCmd)
 	rootCmd.AddCommand(swapCmd)
 }
