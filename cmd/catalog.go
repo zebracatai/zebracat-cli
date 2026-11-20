@@ -202,9 +202,19 @@ func printPricing(out any) {
 	rows := [][]string{}
 	for _, p := range asList(m["prices"]) {
 		pm, _ := p.(map[string]any)
-		rows = append(rows, []string{strOr(pm["label"]), fmt.Sprintf("$%v", pm["usd_price"]), "per " + strOr(pm["unit"])})
+		usd := strOr(pm["usd_price"])
+		if strings.Trim(usd, "0.") == "" {
+			usd = "–"
+		} else {
+			usd = "$" + usd
+		}
+		unit := strOr(pm["unit"])
+		if unit != "" {
+			unit = "per " + unit
+		}
+		rows = append(rows, []string{strOr(pm["label"]), strOr(pm["credits"]), usd, unit})
 	}
-	ui.Table([]string{"WHAT", "PRICE", "UNIT"}, rows)
+	ui.Table([]string{"WHAT", "CREDITS", "USD", "UNIT"}, rows)
 }
 
 func strOr(v any) string {
