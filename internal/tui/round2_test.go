@@ -386,13 +386,13 @@ func TestLogoGolden(t *testing.T) {
 	}
 }
 
-// The `/` menu shows 8 rows at a time and scrolls with the selection.
+// The `/` menu shows 8 rows at a time (and how many more) and scrolls with the selection.
 func TestSlashMenuScrolls(t *testing.T) {
 	m := layoutModel(t, 100, true)
 	m.in.SetValue("/")
 	m.refreshMatches()
 	v := m.menuView()
-	if len(strings.Split(v, "\n")) != menuRows || !strings.Contains(v, "› /help") {
+	if len(strings.Split(v, "\n")) != menuRows+1 || !strings.Contains(v, "› /help") || !strings.Contains(v, "… 8 more") {
 		t.Fatalf("menu:\n%s", v)
 	}
 	for i := 0; i < len(commands)-1; i++ {

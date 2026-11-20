@@ -160,9 +160,16 @@ func (m *model) poll(taskID string, untilDone bool) tea.Msg {
 
 // fetchAccount reads GET /account for the welcome box and footer (nil on error).
 func fetchAccount(ctx context.Context, cl *client.Client) *account {
+	a, _ := fetchAccountErr(ctx, cl)
+	return a
+}
+
+// fetchAccountErr is fetchAccount with the reason it failed (a rejected key,
+// no connection…).
+func fetchAccountErr(ctx context.Context, cl *client.Client) (*account, error) {
 	var out map[string]any
 	if _, err := cl.Do(ctx, "GET", "/api/v1/public/account", nil, &out); err != nil {
-		return nil
+		return nil, err
 	}
 	a := &account{}
 	a.email, _ = out["email"].(string)
@@ -173,7 +180,7 @@ func fetchAccount(ctx context.Context, cl *client.Client) *account {
 		}
 	}
 	a.apiDollars, _ = out["api_dollar_balance"].(string)
-	return a
+	return a, nil
 }
 
 // accountCmd fetches GET /account in the background.
@@ -182,7 +189,8 @@ func (m *model) accountCmd() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		return acctMsg{a: fetchAccount(ctx, cl)}
+		a, err := fetchAccountErr(ctx, cl)
+		return acctMsg{a: a, err: err}
 	}
 }
 
