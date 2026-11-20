@@ -109,13 +109,13 @@ func TestCreateStopsOnAQuestion(t *testing.T) {
 	}
 }
 
-// --image uploads the picture like the studio and sends it with the plan.
+// --image uploads the picture to /uploads and sends it with the plan.
 func TestCreateWithAnImage(t *testing.T) {
 	srv, _ := setup(t)
 	noShell(t)
 	srv.On("GET", "/videos/{task_id}", apitest.Answer{Example: "plan_ready"})
-	srv.Handle("/api/user/upload_assets", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"uploaded_files": [{"url": "https://cdn.example.com/ai-chat/uploads/mug.png"}]}`))
+	srv.Handle("/api/v1/public/uploads", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"url": "https://cdn.example.com/ai-chat/uploads/mug.png", "kind_hint": "person"}`))
 	})
 	var b bytes.Buffer
 	_ = png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 10, 10)))

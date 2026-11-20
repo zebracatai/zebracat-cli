@@ -14,8 +14,4 @@ var Enums = map[string][]string{
 	"create.preset":             {"street_interview", "video_podcast", "ugc_ad", "ai_movie", "ai_debate", "fruit_drama", "pov_video", "product_showcase", "travel_video", "prompt-to-video", "ai-cartoon-video-generator", "ai-anime-video-generator", "ghibli-ai", "italian-brainrot-generator", "ai-animal-video-generator", "ai-cat-video-generator", "brainrot-video-generator", "subway-surfers-video-generator", "minecraft-parkour-generator"},
 	"create.uploads.kind":       {"person", "place", "product", "style", "other"},
 	"plan_edit.tool":            {"add_scene", "attach_upload", "move_scene", "reassign_speaker", "remove_asset", "remove_cast", "remove_scene", "replace_reference", "rewrite_line", "set_aspect", "set_audio_mode", "set_captions", "set_duration", "set_language", "set_model", "set_music", "set_quality", "set_style", "set_visual", "set_voice"},
-	"studio_clip.aspect":        {"9:16", "1:1", "16:9"},
-	"studio_hooks.platform":     {"tiktok", "reels", "shorts", "youtube"},
-	"studio_hooks.tone":         {"match", "bold", "friendly", "funny", "calm", "urgent", "nerdy", "inspiring", "serious"},
-	"studio_image.aspect":       {"9:16", "1:1", "16:9"},
 }

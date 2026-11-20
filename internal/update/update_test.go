@@ -194,12 +194,16 @@ func TestApplyToReplacesTheBinaryAndChecksTheSum(t *testing.T) {
 	arch := tarball(t, "new-binary")
 	sum := sha256.Sum256(arch)
 	sums := hex.EncodeToString(sum[:]) + "  zebracat_linux_amd64.tar.gz\n"
-	bad := false
+	bad, missing := false, false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/" + Repo + "/releases/download/v0.3.0/zebracat_linux_amd64.tar.gz":
 			_, _ = w.Write(arch)
 		case "/" + Repo + "/releases/download/v0.3.0/checksums.txt":
+			if missing {
+				http.NotFound(w, r)
+				return
+			}
 			if bad {
 				_, _ = w.Write([]byte(strings.Repeat("0", 64) + "  zebracat_linux_amd64.tar.gz\n"))
 				return
@@ -230,6 +234,15 @@ func TestApplyToReplacesTheBinaryAndChecksTheSum(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(exe); string(b) != "old-binary" {
 		t.Fatal("a refused download leaves the old binary")
+	}
+
+	// A release whose checksums.txt can't be read is refused, not installed unchecked.
+	bad, missing = false, true
+	if err := ApplyTo(context.Background(), "v0.3.0", exe, "linux", "amd64"); err == nil || !strings.Contains(err.Error(), "checksums.txt") {
+		t.Fatalf("a missing checksums.txt must refuse, got %v", err)
+	}
+	if b, _ := os.ReadFile(exe); string(b) != "old-binary" {
+		t.Fatal("an unchecked download must leave the old binary")
 	}
 }
 

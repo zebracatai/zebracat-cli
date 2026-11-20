@@ -286,10 +286,14 @@ func ApplyTo(ctx context.Context, tag, exe, goos, goarch string) error {
 	if err != nil {
 		return err
 	}
-	if sums, err := fetch(ctx, base+"checksums.txt"); err == nil {
-		if err := verify(sums, asset, archive); err != nil {
-			return err
-		}
+	// No checksums.txt, no install: a release without one (or a blocked
+	// download of it) must not slip an unchecked binary in.
+	sums, err := fetch(ctx, base+"checksums.txt")
+	if err != nil {
+		return fmt.Errorf("could not read the release's checksums.txt, so the download was not installed: %w", err)
+	}
+	if err := verify(sums, asset, archive); err != nil {
+		return err
 	}
 	bin, err := extractBinary(bytes.NewReader(archive))
 	if err != nil {

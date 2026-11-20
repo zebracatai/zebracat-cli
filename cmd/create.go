@@ -79,19 +79,19 @@ func createPlan(text string, kind brief.Kind, imgs []attach.Image) error {
 		return err
 	}
 	body := brief.Body(text, kind, !crNoRender)
-	if len(imgs) > 0 { // uploaded first, the way the studio's /chat does
+	if len(imgs) > 0 { // uploaded first (POST /uploads), then sent as the plan's uploads
 		ctx, cancel := ctxTimeout(2 * time.Minute)
-		var urls []string
+		var stored []attach.Stored
 		for _, im := range imgs {
-			u, err := attach.Upload(ctx, c, im)
+			st, err := attach.Upload(ctx, c, im)
 			if err != nil {
 				cancel()
 				return err
 			}
-			urls = append(urls, u)
+			stored = append(stored, st)
 		}
 		cancel()
-		body["uploads"] = attach.Uploads(urls, imgs)
+		body["uploads"] = attach.Uploads(stored, imgs)
 	}
 	key := newIdempotencyKey()
 	var out map[string]any

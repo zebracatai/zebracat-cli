@@ -10,11 +10,14 @@
 # Env overrides:
 #   ZEBRACAT_BIN_DIR          install dir (default: ~/.local/bin)
 #   ZEBRACAT_INSTALL_VERSION  pin a release tag (e.g. v0.1.0; default: latest)
+#   ZEBRACAT_RELEASES_URL     releases host (default: https://github.com; for tests)
 set -euo pipefail
 
 REPO="zebracatai/zebracat-cli"
 BIN="zebracat"
 BIN_DIR="${ZEBRACAT_BIN_DIR:-$HOME/.local/bin}"
+GH="${ZEBRACAT_RELEASES_URL:-https://github.com}"
+GH="${GH%/}"
 
 purple() { printf '\033[38;5;141m%s\033[0m\n' "$1"; }
 err() { printf '\033[31merror:\033[0m %s\n' "$1" >&2; exit 1; }
@@ -40,7 +43,7 @@ if [ -z "$tag" ]; then
   # GitHub redirects /releases/latest to /releases/tag/<tag>. Following that redirect
   # needs no API call (no 60/h anonymous rate limit) and no early-exiting pipe, which
   # under `set -o pipefail` killed the script with curl error 23.
-  latest="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/${REPO}/releases/latest")" \
+  latest="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "${GH}/${REPO}/releases/latest")" \
     || err "could not reach GitHub to find the latest release"
   case "$latest" in
     */releases/tag/*) tag="${latest##*/}" ;;
@@ -49,12 +52,30 @@ fi
 [ -n "$tag" ] || err "could not determine the latest release (none published yet?)"
 
 asset="${BIN}_${os}_${arch}.tar.gz"
-url="https://github.com/${REPO}/releases/download/${tag}/${asset}"
+url="${GH}/${REPO}/releases/download/${tag}/${asset}"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 purple "Downloading ${tag} (${os}/${arch})…"
 curl -fsSL "$url" -o "$tmp/$asset" || err "download failed: $url"
+
+# Check the archive against the release's checksums.txt before installing it.
+# No checksums file or no sha256 tool: refuse rather than install unchecked.
+sums_url="${GH}/${REPO}/releases/download/${tag}/checksums.txt"
+curl -fsSL "$sums_url" -o "$tmp/checksums.txt" || err "could not download checksums.txt: $sums_url"
+want="$(awk -v f="$asset" '$2 == f { print $1 }' "$tmp/checksums.txt")"
+[ -n "$want" ] || err "checksums.txt has no line for $asset; not installing"
+if command -v sha256sum >/dev/null 2>&1; then
+  got="$(sha256sum "$tmp/$asset" | awk '{ print $1 }')"
+elif command -v shasum >/dev/null 2>&1; then
+  got="$(shasum -a 256 "$tmp/$asset" | awk '{ print $1 }')"
+else
+  err "need sha256sum or shasum to check the download"
+fi
+[ "$(printf '%s' "$want" | tr 'A-F' 'a-f')" = "$(printf '%s' "$got" | tr 'A-F' 'a-f')" ] \
+  || err "checksum mismatch for $asset; the download was not installed"
+purple "✓ Checksum verified"
+
 tar -xzf "$tmp/$asset" -C "$tmp"
 
 mkdir -p "$BIN_DIR"

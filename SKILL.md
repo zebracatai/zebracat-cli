@@ -1,11 +1,11 @@
 ---
 name: zebracat-cli
-version: 0.6.4
+version: 0.7.0
 description: |
   Make AI videos from the terminal with the Zebracat CLI. Use when the user wants to
-  generate, plan, edit, price, translate, clone, list or download Zebracat videos, write
-  scripts/hooks/voice-overs/images/clips with Zebracat Studio, or manage voices/avatars/
-  account from a shell or an agent. Wraps `zebracat` (JSON out, stable exit codes).
+  generate, plan, edit, price, translate, clone, list or download Zebracat videos, swap a
+  face into a clip (Character Swap), or manage voices/avatars/account from a shell or an
+  agent. Wraps `zebracat` (JSON out, stable exit codes).
 argument-hint: "[idea or topic]"
 allowed-tools: Bash, Read, Write
 metadata:
@@ -42,8 +42,8 @@ plan decides whether to clone it or use it as the topic. `--yes` on `create` pla
 generates (spends) — only when the user already agreed.
 
 Pictures the user gives you: `--image <path>[:person|place|product|style|logo|other]`
-(repeatable; PNG/JPEG/WebP ≤12 MB). They are uploaded like the studio's chat and sent as
-the plan's `uploads`.
+(repeatable; PNG/JPEG/WebP ≤12 MB). They are uploaded to `POST /api/v1/public/uploads`
+and sent as the plan's `uploads` (no kind given: the server's `kind_hint`, else `other`).
 
 Don't run bare `zebracat` from an agent: it is the human conversation and, without a
 terminal, exits 2 (`needs_terminal`). A brief with nothing to film ("hi") ends with
@@ -101,13 +101,9 @@ Only pass what the user said; Director v2 decides the rest from the brief.
 zebracat video status <task_id> --wait        # .phase
 zebracat video clone --url <video> --mode remix|generate_similar|recreate_script [--topic] --wait
 zebracat video translate --url <mp4-url> --to spanish --render --wait
-zebracat studio script "<idea>" --seconds 30 --wait      # .result.narration_text
-zebracat studio hooks --script script.txt                # .hooks[].line
-zebracat studio voice --text script.txt --voice <id> --dry-run   # paid: quote first
-zebracat studio image "<prompt>" --aspect vertical --count 2 --wait
-zebracat studio clip "<prompt>" --seconds 5 --dry-run           # paid: quote first
-zebracat swap --video <clip-url> --character <face-url> --consent --dry-run   # paid: quote first
+zebracat swap --video <clip-url> --character <face-url> --consent --dry-run   # paid plans: quote first
 # --consent only when the user confirmed they may use that face; never add it yourself
+zebracat swap status <job_id> --wait                     # .result.video_url
 zebracat models list ; zebracat presets list ; zebracat voice list --language english
 zebracat account show                                    # balances
 ```
@@ -120,7 +116,8 @@ zebracat account show                                    # balances
   `3` → tell the user to set a valid API key; `1` with `type: insufficient_funds` → show
   the `hint` verbatim (it says where to top up); `1` with `retryable: true` → wait and
   retry; `4` → the job is still running, poll later with `zebracat video status`.
-- Tell the user the quote before any paid step (`video generate`, `studio voice`,
-  `studio clip`, `swap`); `video clone` has no quote, so confirm it with the user first.
-  Script, hooks, images, plans and plan edits are free.
+- Tell the user the quote before any paid step (`video generate`, `swap`); `video clone`
+  has no quote, so confirm it with the user first. Plans and plan edits are free.
+- There is no `zebracat studio` command any more (the Studio API was removed); for a
+  script without a video use `zebracat script "<idea>"`.
 - Log finished videos to `zebracat-video-log.jsonl` (one JSON line: task_id, phase, video_url, topic).

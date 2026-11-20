@@ -40,16 +40,16 @@ func (m *model) createCmd(j *job, body map[string]any, imgs []attach.Image) tea.
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		if len(imgs) > 0 { // the pictures first, the way the studio uploads them
-			var urls []string
+		if len(imgs) > 0 { // the pictures first (POST /uploads)
+			var stored []attach.Stored
 			for _, im := range imgs {
-				u, err := attach.Upload(ctx, cl, im)
+				st, err := attach.Upload(ctx, cl, im)
 				if err != nil {
 					return createdMsg{j: j, err: err}
 				}
-				urls = append(urls, u)
+				stored = append(stored, st)
 			}
-			body["uploads"] = attach.Uploads(urls, imgs)
+			body["uploads"] = attach.Uploads(stored, imgs)
 		}
 		var out map[string]any
 		_, err := cl.DoWith(ctx, "POST", videos.Base+"/videos", body, map[string]string{"Idempotency-Key": key}, &out)

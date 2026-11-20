@@ -27,30 +27,12 @@ var scriptCmd = &cobra.Command{
 	Short: "Generate a voice-over script from an idea",
 	Long: `Generate a ready-to-use voice-over script from a one-line idea — no video.
 
-  zebracat script "benefits of morning walks" --duration 30
-
-When the server has the Studio API this is ` + "`zebracat studio script --wait`" + ` (the
-answer keeps a "script" key with the narration); otherwise the classic
-script generator.`,
+  zebracat script "benefits of morning walks" --duration 30`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := newClient()
 		if err != nil {
 			return err
-		}
-		if c.HasPath(cmd.Context(), "/studio/scripts") {
-			if sgMood != "" || sgPromptStyle != "" {
-				note("--mood and --prompt-style are not Studio script options; they are ignored")
-			}
-			stTimeout = 3 * time.Minute
-			out, err := studioScript(c, strings.Join(args, " "), sgDuration, sgLanguage, true)
-			if err != nil {
-				return err
-			}
-			if res, ok := out["result"].(map[string]any); ok {
-				out["script"] = res["narration_text"]
-			}
-			return emit(out, func() { printStudioJobHuman(out) })
 		}
 		body := map[string]any{"idea": strings.Join(args, " ")}
 		if sgDuration != 0 {
@@ -85,26 +67,12 @@ var imageCmd = &cobra.Command{
 	Short: "Generate an AI image",
 	Long: `Generate one or more AI images from a prompt.
 
-  zebracat image "a neon city skyline at dusk" --n 2
-
-When the server has the Studio API this is ` + "`zebracat studio image --wait`" + `;
-otherwise the classic image generator.`,
+  zebracat image "a neon city skyline at dusk" --n 2`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := newClient()
 		if err != nil {
 			return err
-		}
-		if c.HasPath(cmd.Context(), "/studio/images") {
-			if imgStyle != 0 || imgWidth != 0 || imgHeight != 0 {
-				note("--style, --width and --height are not Studio image options; use `zebracat studio image --aspect`")
-			}
-			stTimeout = 3 * time.Minute
-			out, err := studioImage(c, strings.Join(args, " "), "", imgCount, true)
-			if err != nil {
-				return err
-			}
-			return emit(out, func() { printStudioJobHuman(out) })
 		}
 		body := map[string]any{"prompt": strings.Join(args, " ")}
 		if imgStyle != 0 {
