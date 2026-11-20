@@ -2,8 +2,8 @@
     "openapi": "3.1.0",
     "info": {
         "title": "Zebracat Public API",
-        "version": "v1",
-        "description": "## Welcome to the Zebracat AI Public API\n\nZebracat gives you a full suite of **agentic video generation** tools you can plug into any workflow, any platform, anywhere. Generate complete videos end-to-end, or use individual building blocks — **AI image generation**, **music generation**, **voice-over synthesis**, **AI avatars**, **video cloning**, **video translation**, and more — as standalone APIs.\n\nBuild text-to-video, blog-to-video, idea-to-video pipelines, or mix and match our tools to create something entirely your own.\n\n### Base URL\n\nAll API endpoints are served under the versioned base path:\n\n```\nhttps://api.zebracat.ai/api/v1/public/\n```\n\n### API Versioning\n\nThe Zebracat API uses **URL-based versioning**. The version is included in the URL path (e.g. `/api/v1/public/...`).\n\n- **Current version:** `v1`\n- **Version header:** Every response includes an `API-Version` header with the version used.\n- **Unversioned alias:** `/api/public/` maps to the latest stable version (currently v1).\n- **Deprecation policy:** Older versions will be supported for at least 6 months after a new version is released. Deprecation timelines will be announced via the changelog and response headers.\n\n### Authentication\n\nZebracat supports **two** ways to authenticate, each billed from a different pool:\n\n1. **API key (`X-API-KEY`)** — pay-as-you-go, billed from your **API dollar balance**. Best for servers, CI, scripts and the Zebracat CLI (`zebracat auth login`). Generate a key at [zebracat.ai/api](https://zebracat.ai/api) and send it on every request:\n   ```\n   X-API-KEY: sk-your-api-key-here\n   ```\n2. **OAuth 2.1 (`Authorization: Bearer …`)** — log in with your Zebracat account and spend your **normal plan credits** (no separate top-up). Best for end-user apps and MCP clients (Claude, ChatGPT, Codex, Cursor). Discovery: `GET /.well-known/oauth-authorization-server`; the flow is standard authorization-code + PKCE with dynamic client registration at `POST /api/oauth/register`. Scopes, endpoints and token lifetimes: [Auth and billing](/docs/guides/auth-and-billing.md).\n\n### From Claude or ChatGPT\n\nAdd `https://mcp.zebracat.ai/mcp` as a custom connector (Claude: Customize → Connectors → Add custom connector; ChatGPT: Plugins → Add custom MCP server), sign in with Zebracat, and ask for a video. Step-by-step for every client: the [MCP guide](/docs/guides/mcp.md).\n\n### ID types cheat-sheet\n\nDifferent resources use different identifier formats — send the right one:\n\n| Field | Format | Where to get it |\n|---|---|---|\n| `voice_id` | provider string (e.g. `21m00Tcm4TlvDq8ikWAM`) | `GET /voices` — or one of **your cloned voices** from `GET /voice/clone` |\n| `style_id` (visual style) | integer | `GET /visual_styles` |\n| `avatar_id` / `brand_id` / `character_id` | integer | `GET /avatars` / `GET /brands` / `GET /characters` |\n| `language` (generation) | lowercase English name (`english`, `spanish`) | `GET /video/languages` |\n| `target_language` (translation) | ISO 639-1 code (`es`) or name | `GET /video/translate/languages` |\n| `task_id` | hex string from any create call | create responses / `GET /videos` |\n| `project_id` | integer | create responses — open at `https://studio.zebracat.ai/storyboard/{project_id}` |\n\n### Error handling\n\nEvery error uses one envelope (the `Error` schema). `error` is always present; `type` (the family: `invalid_request`, `authentication`, `permission`, `insufficient_funds`, `not_found`, `conflict`, `rate_limited`, `engine`, `unavailable`), `retryable` and `request_id` are added on every error, and the other keys appear when known. Every code is listed in the [Errors guide](/docs/guides/errors.md):\n\n```json\n{\n  \"error\": \"mood must be one of hype_swagger, energetic_upbeat, ... .\",\n  \"code\": \"invalid_choice\",\n  \"field\": \"mood\",\n  \"allowed_values\": [\"hype_swagger\", \"energetic_upbeat\", \"motivational_inspiring\", \"cinematic_storytelling\", \"suspense_mysterious\", \"curious_intriguing\", \"emotional_sad\", \"calm_chill\", \"happy_feelgood\", \"funny_quirky\"],\n  \"hint\": \"optional actionable next step\",\n  \"errors\": [{\"...\": \"every problem found, when more than one\"}]\n}\n```\n\nCommon `code` values: `missing_field`, `invalid_choice`, `invalid_type`, `not_found`, `unknown_field` (unrecognized body key — the `hint` says where it belongs), `duration_over_plan`, `url_unreachable`, `file_too_large`, `invalid_media`, `insufficient_balance` / `insufficient_credit` (402, with `topup_url`/`billing_url`), `concurrency_limit` / `daily_quota` (429), `project_setup_failed`.\n\nUnknown body fields are **rejected** (HTTP 400, `code: unknown_field`) with a hint — e.g. sending `video_type` to `/video/idea` explains that only `/video/agentic` accepts it and that this endpoint wants `footage_type` instead.\n\n### Making a video\n\nVideo generation is **asynchronous** and runs the same engine as the dashboard's chat:\n\n1. **Submit** `POST /videos` with a `brief` (and any structured choices). You get `202` with a `task_id` and a `phase`. With `auto_generate: false` the video stops at `plan_ready` so you can read the plan, change it and see its exact price (`GET /videos/{task_id}/quote`) before `POST /videos/{task_id}/generate`.\n2. **Track it**: poll `GET /videos/{task_id}` until `phase` is `completed` (or `failed`), or register a webhook (`POST /webhooks`) for `video.plan_ready`, `video.completed`, `video.failed` and the rest.\n3. **Get the result**: `video_url` is the MP4; every project also opens in the editor at `https://studio.zebracat.ai/storyboard/{project_id}`.\n\nPictures the video should use (a person, a product, a logo): `POST /uploads` (multipart `file`) answers a `url` to send in `uploads`.\n\nEvery call that can spend money accepts `\"dry_run\": true` and answers its price instead; every create accepts an `Idempotency-Key` header (the same key with another body answers `422 idempotency_key_reused`). The v1 endpoints (`/video/idea`, `/video/script`, …) keep working and are marked **deprecated**: each names its `/videos` replacement.\n\n### Guides\n\n- [Agent quickstart](/docs/guides/agent-quickstart.md): one call to a finished video\n- [Auth and billing](/docs/guides/auth-and-billing.md): API key vs OAuth, which balance pays\n- [Video lifecycle](/docs/guides/video-lifecycle.md): phases, plan, edit, quote, Generate, webhooks\n- [Idempotency and dry run](/docs/guides/idempotency-and-dry-run.md)\n- [Errors](/docs/guides/errors.md): every error code\n- [Rate limits](/docs/guides/rate-limits.md)\n- [Webhooks](/docs/guides/webhooks.md)\n- [Character Swap](/docs/guides/character-swap.md): paid only, live wherever the dashboard's Swap is\n- [Clone a video](/docs/guides/clone.md)\n- [Translate a video](/docs/guides/translate.md)\n- [MCP server](/docs/guides/mcp.md)\n- [CLI](/docs/guides/cli.md)\n- [Migrating to v2](/docs/guides/migrating-to-v2.md)\n\n### For AI agents\n\n- **[`/docs/llms-small.txt`](/docs/llms-small.txt)**: the agent primer, the whole flow in under 4k tokens.\n- **[`/docs/llms.txt`](/docs/llms.txt)**: the llmstxt.org index of these docs; **[`/docs/llms-full.txt`](/docs/llms-full.txt)**: every guide and the whole reference in one Markdown file. Both are generated from this schema and the code.\n- **Per-group reference in Markdown:** `/docs/reference/<group>.md`.\n- **MCP server:** `https://mcp.zebracat.ai/mcp` (OAuth sign-in, or `X-API-KEY`): see the MCP guide.\n- **Postman:** [`/docs/postman.json`](/docs/postman.json), a Postman Collection v2.1 of this API.\n- **OpenAPI 3.1:** [`/docs/openapi.json`](/docs/openapi.json).\n\n### Pricing\n\nAPI usage is billed per request based on your plan — `GET /pricing` returns live per-service prices. Visit [zebracat.ai/api](https://zebracat.ai/api) to view pricing and choose the plan that fits your needs.\n\n### Support\n\nNeed help? Reach out to us at [zebracat.ai](https://zebracat.ai) or check our documentation for guides and examples.",
+        "version": "v1 (v1)",
+        "description": "## Welcome to the Zebracat AI Public API\n\nZebracat gives you a full suite of **agentic video generation** tools you can plug into any workflow, any platform, anywhere. Generate complete videos end-to-end, or use individual building blocks — **AI image generation**, **music generation**, **voice-over synthesis**, **AI avatars**, **video cloning**, **video translation**, and more — as standalone APIs.\n\nBuild text-to-video, blog-to-video, idea-to-video pipelines, or mix and match our tools to create something entirely your own.\n\n### Base URL\n\nAll API endpoints are served under the versioned base path:\n\n```\nhttps://api.zebracat.ai/api/v1/public/\n```\n\n### API Versioning\n\nThe Zebracat API uses **URL-based versioning**. The version is included in the URL path (e.g. `/api/v1/public/...`).\n\n- **Current version:** `v1`\n- **Version header:** Every response includes an `API-Version` header with the version used.\n- **Unversioned alias:** `/api/public/` maps to the latest stable version (currently v1).\n- **Deprecation policy:** Older versions will be supported for at least 6 months after a new version is released. Deprecation timelines will be announced via the changelog and response headers.\n\n### Authentication\n\nZebracat supports **two** ways to authenticate, each billed from a different pool:\n\n1. **API key (`X-API-KEY`)** — pay-as-you-go, billed from your **API dollar balance**. Best for servers, CI, scripts and the Zebracat CLI (`zebracat auth login`). Generate a key at [zebracat.ai/api](https://zebracat.ai/api) and send it on every request:\n   ```\n   X-API-KEY: sk-your-api-key-here\n   ```\n2. **OAuth 2.1 (`Authorization: Bearer …`)** — log in with your Zebracat account and spend your **normal plan credits** (no separate top-up). Best for end-user apps and MCP clients (Claude, ChatGPT, Codex, Cursor). Discovery: `GET /.well-known/oauth-authorization-server`; the flow is standard authorization-code + PKCE with dynamic client registration at `POST /api/oauth/register`. Scopes, endpoints and token lifetimes: [Auth and billing](/docs/guides/auth-and-billing.md).\n\n### From Claude or ChatGPT\n\nAdd `https://mcp.zebracat.ai/mcp` as a custom connector (Claude: Customize → Connectors → Add custom connector; ChatGPT: Plugins → Add custom MCP server), sign in with Zebracat, and ask for a video. Step-by-step for every client: the [MCP guide](/docs/guides/mcp.md).\n\n### ID types cheat-sheet\n\nDifferent resources use different identifier formats — send the right one:\n\n| Field | Format | Where to get it |\n|---|---|---|\n| `voice_id` | provider string (e.g. `21m00Tcm4TlvDq8ikWAM`) | `GET /voices` — or one of **your cloned voices** from `GET /voice/clone` |\n| `style_id` (visual style) | integer | `GET /visual_styles` |\n| `avatar_id` / `brand_id` / `character_id` | integer | `GET /avatars` / `GET /brands` / `GET /characters` |\n| `language` (generation) | lowercase English name (`english`, `spanish`) | `GET /video/languages` |\n| `target_language` (translation) | ISO 639-1 code (`es`) or name | `GET /video/translate/languages` |\n| `task_id` | hex string from any create call | create responses / `GET /videos` |\n| `project_id` | integer | create responses — open at `https://studio.zebracat.ai/storyboard/{project_id}` |\n\n### Error handling\n\nEvery error uses one envelope (the `Error` schema). `error` is always present; `type` (the family: `invalid_request`, `authentication`, `permission`, `insufficient_funds`, `not_found`, `conflict`, `rate_limited`, `engine`, `unavailable`), `retryable` and `request_id` are added on every error, and the other keys appear when known. Every code is listed in the [Errors guide](/docs/guides/errors.md):\n\n```json\n{\n  \"error\": \"mood must be one of hype_swagger, energetic_upbeat, ... .\",\n  \"code\": \"invalid_choice\",\n  \"field\": \"mood\",\n  \"allowed_values\": [\"hype_swagger\", \"energetic_upbeat\", \"motivational_inspiring\", \"cinematic_storytelling\", \"suspense_mysterious\", \"curious_intriguing\", \"emotional_sad\", \"calm_chill\", \"happy_feelgood\", \"funny_quirky\"],\n  \"hint\": \"optional actionable next step\",\n  \"errors\": [{\"...\": \"every problem found, when more than one\"}]\n}\n```\n\nCommon `code` values: `missing_field`, `invalid_choice`, `invalid_type`, `not_found`, `unknown_field` (unrecognized body key — the `hint` says where it belongs), `duration_over_plan`, `url_unreachable`, `file_too_large`, `invalid_media`, `insufficient_balance` / `insufficient_credit` (402, with `topup_url`/`billing_url`), `concurrency_limit` / `daily_quota` (429), `project_setup_failed`.\n\nUnknown body fields are **rejected** (HTTP 400, `code: unknown_field`) with a hint — e.g. sending `video_type` to `/video/idea` explains that only `/video/agentic` accepts it and that this endpoint wants `footage_type` instead.\n\n### Making a video\n\nVideo generation is **asynchronous** and runs the same engine as the dashboard's chat:\n\n1. **Submit** `POST /videos` with a `brief` (and any structured choices). You get `202` with a `task_id` and a `phase`. With `auto_generate: false` the video stops at `plan_ready` so you can read the plan, change it and see its exact price (`GET /videos/{task_id}/quote`) before `POST /videos/{task_id}/generate`.\n2. **Track it**: poll `GET /videos/{task_id}` until `phase` is `completed` (or `failed`), or register a webhook (`POST /webhooks`) for `video.plan_ready`, `video.completed`, `video.failed` and the rest.\n3. **Get the result**: `video_url` is the MP4; every project also opens in the editor at `https://studio.zebracat.ai/storyboard/{project_id}`.\n\nPictures the video should use (a person, a product, a logo): `POST /uploads` (multipart `file`) answers a `url` to send in `uploads`.\n\nEvery call that can spend money accepts `\"dry_run\": true` and answers its price instead; every create accepts an `Idempotency-Key` header (the same key with another body answers `422 idempotency_key_reused`). The v1 endpoints (`/video/idea`, `/video/script`, …) keep working and are marked **deprecated**: each names its `/videos` replacement.\n\n### Guides\n\n- [Agent quickstart](/docs/guides/agent-quickstart.md): one call to a finished video\n- [Auth and billing](/docs/guides/auth-and-billing.md): API key vs OAuth, which balance pays\n- [Video lifecycle](/docs/guides/video-lifecycle.md): phases, plan, edit, quote, Generate, webhooks\n- [Idempotency and dry run](/docs/guides/idempotency-and-dry-run.md)\n- [Errors](/docs/guides/errors.md): every error code\n- [Rate limits](/docs/guides/rate-limits.md)\n- [Webhooks](/docs/guides/webhooks.md)\n- [Character Swap](/docs/guides/character-swap.md): paid only, live wherever the dashboard's Swap is\n- [Clone a video](/docs/guides/clone.md)\n- [Translate a video](/docs/guides/translate.md)\n- [MCP server](/docs/guides/mcp.md)\n- [CLI](/docs/guides/cli.md)\n- [Workflows](/docs/guides/workflows.md): videos on a schedule from a template (topic series, RSS or blog, clone from links)\n- [Migrating to v2](/docs/guides/migrating-to-v2.md)\n\n### For AI agents\n\n- **[`/docs/llms-small.txt`](/docs/llms-small.txt)**: the agent primer, the whole flow in under 4k tokens.\n- **[`/docs/llms.txt`](/docs/llms.txt)**: the llmstxt.org index of these docs; **[`/docs/llms-full.txt`](/docs/llms-full.txt)**: every guide and the whole reference in one Markdown file. Both are generated from this schema and the code.\n- **Per-group reference in Markdown:** `/docs/reference/<group>.md`.\n- **MCP server:** `https://mcp.zebracat.ai/mcp` (OAuth sign-in, or `X-API-KEY`): see the MCP guide.\n- **Postman:** [`/docs/postman.json`](/docs/postman.json), a Postman Collection v2.1 of this API.\n- **OpenAPI 3.1:** [`/docs/openapi.json`](/docs/openapi.json).\n\n### Pricing\n\nAPI usage is billed per request based on your plan — `GET /pricing` returns live per-service prices. Visit [zebracat.ai/api](https://zebracat.ai/api) to view pricing and choose the plan that fits your needs.\n\n### Support\n\nNeed help? Reach out to us at [zebracat.ai](https://zebracat.ai) or check our documentation for guides and examples.",
         "contact": {
             "email": "support@zebracat.ai",
             "url": "https://zebracat.ai"
@@ -3721,82 +3721,17 @@
                                                     "description": "Or send your Zebracat API key in the X-API-KEY header (servers, CI). Spends the API dollar balance."
                                                 }
                                             },
-                                            "tools_count": 40,
+                                            "tools_count": 63,
                                             "tools": [
                                                 {
                                                     "name": "plan_video",
                                                     "title": "Plan a video",
-                                                    "description": "List the choices for a new video (type, duration, aspect ratio, voice, style) with a recommendation, before anything is made.",
+                                                    "description": "Plan a Director v2 video from the user's words and wait (up to 45 s) for the plan: screenplay summary and price. Nothing is generated.",
                                                     "category": "Guided Flow",
                                                     "annotations": {
                                                         "title": "Plan a video",
-                                                        "readOnlyHint": true,
+                                                        "readOnlyHint": false,
                                                         "destructiveHint": false,
-                                                        "idempotentHint": true,
-                                                        "openWorldHint": false
-                                                    }
-                                                },
-                                                {
-                                                    "name": "create_video_from_idea",
-                                                    "title": "Create a video from an idea",
-                                                    "description": "Make a video from a short text idea: Zebracat writes the script, then the voice-over and the visuals.",
-                                                    "category": "Video Generation",
-                                                    "annotations": {
-                                                        "title": "Create a video from an idea",
-                                                        "readOnlyHint": false,
-                                                        "destructiveHint": true,
-                                                        "idempotentHint": true,
-                                                        "openWorldHint": false
-                                                    }
-                                                },
-                                                {
-                                                    "name": "create_video_from_script",
-                                                    "title": "Create a video from a script",
-                                                    "description": "Make a video that speaks a script word for word: voice-over of the given text, then matching visuals.",
-                                                    "category": "Video Generation",
-                                                    "annotations": {
-                                                        "title": "Create a video from a script",
-                                                        "readOnlyHint": false,
-                                                        "destructiveHint": true,
-                                                        "idempotentHint": true,
-                                                        "openWorldHint": false
-                                                    }
-                                                },
-                                                {
-                                                    "name": "create_video_from_blog",
-                                                    "title": "Create a video from a blog post",
-                                                    "description": "Make a video from a blog post or article URL: the page is read, summarised into a script, voiced and illustrated.",
-                                                    "category": "Video Generation",
-                                                    "annotations": {
-                                                        "title": "Create a video from a blog post",
-                                                        "readOnlyHint": false,
-                                                        "destructiveHint": true,
-                                                        "idempotentHint": true,
-                                                        "openWorldHint": true
-                                                    }
-                                                },
-                                                {
-                                                    "name": "create_video_from_audio",
-                                                    "title": "Create a video from audio",
-                                                    "description": "Make a video around an existing audio file: the audio is transcribed and visuals are timed to it.",
-                                                    "category": "Video Generation",
-                                                    "annotations": {
-                                                        "title": "Create a video from audio",
-                                                        "readOnlyHint": false,
-                                                        "destructiveHint": true,
-                                                        "idempotentHint": true,
-                                                        "openWorldHint": true
-                                                    }
-                                                },
-                                                {
-                                                    "name": "create_agentic_video",
-                                                    "title": "Create a video (guided)",
-                                                    "description": "Make a video from the user's request once they confirmed the plan: Zebracat picks the script, scenes, voice and music. The preferred create tool.",
-                                                    "category": "Video Generation",
-                                                    "annotations": {
-                                                        "title": "Create a video (guided)",
-                                                        "readOnlyHint": false,
-                                                        "destructiveHint": true,
                                                         "idempotentHint": true,
                                                         "openWorldHint": true
                                                     }
@@ -3843,7 +3778,7 @@
                                                 {
                                                     "name": "get_video_status",
                                                     "title": "Get video status",
-                                                    "description": "Read the current status of one video job.",
+                                                    "description": "Deprecated: use get_video. It will be removed in a coming release. Read the current status of one video job.",
                                                     "category": "Status",
                                                     "annotations": {
                                                         "title": "Get video status",
@@ -3856,13 +3791,156 @@
                                                 {
                                                     "name": "generate_script",
                                                     "title": "Write a voice-over script",
-                                                    "description": "Write a voice-over script from an idea and return the text at once. No video is made.",
+                                                    "description": "Deprecated: plan_video writes the script inside the plan (get_plan shows it). It will be removed in a coming release. Write a voice-over script from an idea and return the text at once. No video is made.",
                                                     "category": "Video Generation",
                                                     "annotations": {
                                                         "title": "Write a voice-over script",
                                                         "readOnlyHint": false,
                                                         "destructiveHint": true,
                                                         "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "create_video",
+                                                    "title": "Create a video",
+                                                    "description": "Start a Director v2 video from the user's words, the way the dashboard's /chat does: a plan first, then Generate.",
+                                                    "category": "Video Generation",
+                                                    "annotations": {
+                                                        "title": "Create a video",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": true,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": true
+                                                    }
+                                                },
+                                                {
+                                                    "name": "get_video",
+                                                    "title": "Get a video",
+                                                    "description": "Read a Director v2 video: its phase, the plan's question or summary, the quote, and the video once made.",
+                                                    "category": "Status",
+                                                    "annotations": {
+                                                        "title": "Get a video",
+                                                        "readOnlyHint": true,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "get_plan",
+                                                    "title": "Read the plan",
+                                                    "description": "Read the full plan of a video: the screenplay (beats, cast, places, voices, music), the render choices and its version rev.",
+                                                    "category": "Plan",
+                                                    "annotations": {
+                                                        "title": "Read the plan",
+                                                        "readOnlyHint": true,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "quote_video",
+                                                    "title": "Quote the plan",
+                                                    "description": "Price the plan's current version: the exact amount Generate charges.",
+                                                    "category": "Plan",
+                                                    "annotations": {
+                                                        "title": "Quote the plan",
+                                                        "readOnlyHint": true,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "edit_plan",
+                                                    "title": "Edit the plan",
+                                                    "description": "Apply one structured change to the plan as a new version, exactly as the dashboard's plan card does.",
+                                                    "category": "Plan",
+                                                    "annotations": {
+                                                        "title": "Edit the plan",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "chat_plan",
+                                                    "title": "Change the plan in words",
+                                                    "description": "Send one plan-chat turn: ask about the plan or say what to change; every change lands as one new version.",
+                                                    "category": "Plan",
+                                                    "annotations": {
+                                                        "title": "Change the plan in words",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "undo_plan",
+                                                    "title": "Undo a plan change",
+                                                    "description": "Undo plan changes: back to the version before (or to_rev), saved as a new version.",
+                                                    "category": "Plan",
+                                                    "annotations": {
+                                                        "title": "Undo a plan change",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "answer_video_question",
+                                                    "title": "Answer the plan's question",
+                                                    "description": "Answer the question the planner asked (phase needs_input); planning resumes.",
+                                                    "category": "Plan",
+                                                    "annotations": {
+                                                        "title": "Answer the plan's question",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "generate_video",
+                                                    "title": "Generate the video",
+                                                    "description": "Film the approved plan: clips, voices, music and the final video. This is the step that spends.",
+                                                    "category": "Video Generation",
+                                                    "annotations": {
+                                                        "title": "Generate the video",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": true,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "list_presets",
+                                                    "title": "List video presets",
+                                                    "description": "List the video presets: formats (street interview, podcast, UGC ad...) and tool pages (Ghibli, brainrot...), each with the defaults it pre-fills.",
+                                                    "category": "Assets",
+                                                    "annotations": {
+                                                        "title": "List video presets",
+                                                        "readOnlyHint": true,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "list_video_models",
+                                                    "title": "List video qualities and models",
+                                                    "description": "List the quality tiers, the video models each films on and their credits per 5 s scene.",
+                                                    "category": "Assets",
+                                                    "annotations": {
+                                                        "title": "List video qualities and models",
+                                                        "readOnlyHint": true,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
                                                         "openWorldHint": false
                                                     }
                                                 },
@@ -4090,7 +4168,7 @@
                                                 {
                                                     "name": "list_prompt_styles",
                                                     "title": "List script styles",
-                                                    "description": "List the script writing styles (listicle, storytime, howto, pov ...).",
+                                                    "description": "Deprecated: its styles only feed generate_script; on this server describe the format in plan_video's idea. It will be removed in a coming release. List the script writing styles (listicle, storytime, howto, pov ...).",
                                                     "category": "Assets",
                                                     "annotations": {
                                                         "title": "List script styles",
@@ -4124,6 +4202,227 @@
                                                         "destructiveHint": false,
                                                         "idempotentHint": true,
                                                         "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "list_workflows",
+                                                    "title": "List workflows",
+                                                    "description": "List the user's workflows: videos made on a schedule, with their state (needs_input, waiting_approval), next video and last run.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "List workflows",
+                                                        "readOnlyHint": true,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "get_workflow",
+                                                    "title": "Get a workflow",
+                                                    "description": "Read one workflow: its source, settings, state, the next video it will make, its inbox, a plan waiting for approval, and the history of what it used.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Get a workflow",
+                                                        "readOnlyHint": true,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "create_workflow",
+                                                    "title": "Create a workflow",
+                                                    "description": "Create a workflow that makes a video on a schedule: we find ideas for a niche, the user gives a link or idea each time, we adapt trending videos, or (source viral) we plan each week from the niche's viral videos.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Create a workflow",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": true,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": true
+                                                    }
+                                                },
+                                                {
+                                                    "name": "update_workflow",
+                                                    "title": "Update a workflow",
+                                                    "description": "Rename a workflow or change its settings: the niches, source, schedule, video picks or what happens with each video.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Update a workflow",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": true
+                                                    }
+                                                },
+                                                {
+                                                    "name": "pause_workflow",
+                                                    "title": "Pause a workflow",
+                                                    "description": "Pause a workflow: no scheduled run starts until it is resumed.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Pause a workflow",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "resume_workflow",
+                                                    "title": "Resume a workflow",
+                                                    "description": "Resume a paused workflow: it runs again from its next scheduled slot.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Resume a workflow",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": true,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "run_workflow",
+                                                    "title": "Run a workflow now",
+                                                    "description": "Run a workflow once now, whatever its schedule: it makes one real video.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Run a workflow now",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": true,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "list_workflow_runs",
+                                                    "title": "List a workflow's runs",
+                                                    "description": "Read a workflow's run history: each run's status, the video it made, or why it made none.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "List a workflow's runs",
+                                                        "readOnlyHint": true,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "add_workflow_input",
+                                                    "title": "Give a workflow its next input",
+                                                    "description": "Queue a link, idea or script for an 'input' workflow's next video.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Give a workflow its next input",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": true
+                                                    }
+                                                },
+                                                {
+                                                    "name": "change_workflow_next_video",
+                                                    "title": "Swap or edit the next video",
+                                                    "description": "Swap the next video of an 'ideas' or 'trending' workflow for another one, or set it in the user's words.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Swap or edit the next video",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": true
+                                                    }
+                                                },
+                                                {
+                                                    "name": "decide_workflow_plan",
+                                                    "title": "Make or skip a waiting plan",
+                                                    "description": "Answer an \"ask me first\" workflow whose plan waits (state waiting_approval): make it or skip it.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Make or skip a waiting plan",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": true,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "list_workflow_drafts",
+                                                    "title": "List a workflow's upcoming videos",
+                                                    "description": "List one workflow's upcoming video drafts, each at its time, plus what it made in the last two days.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "List a workflow's upcoming videos",
+                                                        "readOnlyHint": true,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "list_upcoming_videos",
+                                                    "title": "List upcoming videos across workflows",
+                                                    "description": "List the upcoming video drafts of all the user's workflows in time order (each row has workflow_id and workflow_name).",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "List upcoming videos across workflows",
+                                                        "readOnlyHint": true,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": true,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "act_on_workflow_draft",
+                                                    "title": "Approve, skip, regenerate or edit a draft",
+                                                    "description": "Act on one upcoming draft: approve it (made at its time), take the OK back, skip it, get another idea in its place, or edit its words.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Approve, skip, regenerate or edit a draft",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": true,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "approve_workflow_drafts",
+                                                    "title": "Approve many drafts",
+                                                    "description": "Approve several upcoming drafts at once (the \"Approve all\" of the Workflows home).",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Approve many drafts",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": true,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "set_workflow_auto_approve",
+                                                    "title": "Auto-approve a workflow's drafts",
+                                                    "description": "Turn a workflow's \"Auto-approve drafts\" on or off (it is the delivery mode: off = \"ask me first\").",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Auto-approve a workflow's drafts",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": true,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": false
+                                                    }
+                                                },
+                                                {
+                                                    "name": "plan_videos",
+                                                    "title": "Plan my videos (a week of drafts)",
+                                                    "description": "Plan a week of videos from one ask: a workflow that researches trends every week and writes that week's drafts.",
+                                                    "category": "Workflows",
+                                                    "annotations": {
+                                                        "title": "Plan my videos (a week of drafts)",
+                                                        "readOnlyHint": false,
+                                                        "destructiveHint": false,
+                                                        "idempotentHint": false,
+                                                        "openWorldHint": true
                                                     }
                                                 },
                                                 {
@@ -10997,6 +11296,1656 @@
                     }
                 }
             }
+        },
+        "/api/v1/public/workflows": {
+            "get": {
+                "operationId": "list_workflows",
+                "description": "Every workflow on the account, newest first: simple ones (`source` `ideas`, `input`, `trending` or `feed`, with their `settings`, `state`, `needs_input`, `next_video` and `history`) and canvas ones (`source: canvas`). `limit` is your plan's workflow cap, `allowed` whether your plan may create and run workflows (paid plans).",
+                "summary": "List your workflows",
+                "tags": [
+                    "Workflows"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "`{workflows, count, limit, allowed}`."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "create_workflow",
+                "description": "A workflow that makes a video on a schedule, like the dashboard's New workflow steps.\n\n- `ideas`: each run makes a new idea for your `niches`; the model is given the recent ideas and writes a different one. `next_video` shows it before the run.\n- `input`: each run makes the next link, idea or script you queued (`POST /workflows/{id}/input`). With nothing queued the run waits (`state: needs_input`); your next input starts it.\n- `trending`: each run adapts a fresh Inspiration video for your `niches` (never one it used before).\n- `feed`: each run makes the newest post of an RSS / Atom feed no earlier run made.\n\n`delivery.mode`: `publish` posts each video to your accounts, `approve` makes the plan and waits for `POST /workflows/{id}/approval`, `library` keeps it in your videos.\n\nEvery run makes its video on the v2 engine and checks your credits first: a run without enough credits is skipped (`reason: not_enough_credits`) and nothing is spent. Videos are paid from your plan's AI credits, like a dashboard Generate. Creating is free; the plan's workflow cap applies (402).",
+                "summary": "Create a workflow",
+                "tags": [
+                    "Workflows"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateWorkflowRequest"
+                            },
+                            "examples": {
+                                "WeFindIdeasForYou": {
+                                    "value": {
+                                        "name": "Zebracat Instagram",
+                                        "settings": {
+                                            "source": "ideas",
+                                            "niches": [
+                                                "AI video tips"
+                                            ],
+                                            "schedule": {
+                                                "kind": "daily",
+                                                "time": "10:00",
+                                                "timezone": "Europe/Berlin"
+                                            },
+                                            "video": {
+                                                "seconds": 30,
+                                                "aspect": "vertical"
+                                            },
+                                            "delivery": {
+                                                "mode": "approve",
+                                                "platforms": [
+                                                    "instagram"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "summary": "We find ideas for you"
+                                },
+                                "YouGiveUsSomethingEachTime": {
+                                    "value": {
+                                        "name": "My links",
+                                        "settings": {
+                                            "source": "input",
+                                            "schedule": {
+                                                "kind": "weekly",
+                                                "days": [
+                                                    "MON",
+                                                    "THU"
+                                                ],
+                                                "time": "08:00",
+                                                "timezone": "UTC"
+                                            },
+                                            "delivery": {
+                                                "mode": "library"
+                                            }
+                                        }
+                                    },
+                                    "summary": "You give us something each time"
+                                },
+                                "FromTrending": {
+                                    "value": {
+                                        "name": "Trending remakes",
+                                        "settings": {
+                                            "source": "trending",
+                                            "niches": [
+                                                "home workouts"
+                                            ],
+                                            "schedule": {
+                                                "kind": "daily",
+                                                "time": "18:30",
+                                                "timezone": "UTC"
+                                            },
+                                            "delivery": {
+                                                "mode": "publish",
+                                                "platforms": [
+                                                    "tiktok"
+                                                ]
+                                            }
+                                        },
+                                        "active": false
+                                    },
+                                    "summary": "From trending"
+                                },
+                                "FromViralVideosInMyNiche": {
+                                    "value": {
+                                        "name": "Viral coffee remakes",
+                                        "settings": {
+                                            "source": "viral",
+                                            "niches": [
+                                                "coffee shop"
+                                            ],
+                                            "notes": "Our cafe in Leipzig: pumpkin latte, student discount on Fridays.",
+                                            "schedule": {
+                                                "kind": "weekly",
+                                                "days": [
+                                                    "MON",
+                                                    "WED",
+                                                    "FRI"
+                                                ],
+                                                "time": "10:00",
+                                                "timezone": "Europe/Berlin"
+                                            },
+                                            "delivery": {
+                                                "mode": "approve",
+                                                "platforms": [
+                                                    "tiktok"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "summary": "From viral videos in my niche"
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "The workflow."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "402": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}": {
+            "get": {
+                "operationId": "get_workflow",
+                "description": "One workflow: its source and settings, `state` (`active`, `paused`, `needs_input`, `waiting_approval`), `next_video`, the `inbox`, a plan waiting for you (`approval`), the `history` of what its runs used, the schedule, next run and last run.",
+                "summary": "Get a workflow",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "The workflow."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "update_workflow",
+                "description": "Rename a workflow or change its settings (source fields, schedule, video picks, delivery). Only the keys you send change. A new schedule takes effect from its next slot. Canvas workflows are edited on the dashboard; here they can only be renamed.",
+                "summary": "Update a workflow",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUpdateWorkflowRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "The workflow."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "delete_workflow",
+                "description": "Deletes the workflow and its run history. Videos it made stay in your projects.",
+                "summary": "Delete a workflow",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "Deleted."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}/approval": {
+            "post": {
+                "operationId": "decide_workflow_plan",
+                "description": "`delivery.mode: approve`: each run makes the plan and waits (`state: waiting_approval`, `approval`). `make` generates it after the credit check and then posts it to your accounts when you picked any; `skip` lets it go. Making spends credits like a Generate.",
+                "summary": "Make or skip the plan waiting for you",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ApprovalRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "`{workflow, decision, run_id}`."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}/auto-approve": {
+            "post": {
+                "operationId": "set_workflow_auto_approve",
+                "description": "The \"Auto-approve drafts\" switch; it is the delivery mode seen from the drafts (`false` = \"ask me first\"). Switched on over a draft whose time came, that draft starts now (`run_id`).",
+                "summary": "Auto-approve a workflow's drafts",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AutoApproveRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "`{workflow_id, auto_approve, rows, done}`."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}/drafts": {
+            "get": {
+                "operationId": "list_workflow_drafts",
+                "description": "Each `ideas` / `trending` workflow keeps its next 5 videos as drafts, each at its time (`at`). A row's `status`: `draft` (waits for your OK), `approved` (made at its time), `needs_input` (an `input` workflow with nothing queued), and for the last two days `making`, `posted`, `made` (saved), `skipped` (`reason`) or `failed`. A draft whose time came unapproved waits (`due: true`) and is never made on its own.",
+                "summary": "A workflow's upcoming videos",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "`{workflow_id, auto_approve, drafts_ahead, rows}`."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}/drafts/{draft_id}": {
+            "post": {
+                "operationId": "act_on_workflow_draft",
+                "description": "One upcoming draft. Approving spends nothing now; the video is made (credits checked first) at its time, or at once when its time already came (`run_id`).",
+                "summary": "Approve, skip, regenerate or edit a draft",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "draft_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "A draft's `id` (`GET /workflows/{workflow_id}/drafts`).",
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DraftActionRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "`{workflow_id, auto_approve, rows, done}`."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}/input": {
+            "post": {
+                "operationId": "add_workflow_input",
+                "description": "`input` workflows: queue a link, an idea or a script for the next run. A link this workflow already made a video of answers 409 `already_used`. When a due run was waiting for input (`state: needs_input`), it starts now (`released: true`) and spends credits like any run.",
+                "summary": "Give a workflow its next input",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/InputRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "`{workflow, item, released, run_id}`."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}/next": {
+            "post": {
+                "operationId": "change_workflow_next_video",
+                "description": "`ideas` / `trending` workflows: `another` prepares a different idea (one small model call) or another Inspiration video; `edit` sets your own words for the next video. Nothing is generated here.",
+                "summary": "Swap or edit the next video",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NextRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "The workflow."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}/pause": {
+            "post": {
+                "operationId": "pause_workflow",
+                "description": "No scheduled run starts while it is paused. A run already making its video finishes.",
+                "summary": "Pause a workflow",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "The workflow."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}/resume": {
+            "post": {
+                "operationId": "resume_workflow",
+                "description": "Turns it back on. The next run is the next slot from now; a slot missed while paused never runs.",
+                "summary": "Resume a workflow",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "The workflow."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}/run": {
+            "post": {
+                "operationId": "run_workflow",
+                "description": "One run now, whatever the schedule (a paused workflow too). It makes a real video and spends credits like a Generate, after the same credit check as a scheduled run. Follow it with `GET /workflows/{workflow_id}/runs`.",
+                "summary": "Run a workflow now",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "The run: `{id, status, …}`."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/{workflow_id}/runs": {
+            "get": {
+                "operationId": "list_workflow_runs",
+                "description": "The run history, newest first, 20 a page. Each run: `status` (`queued`, `running`, `success`, `skipped`, `failed`, `waiting_approval`), `reason` when skipped (`needs_input`, `not_enough_credits`, `nothing_new`, `waiting_for_approval`, …), and once made the `project_id`, `video_url` and `title`, with the `idea`, `link` or Inspiration `item_id` it used and where it was `posted`.",
+                "summary": "List a workflow's runs",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "1-based page number."
+                    },
+                    {
+                        "in": "path",
+                        "name": "workflow_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "The workflow's id (`GET /workflows`).",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "`{runs, page, page_size, count}`."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/drafts": {
+            "get": {
+                "operationId": "list_upcoming_videos",
+                "description": "Every workflow's rows (as `GET /workflows/{workflow_id}/drafts`, each with `workflow_id` and `workflow_name`), by time: one list to approve the week.",
+                "summary": "Upcoming videos across your workflows",
+                "tags": [
+                    "Workflows"
+                ],
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "`{rows, drafts_ahead}`."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "approve_workflow_drafts",
+                "description": "\"Approve all\": `items` = `[{workflow_id, draft_id}]` of your workflows. A draft whose time came starts now (`run_ids`).",
+                "summary": "Approve many drafts at once",
+                "tags": [
+                    "Workflows"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ApproveManyRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "`{rows, done: {approved, run_ids}}`."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/public/workflows/plan": {
+            "post": {
+                "operationId": "plan_videos",
+                "description": "Creates a `planned` workflow. Every week it fetches fresh research (trending videos in your niche, your own recent posts and their numbers, what was already made) and one model call writes that week's drafts, each on a slot of the schedule and naming the trend or post it is based on (`source`), or `evergreen` when the research had nothing. The first week is written now, in the background (`planning`); the next one on Sunday evening in your timezone. Last week's drafts that were not made expire (`expired`; `restore` brings one back). Writing the plan is free; each video spends credits when it is made (approved, or auto-approved), after the credit check.",
+                "summary": "Plan my videos: a week of drafts from one ask",
+                "tags": [
+                    "Workflows"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlanRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    },
+                    {
+                        "OAuth2": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "example": {}
+                            }
+                        },
+                        "description": "The workflow (`source: planned`)."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "402": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        },
+                        "description": "The public error envelope."
+                    },
+                    "default": {
+                        "description": "Any error, in the public error envelope (`Error`).",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -11066,6 +13015,38 @@
                     "question_id"
                 ]
             },
+            "ApprovalRequest": {
+                "type": "object",
+                "properties": {
+                    "decision": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DecisionEnum"
+                            }
+                        ],
+                        "description": "`make`: generate the waiting plan (credits are checked first). `skip`: let it go; it stays in your videos.\n\n* `make` - make\n* `skip` - skip"
+                    }
+                },
+                "required": [
+                    "decision"
+                ]
+            },
+            "ApproveManyRequest": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        },
+                        "description": "`[{workflow_id, draft_id}]`."
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            },
             "AspectRatioEnum": {
                 "enum": [
                     "horizontal",
@@ -11083,6 +13064,18 @@
                 ],
                 "type": "string",
                 "description": "* `narration` - narration\n* `dialogue` - dialogue\n* `silent` - silent"
+            },
+            "AutoApproveRequest": {
+                "type": "object",
+                "properties": {
+                    "on": {
+                        "type": "boolean",
+                        "description": "`true`: drafts are made at their time without asking (delivery `publish` when accounts are picked, else `library`). `false`: each draft waits for `approve` (delivery `approve`, \"ask me first\")."
+                    }
+                },
+                "required": [
+                    "on"
+                ]
             },
             "Avatar": {
                 "type": "object",
@@ -11295,7 +13288,7 @@
                     "source": {
                         "oneOf": [
                             {
-                                "$ref": "#/components/schemas/SourceEnum"
+                                "$ref": "#/components/schemas/BrandSourceEnum"
                             },
                             {
                                 "$ref": "#/components/schemas/BlankEnum"
@@ -11506,7 +13499,7 @@
                     "source": {
                         "oneOf": [
                             {
-                                "$ref": "#/components/schemas/SourceEnum"
+                                "$ref": "#/components/schemas/BrandSourceEnum"
                             },
                             {
                                 "$ref": "#/components/schemas/BlankEnum"
@@ -11557,6 +13550,14 @@
                 "required": [
                     "name"
                 ]
+            },
+            "BrandSourceEnum": {
+                "enum": [
+                    "manual",
+                    "scan"
+                ],
+                "type": "string",
+                "description": "* `manual` - manual\n* `scan` - scan"
             },
             "BulkPostResponse": {
                 "type": "object",
@@ -11910,6 +13911,71 @@
                     "brief"
                 ]
             },
+            "CreateWorkflowRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Shown in your workflow list.",
+                        "maxLength": 200
+                    },
+                    "settings": {
+                        "$ref": "#/components/schemas/WorkflowSettingsRequest"
+                    },
+                    "active": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "`false` creates it paused."
+                    }
+                },
+                "required": [
+                    "settings"
+                ]
+            },
+            "DaysEnum": {
+                "enum": [
+                    "MON",
+                    "TUE",
+                    "WED",
+                    "THU",
+                    "FRI",
+                    "SAT",
+                    "SUN"
+                ],
+                "type": "string",
+                "description": "* `MON` - MON\n* `TUE` - TUE\n* `WED` - WED\n* `THU` - THU\n* `FRI` - FRI\n* `SAT` - SAT\n* `SUN` - SUN"
+            },
+            "DecisionEnum": {
+                "enum": [
+                    "make",
+                    "skip"
+                ],
+                "type": "string",
+                "description": "* `make` - make\n* `skip` - skip"
+            },
+            "DeliveryRequest": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ModeEnum"
+                            }
+                        ],
+                        "default": "library",
+                        "description": "`publish`: post each video to `platforms` with a caption we write. `approve`: each run makes the plan and waits for your `POST …/approval` (then posts to `platforms` when you picked any). `library`: keep it in your videos.\n\n* `publish` - publish\n* `approve` - approve\n* `library` - library"
+                    },
+                    "platforms": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Connected accounts to post to (`GET /scheduling/connected`)."
+                    }
+                }
+            },
             "DisconnectPlatformRequest": {
                 "type": "object",
                 "description": "Serializer for disconnecting platform",
@@ -11925,6 +13991,39 @@
                 },
                 "required": [
                     "platform"
+                ]
+            },
+            "DraftActionActionEnum": {
+                "enum": [
+                    "approve",
+                    "unapprove",
+                    "skip",
+                    "another",
+                    "edit",
+                    "restore"
+                ],
+                "type": "string",
+                "description": "* `approve` - approve\n* `unapprove` - unapprove\n* `skip` - skip\n* `another` - another\n* `edit` - edit\n* `restore` - restore"
+            },
+            "DraftActionRequest": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DraftActionActionEnum"
+                            }
+                        ],
+                        "description": "`approve`: it is made at its time (at once when its time already came). `unapprove`: take the OK back. `skip`: drop it; the drafts after it move up (a planned week keeps its dates). `another`: a different idea or Inspiration video in its place (one small model call; never a used idea or link). `edit`: use `text`. `restore`: bring back an expired draft of a planned workflow (its id from `expired`) on the next free slot.\n\n* `approve` - approve\n* `unapprove` - unapprove\n* `skip` - skip\n* `another` - another\n* `edit` - edit\n* `restore` - restore"
+                    },
+                    "text": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "`edit`: your own words for this draft."
+                    }
+                },
+                "required": [
+                    "action"
                 ]
             },
             "DryRun": {
@@ -12047,17 +14146,26 @@
                 "type": "string",
                 "description": "* `idea` - idea\n* `script` - script\n* `voiceover_script` - voiceover_script\n* `script_with_scenes` - script_with_scenes\n* `url` - url"
             },
-            "KindEnum": {
-                "enum": [
-                    "person",
-                    "place",
-                    "product",
-                    "style",
-                    "other",
-                    "logo"
-                ],
-                "type": "string",
-                "description": "* `person` - person\n* `place` - place\n* `product` - product\n* `style` - style\n* `other` - other\n* `logo` - logo"
+            "InputRequest": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "A link (a video to remake, or a page to make a video of), an idea or a script."
+                    },
+                    "kind": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/InputKindEnum"
+                            }
+                        ],
+                        "description": "For words: `idea` (default; we write the script) or `script` (your words are kept). A link is read as a link.\n\n* `idea` - idea\n* `script` - script"
+                    }
+                },
+                "required": [
+                    "text"
+                ]
             },
             "Links": {
                 "type": "object",
@@ -12102,6 +14210,15 @@
                 "type": "string",
                 "description": "* `ai_video` - ai_video\n* `ai_image_video` - ai_image_video\n* `brainrot` - brainrot\n* `stock` - stock\n* `motion_graphics` - motion_graphics\n* `animation_3d` - animation_3d\n* `avatar` - avatar"
             },
+            "ModeEnum": {
+                "enum": [
+                    "publish",
+                    "approve",
+                    "library"
+                ],
+                "type": "string",
+                "description": "* `publish` - publish\n* `approve` - approve\n* `library` - library"
+            },
             "ModelRow": {
                 "type": "object",
                 "properties": {
@@ -12139,6 +14256,35 @@
                 "required": [
                     "qualities",
                     "scene_seconds"
+                ]
+            },
+            "NextActionEnum": {
+                "enum": [
+                    "another",
+                    "edit"
+                ],
+                "type": "string",
+                "description": "* `another` - another\n* `edit` - edit"
+            },
+            "NextRequest": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/NextActionEnum"
+                            }
+                        ],
+                        "description": "`another`: a different idea or Inspiration video. `edit`: use `text`.\n\n* `another` - another\n* `edit` - edit"
+                    },
+                    "text": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "`edit`: your own words for the next video."
+                    }
+                },
+                "required": [
+                    "action"
                 ]
             },
             "NullEnum": {
@@ -12423,7 +14569,7 @@
                     "source": {
                         "oneOf": [
                             {
-                                "$ref": "#/components/schemas/SourceEnum"
+                                "$ref": "#/components/schemas/BrandSourceEnum"
                             },
                             {
                                 "$ref": "#/components/schemas/BlankEnum"
@@ -12496,6 +14642,24 @@
                     }
                 }
             },
+            "PatchedUpdateWorkflowRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                    },
+                    "settings": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/WorkflowSettingsRequest"
+                            }
+                        ],
+                        "description": "Only the keys you send change; the others are kept."
+                    }
+                }
+            },
             "PatchedWebhookUpdateRequest": {
                 "type": "object",
                 "description": "``PATCH /webhooks/{id}``: change any of these; ``rotate_secret: true`` issues a new signing secret.",
@@ -12543,6 +14707,53 @@
                 ],
                 "type": "string",
                 "description": "* `planning` - planning\n* `needs_input` - needs_input\n* `plan_ready` - plan_ready\n* `generating` - generating\n* `rendering` - rendering\n* `completed` - completed\n* `failed` - failed\n* `cancelled` - cancelled"
+            },
+            "PlanRequest": {
+                "type": "object",
+                "properties": {
+                    "ask": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "What to plan, in your words, e.g. \"TikToks for my coffee shop, 3 a week\"."
+                    },
+                    "per_week": {
+                        "type": "integer",
+                        "maximum": 7,
+                        "minimum": 1,
+                        "description": "Videos a week; left out, it is read from `ask` (default 3)."
+                    },
+                    "days": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DaysEnum"
+                        },
+                        "description": "The days videos go out; left out, they follow `per_week`."
+                    },
+                    "time": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "`HH:MM` on `timezone` (default 10:00)."
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "An IANA timezone, e.g. `Europe/Berlin` (default UTC)."
+                    },
+                    "delivery": {
+                        "$ref": "#/components/schemas/DeliveryRequest"
+                    },
+                    "video": {
+                        "$ref": "#/components/schemas/VideoPicksRequest"
+                    },
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Left out, the plan names itself."
+                    }
+                },
+                "required": [
+                    "ask"
+                ]
             },
             "PlanSummary": {
                 "type": "object",
@@ -13161,6 +15372,47 @@
                     "why"
                 ]
             },
+            "ScheduleKindEnum": {
+                "enum": [
+                    "daily",
+                    "weekly"
+                ],
+                "type": "string",
+                "description": "* `daily` - daily\n* `weekly` - weekly"
+            },
+            "ScheduleRequest": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ScheduleKindEnum"
+                            }
+                        ],
+                        "default": "daily",
+                        "description": "`daily`, or `weekly` on the `days` you pick.\n\n* `daily` - daily\n* `weekly` - weekly"
+                    },
+                    "time": {
+                        "type": "string",
+                        "minLength": 1,
+                        "default": "09:00",
+                        "description": "The wall-clock time, `HH:MM` (24 h)."
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "default": "UTC",
+                        "description": "An IANA timezone, e.g. `Europe/Berlin`."
+                    },
+                    "days": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DaysEnum"
+                        },
+                        "description": "`weekly` only: the days, e.g. `[\"MON\", \"THU\"]`."
+                    }
+                }
+            },
             "SchedulingList": {
                 "type": "object",
                 "description": "Serializer for listing scheduled posts",
@@ -13298,14 +15550,6 @@
                 ],
                 "type": "string",
                 "description": "* `instagram` - instagram\n* `tiktok` - tiktok\n* `youtube` - youtube\n* `facebook` - facebook\n* `x` - x\n* `bluesky` - bluesky\n* `linkedin` - linkedin\n* `pinterest` - pinterest\n* `threads` - threads\n* `tiktok_business` - tiktok_business"
-            },
-            "SourceEnum": {
-                "enum": [
-                    "manual",
-                    "scan"
-                ],
-                "type": "string",
-                "description": "* `manual` - manual\n* `scan` - scan"
             },
             "StyleIdEnum": {
                 "enum": [
@@ -13590,6 +15834,40 @@
                     "base_rev"
                 ]
             },
+            "UploadKindEnum": {
+                "enum": [
+                    "person",
+                    "place",
+                    "product",
+                    "style",
+                    "other",
+                    "logo"
+                ],
+                "type": "string",
+                "description": "* `person` - person\n* `place` - place\n* `product` - product\n* `style` - style\n* `other` - other\n* `logo` - logo"
+            },
+            "UploadPickRequest": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "A public https link to your asset (a logo, a photo, a recording)."
+                    },
+                    "kind": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "`logo`, `person`, `product`, `place`, `style` or `other`."
+                    },
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "url"
+                ]
+            },
             "UploadRequest": {
                 "type": "object",
                 "description": "A body key no field takes is refused (400 ``unknown_field`` with a did-you-mean), never dropped in silence\n(api-mcp-audit #15): a misspelt ``auto_generat`` would otherwise run the default and spend.",
@@ -13600,7 +15878,7 @@
                         "maxLength": 2000
                     },
                     "kind": {
-                        "$ref": "#/components/schemas/KindEnum"
+                        "$ref": "#/components/schemas/UploadKindEnum"
                     },
                     "name": {
                         "type": [
@@ -13717,6 +15995,58 @@
                     "videos"
                 ]
             },
+            "VideoPicksRequest": {
+                "type": "object",
+                "properties": {
+                    "seconds": {
+                        "type": "integer",
+                        "maximum": 600,
+                        "minimum": 5,
+                        "description": "Target length (topic and feed workflows)."
+                    },
+                    "quality": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "`auto`, `quick`, `balanced` or `cinematic`."
+                    },
+                    "aspect": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "`vertical`, `horizontal` or `square`."
+                    },
+                    "language": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The video's language, e.g. `english`."
+                    },
+                    "media_type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "`ai_video`, `ai_image_video`, `stock` or `brainrot`."
+                    },
+                    "audio_mode": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "`narration`, `dialogue` or `silent`."
+                    },
+                    "voice_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "A voice from `GET /voices`."
+                    },
+                    "style_id": {
+                        "type": "integer",
+                        "description": "A visual style from `GET /styles`."
+                    },
+                    "uploads": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/UploadPickRequest"
+                        },
+                        "description": "Up to 8 of your assets to use in every video."
+                    }
+                }
+            },
             "VideoRow": {
                 "type": "object",
                 "properties": {
@@ -13792,6 +16122,75 @@
                 "required": [
                     "code"
                 ]
+            },
+            "WorkflowSettingsRequest": {
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/WorkflowSettingsSourceEnum"
+                            }
+                        ],
+                        "description": "Where each video's idea comes from: `ideas` (we write a new idea for your `niches` each run), `input` (you give us a link, idea or script each time: `POST /workflows/{id}/input`; with nothing queued a due run waits in `needs_input`), `trending` (each run adapts a fresh Inspiration video for your `niches`), `feed` (the newest post of an RSS / Atom feed), `planned` (`POST /workflows/plan`) or `viral` (a week at a time, each draft adapts one of the fastest-growing videos in your `niches` for your brand: the source video's link, cover, views and growth plus our scenario; approved drafts are made on the clone path after a credit check).\n\n* `ideas` - ideas\n* `input` - input\n* `trending` - trending\n* `feed` - feed\n* `planned` - planned\n* `viral` - viral"
+                    },
+                    "niches": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "`ideas` / `trending` / `viral`: up to 5 niches or topics, e.g. `[\"AI video tips\"]`."
+                    },
+                    "brand_id": {
+                        "type": "integer",
+                        "description": "One of your brands: its name, tone and assets."
+                    },
+                    "notes": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Your own instructions for every video (audience, tone)."
+                    },
+                    "feed_url": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "`feed`: an RSS / Atom feed, or a blog page that names one."
+                    },
+                    "clone_mode": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "`input`: how a video link you give is remade."
+                    },
+                    "webhook_url": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "POSTed `{event: workflow.video_made, video_url, project_id, …}` after each video. Your account's API webhooks fire too."
+                    },
+                    "schedule": {
+                        "$ref": "#/components/schemas/ScheduleRequest"
+                    },
+                    "video": {
+                        "$ref": "#/components/schemas/VideoPicksRequest"
+                    },
+                    "delivery": {
+                        "$ref": "#/components/schemas/DeliveryRequest"
+                    }
+                },
+                "required": [
+                    "source"
+                ]
+            },
+            "WorkflowSettingsSourceEnum": {
+                "enum": [
+                    "ideas",
+                    "input",
+                    "trending",
+                    "feed",
+                    "planned",
+                    "viral"
+                ],
+                "type": "string",
+                "description": "* `ideas` - ideas\n* `input` - input\n* `trending` - trending\n* `feed` - feed\n* `planned` - planned\n* `viral` - viral"
             },
             "Error": {
                 "type": "object",
@@ -13973,6 +16372,10 @@
             "description": "Connect social accounts and schedule or publish videos to them."
         },
         {
+            "name": "Workflows",
+            "description": "Videos made on a schedule from a template: a daily topic series, RSS or blog → video, or clone from a list of links. Every run makes its video on the v2 engine and checks your credits first. Guide: [Workflows](/docs/guides/workflows.md)."
+        },
+        {
             "name": "Character Swap",
             "description": "Replace the main person in a video with your character (AI-video credits per second; consent required; an API key pays in dollars on any plan, OAuth needs a paid plan). Guide: [Character Swap](/docs/guides/character-swap.md)."
         },
@@ -14042,14 +16445,15 @@
         {
             "name": "Videos (v2)",
             "slug": "videos",
-            "description": "Make a video from a brief: plan, edit, quote, generate; uploads, clone, translate, projects and scheduling.",
+            "description": "Make a video from a brief: plan, edit, quote, generate; uploads, clone, translate, projects and scheduling, and workflows that make videos on a schedule.",
             "tags": [
                 "Video Generation",
                 "Uploads",
                 "Video Translation",
                 "Videos",
                 "Projects",
-                "Scheduling"
+                "Scheduling",
+                "Workflows"
             ]
         },
         {
