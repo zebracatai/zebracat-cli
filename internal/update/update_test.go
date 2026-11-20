@@ -167,7 +167,7 @@ func TestCheckIsSkipped(t *testing.T) {
 func TestMethodOf(t *testing.T) {
 	cases := map[string]string{
 		"/usr/local/lib/node_modules/@zebracat/cli/bin/zebracat": "npm",
-		"/opt/homebrew/Cellar/zebracat/0.3.0/bin/zebracat":       "brew",
+		"/opt/homebrew/bin/zebracat":                             "binary", // no Homebrew tap: a copy put there by hand
 		"/home/me/go/bin/zebracat-cli":                           "go",
 		"/home/me/.local/bin/zebracat":                           "binary",
 	}
@@ -267,5 +267,13 @@ func TestRelaunchExecsTheNewBinary(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("the new binary is told the old version")
+	}
+}
+
+// On Windows `zebracat update` points at the PowerShell installer.
+func TestApplyToOnWindowsNamesTheInstaller(t *testing.T) {
+	err := ApplyTo(context.Background(), "v0.3.0", "zebracat.exe", "windows", "amd64")
+	if err == nil || !strings.Contains(err.Error(), "install.ps1 | iex") {
+		t.Fatalf("got %v", err)
 	}
 }

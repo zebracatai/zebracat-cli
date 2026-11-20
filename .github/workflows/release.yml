@@ -21,6 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # GitHub build attestation: id-token signs it, attestations stores it.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,10 +33,20 @@ jobs:
           go-version: "1.22"
       - uses: goreleaser/goreleaser-action@v6
         with:
-          version: latest
+          # Pinned: a new goreleaser release can't change what ships without a commit here.
+          version: v2.19.0
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Signed provenance for every file the installers download. Anyone can check
+      # an archive was built by this workflow from this repo:
+      #   gh attestation verify zebracat_linux_amd64.tar.gz --repo zebracatai/zebracat-cli
+      - uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
 
   # npm Trusted Publishing: GitHub's OIDC token proves this workflow is the publisher,
   # so no npm token or one-time password is stored anywhere. One-time setup on npmjs.com:

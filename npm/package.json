@@ -6,7 +6,8 @@
     "zebracat": "bin/zebracat.js"
   },
   "scripts": {
-    "postinstall": "node install.js"
+    "postinstall": "node install.js",
+    "test": "node --test test/install.test.js"
   },
   "files": [
     "bin/zebracat.js",
