@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -59,7 +60,9 @@ func fakeGitHub(t *testing.T, tag string, delay time.Duration) (*int32, func()) 
 }
 
 func cleanEnv(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	t.Setenv("ZEBRACAT_NO_UPDATE_CHECK", "")
 	for _, k := range ciVars {
 		t.Setenv(k, "")
@@ -248,6 +251,12 @@ func TestApplyToReplacesTheBinaryAndChecksTheSum(t *testing.T) {
 
 // Relaunch execs the new binary with the same args and says what it replaced.
 func TestRelaunchExecsTheNewBinary(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		if err := Relaunch("zebracat.exe", "v0.3.0", nil); err == nil {
+			t.Fatal("Windows has no exec: Relaunch must refuse")
+		}
+		return
+	}
 	var gotPath string
 	var gotArgs, gotEnv []string
 	old := execFn
