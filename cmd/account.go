@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -40,16 +42,41 @@ var accountShowCmd = &cobra.Command{
 var accountPricingCmd = &cobra.Command{
 	Use:   "pricing",
 	Short: "Show pay-as-you-go pricing",
-	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/pricing") },
+	RunE: func(cmd *cobra.Command, args []string) error {
+		out, err := getJSON("/api/v1/public/pricing")
+		if err != nil {
+			return err
+		}
+		return emit(out, func() { printPricing(out) })
+	},
 }
 
+var (
+	usageDetail bool
+	usagePage   int
+	usageSize   int
+)
+
 var accountUsageCmd = &cobra.Command{
-	Use:   "usage",
-	Short: "Show API usage summary",
-	RunE:  func(cmd *cobra.Command, args []string) error { return getAndEmit("/api/v1/public/credit/usage") },
+	Use:   "usage [--detail]",
+	Short: "Show API usage: per key, or every charge with --detail",
+	Example: `  zebracat account usage
+  zebracat account usage --detail --page 2`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if !usageDetail {
+			return getAndEmit("/api/v1/public/credit/usage")
+		}
+		q := url.Values{"page": {strconv.Itoa(usagePage)}, "page_size": {strconv.Itoa(usageSize)}}
+		return getAndEmit(withQuery("/api/v1/public/credit/usage/detail", q))
+	},
 }
 
 func init() {
+	uf := accountUsageCmd.Flags()
+	uf.BoolVar(&usageDetail, "detail", false, "Every charge, newest first, one page at a time")
+	uf.IntVar(&usagePage, "page", 1, "Page (with --detail)")
+	uf.IntVar(&usageSize, "page-size", 50, "Rows per page (with --detail)")
 	accountCmd.AddCommand(accountShowCmd, accountPricingCmd, accountUsageCmd)
 	rootCmd.AddCommand(accountCmd)
 }

@@ -40,13 +40,16 @@ var (
 	clWait     bool
 	clIdemKey  string
 	clTimeout  time.Duration
+	clYes      bool
+	clDryRun   bool
+	clWebhook  string
 )
 
 var planCmd = &cobra.Command{
 	Use:   "plan",
-	Short: "Read and change a Director v2 plan before you generate",
-	Long: `A plan is the screenplay Director v2 writes for a video: scenes, words,
-voices, look. Make one with ` + "`zebracat video create --plan-only`" + `, then:
+	Short: "Read and change a video's plan before you generate",
+	Long: `A plan is the screenplay Zebracat writes for a video: scenes, words, voices,
+look. Make one with ` + "`zebracat create \"<idea>\"`" + ` (it stops at the plan), then:
 
   zebracat plan show <task_id>
   zebracat plan edit <task_id> --tool set_duration --args '{"seconds":15}'
@@ -90,9 +93,7 @@ plan changed since you read it.`,
 		if peTool == "" {
 			return clierr.Usage("--tool is required")
 		}
-		if !client.CheckEnum("plan_edit.tool", peTool) {
-			return enumUsage("--tool", peTool, "plan_edit.tool")
-		}
+		warnUnknown("--tool", peTool, "plan_edit.tool")
 		toolArgs := map[string]any{}
 		if strings.TrimSpace(peArgs) != "" {
 			if err := json.Unmarshal([]byte(peArgs), &toolArgs); err != nil {
@@ -249,17 +250,18 @@ output, or no terminal) are never asked: pass --yes, or the command refuses.
 		}
 		if genDryRun {
 			body["dry_run"] = true
-		} else if !genYes {
-			if !interactive() {
-				e := clierr.Usage("generate spends credits: pass --yes to confirm (or --dry-run for the quote)")
-				e.Code = "confirmation_required"
-				return e
-			}
-			q, err := getMap(c, videos.Path(id, "quote"))
+		} else {
+			ok, err := confirmSpend(genYes, "generate", func() (string, error) {
+				q, err := getMap(c, videos.Path(id, "quote"))
+				if err != nil {
+					return "", err
+				}
+				return "Generate this video for " + videos.QuoteLine(q) + "?", nil
+			})
 			if err != nil {
 				return err
 			}
-			if !confirm("Generate this video for " + videos.QuoteLine(q) + "?") {
+			if !ok {
 				out := map[string]any{"task_id": id, "generated": false}
 				return emit(out, func() { ui.Info("Not generated. The plan is kept.") })
 			}
@@ -315,21 +317,50 @@ var videoAnswerCmd = &cobra.Command{
 
 var videoCloneCmd = &cobra.Command{
 	Use:   "clone --url <video> [--mode remix]",
-	Short: "Clone a reference video: plan it on Director v2, then generate",
-	Long: `Clone a reference video (TikTok, YouTube, Instagram or a direct link): Director v2
-measures it, writes a plan in the chosen mode and generates it.
+	Short: "Make a new video from a reference video (spends credits)",
+	Long: `Clone a reference video (TikTok, YouTube, Instagram, a direct link or a local
+file, uploaded first): Zebracat measures it, writes a plan in the chosen mode
+and generates it.
 
 Modes: ` + client.EnumHelp("clone.mode") + `
 
-  zebracat video clone --url https://www.tiktok.com/@x/video/1 --mode generate_similar --topic "home coffee" --wait`,
+A clone spends credits: on a terminal you are asked first; scripts and agents
+pass --yes. --dry-run answers the price and spends nothing.
+
+  zebracat video clone --url https://www.tiktok.com/@x/video/1 --mode generate_similar --topic "home coffee" --yes --wait`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := checkURL("--url", clURL); err != nil {
+		if err := checkMedia("--url", clURL); err != nil {
 			return err
 		}
-		if clMode != "" && !client.CheckEnum("clone.mode", clMode) {
-			return enumUsage("--mode", clMode, "clone.mode")
+		if err := checkWebhookURL(clWebhook); err != nil {
+			return err
 		}
-		body := map[string]any{"video_url": clURL, "should_render": !clNoRender}
+		if !clDryRun {
+			ok, err := confirmSpend(clYes, "clone", func() (string, error) {
+				return "Clone this video? It plans and generates a new video and spends credits.", nil
+			})
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return emit(map[string]any{"cloned": false}, func() { ui.Info("Not cloned. Nothing was charged.") })
+			}
+		}
+		c, err := newClient()
+		if err != nil {
+			return err
+		}
+		src, err := mediaURL(c, "--url", clURL, "clone", "")
+		if err != nil {
+			return err
+		}
+		body := map[string]any{"video_url": src, "should_render": !clNoRender}
+		if clDryRun {
+			body["dry_run"] = true
+		}
+		if clWebhook != "" {
+			body["webhook_url"] = clWebhook
+		}
 		if clMode != "" {
 			body["mode"] = clMode
 		}
@@ -338,10 +369,6 @@ Modes: ` + client.EnumHelp("clone.mode") + `
 		}
 		if clLanguage != "" {
 			body["language"] = clLanguage
-		}
-		c, err := newClient()
-		if err != nil {
-			return err
 		}
 		key := clIdemKey
 		if key == "" {
@@ -355,6 +382,9 @@ Modes: ` + client.EnumHelp("clone.mode") + `
 			out = map[string]any{}
 		}
 		out["idempotency_key"] = key
+		if dry, _ := out["dry_run"].(bool); dry {
+			return emit(out, func() { printDryRunHuman(out) })
+		}
 		taskID, _ := out["task_id"].(string)
 		if !clWait || taskID == "" {
 			return emit(out, func() { printCreatedHuman(out, taskID) })
@@ -388,8 +418,11 @@ func init() {
 	videoAnswerCmd.Flags().StringVar(&ansAnswer, "answer", "", "Your answer")
 
 	cf := videoCloneCmd.Flags()
-	cf.StringVar(&clURL, "url", "", "The reference video's URL (required)")
+	cf.StringVar(&clURL, "url", "", "The reference video: a link or a local file (required)")
 	cf.StringVar(&clMode, "mode", "", "Clone mode: "+client.EnumHelp("clone.mode")+" (default remix)")
+	cf.BoolVar(&clYes, "yes", false, "Don't ask; required when not on a terminal")
+	cf.BoolVar(&clDryRun, "dry-run", false, "Answer the price; nothing is created or charged")
+	cf.StringVar(&clWebhook, "webhook-url", "", "An https URL to call when this video finishes (signed like account webhooks)")
 	cf.StringVar(&clTopic, "topic", "", "Your topic for the new video")
 	cf.StringVar(&clLanguage, "language", "", "Language of the new video")
 	cf.BoolVar(&clNoRender, "no-render", false, "Keep an editable project; don't export the MP4")

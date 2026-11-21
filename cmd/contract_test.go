@@ -279,18 +279,28 @@ func TestEveryCommandIsInTheTable(t *testing.T) {
 		}
 	}
 	sort.Strings(paid)
-	want := "create image swap video clone video create video generate video translate voice clone"
+	want := "create image post schedule script swap video clone video create video generate video translate voice clone"
 	if got := strings.Join(paid, " "); got != want {
 		t.Fatalf("paid = %s", got)
 	}
 }
 
-// Root help is grouped.
+// Root help shows the product's categories (G1), in order, then Legacy and
+// This CLI.
 func TestRootHelpIsGrouped(t *testing.T) {
 	setup(t)
 	r := run(t, "--help")
-	for _, g := range []string{"Make videos:", "Voices, looks and assets:", "Account:", "This CLI:"} {
-		mustContain(t, r.stdout, g)
+	at := -1
+	for _, g := range []string{"Videos:", "Remake a video:", "Inspiration:", "Catalogs:", "Library:", "Publish:",
+		"Account:", "Webhooks:", "Legacy:", "This CLI:"} {
+		i := strings.Index(r.stdout, "\n"+g+"\n")
+		if i < 0 || i < at {
+			t.Fatalf("group %q missing or out of order:\n%s", g, r.stdout)
+		}
+		at = i
+	}
+	if strings.Contains(r.stdout, "\n  login ") {
+		t.Fatalf("the duplicate login is listed:\n%s", r.stdout)
 	}
 	if strings.Contains(r.stdout, "Additional Commands:") || strings.Contains(r.stdout, "plan credits") {
 		t.Fatalf("ungrouped commands or stale text:\n%s", r.stdout)

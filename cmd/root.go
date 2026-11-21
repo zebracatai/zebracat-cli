@@ -252,6 +252,7 @@ func humanMode() bool {
 // human renderer is provided it's used; otherwise a generic themed renderer runs.
 func emit(v any, human func()) error {
 	if humanMode() {
+		scrubControl(v) // server text never drives the terminal
 		if human != nil {
 			human()
 		} else {

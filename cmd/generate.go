@@ -20,16 +20,25 @@ var (
 	imgWidth  int
 	imgHeight int
 	imgCount  int
+
+	legacyYes bool
 )
 
 var scriptCmd = &cobra.Command{
 	Use:   "script <idea>",
-	Short: "Generate a voice-over script from an idea",
-	Long: `Generate a ready-to-use voice-over script from a one-line idea — no video.
+	Short: "Write a voice-over script from an idea (old call; spends API balance)",
+	Long: `Write a ready-to-use voice-over script from a one-line idea, no video. This is
+an old call kept working; for a video, zebracat create writes the script as
+part of its plan.
 
-  zebracat script "benefits of morning walks" --duration 30`,
-	Args: cobra.MinimumNArgs(1),
+It spends API balance: on a terminal you are asked first; scripts and agents
+pass --yes.`,
+	Example: `  zebracat script "benefits of morning walks" --duration 30 --yes`,
+	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if ok, err := legacySpend("script"); !ok {
+			return err
+		}
 		c, err := newClient()
 		if err != nil {
 			return err
@@ -64,12 +73,17 @@ var scriptCmd = &cobra.Command{
 
 var imageCmd = &cobra.Command{
 	Use:   "image <prompt>",
-	Short: "Generate an AI image",
-	Long: `Generate one or more AI images from a prompt.
+	Short: "Make AI images from a prompt (old call; spends API balance)",
+	Long: `Make one or more AI images from a prompt. This is an old call kept working.
 
-  zebracat image "a neon city skyline at dusk" --n 2`,
-	Args: cobra.MinimumNArgs(1),
+It spends API balance: on a terminal you are asked first; scripts and agents
+pass --yes.`,
+	Example: `  zebracat image "a neon city skyline at dusk" --n 2 --yes`,
+	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if ok, err := legacySpend("image"); !ok {
+			return err
+		}
 		c, err := newClient()
 		if err != nil {
 			return err
@@ -97,11 +111,23 @@ var imageCmd = &cobra.Command{
 	},
 }
 
+// legacySpend is D2 for script and image: --yes, or a y on a terminal.
+func legacySpend(action string) (bool, error) {
+	ok, err := confirmSpend(legacyYes, action, func() (string, error) {
+		return "This spends API balance (see zebracat account pricing). Go ahead?", nil
+	})
+	if err == nil && !ok {
+		_ = emit(map[string]any{"done": false}, func() { ui.Info("Nothing was made or charged.") })
+	}
+	return ok, err
+}
+
 func init() {
 	sf := scriptCmd.Flags()
 	sf.IntVar(&sgDuration, "duration", 0, "Target length in seconds: 15|30|60|120|180")
 	sf.StringVar(&sgMood, "mood", "", "Mood (e.g. energetic, inspiring)")
 	sf.StringVar(&sgPromptStyle, "prompt-style", "", "Narration style (see `zebracat video prompt-styles`)")
+	sf.BoolVar(&legacyYes, "yes", false, "Don't ask; required when not on a terminal")
 	sf.StringVar(&sgLanguage, "language", "", "Language")
 
 	gf := imageCmd.Flags()
@@ -109,6 +135,7 @@ func init() {
 	gf.IntVar(&imgWidth, "width", 0, "Width in px")
 	gf.IntVar(&imgHeight, "height", 0, "Height in px")
 	gf.IntVar(&imgCount, "n", 0, "Number of images")
+	gf.BoolVar(&legacyYes, "yes", false, "Don't ask; required when not on a terminal")
 
 	rootCmd.AddCommand(scriptCmd, imageCmd)
 }

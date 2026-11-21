@@ -12,7 +12,7 @@ import (
 
 func TestCreateOneLinerPostsVideosWithIdempotencyKey(t *testing.T) {
 	srv, _ := setup(t)
-	r := run(t, "video", "create", "why cats knock things off tables", "--seconds", "20")
+	r := run(t, "video", "create", "why cats knock things off tables", "--seconds", "20", "--no-wait")
 	if r.exit() != 0 {
 		t.Fatalf("exit %d: %s", r.exit(), r.stderr)
 	}
@@ -165,7 +165,10 @@ func TestCreateAudioFileKeepsTheV1Endpoint(t *testing.T) {
 		w.WriteHeader(202)
 		_, _ = w.Write([]byte(`{"task_id":"v1-audio","status":"pending"}`))
 	})
-	r := run(t, "video", "create", "--audio-file", "https://example.com/talk.mp3", "--language", "english")
+	if r := run(t, "video", "create", "--audio-file", "https://example.com/talk.mp3"); r.exit() != 2 || r.err.Code != "confirmation_required" {
+		t.Fatalf("audio without --yes: exit %d", r.exit())
+	}
+	r := run(t, "video", "create", "--audio-file", "https://example.com/talk.mp3", "--language", "english", "--yes")
 	if r.exit() != 0 {
 		t.Fatal(r.stderr)
 	}
@@ -175,13 +178,53 @@ func TestCreateAudioFileKeepsTheV1Endpoint(t *testing.T) {
 	}
 }
 
-func TestCreateRejectsValuesOutsideTheSchema(t *testing.T) {
+// cli-audit #3: a value this CLI's schema copy doesn't list is sent to the
+// server (which answers a typed 400 if it doesn't know it either), with a note.
+func TestCreateSendsValuesTheSchemaCopyDoesNotList(t *testing.T) {
+	for _, c := range []struct {
+		args       []string
+		key, value string
+	}{
+		{[]string{"--media-type", "motion_graphics"}, "media_type", "motion_graphics"},
+		{[]string{"--media-type", "hologram"}, "media_type", "hologram"},
+		{[]string{"--audio", "music"}, "audio_mode", "music"},
+	} {
+		srv, _ := setup(t)
+		r := run(t, append([]string{"video", "create", "--brief", "x", "--no-wait"}, c.args...)...)
+		post, _ := srv.Last("POST", "/videos")
+		if r.exit() != 0 || opt(post.Body, c.key) != c.value {
+			t.Fatalf("%v: exit %d body %v (%s)", c.args, r.exit(), post.Body, r.stderr)
+		}
+	}
+	srv, _ := setup(t)
+	r := run(t, "video", "create", "--brief", "x", "--preset", "nope", "--input", "blog", "--no-wait")
+	post, _ := srv.Last("POST", "/videos")
+	if r.exit() != 0 || post.Body["preset"] != "nope" || post.Body["input_kind"] != "blog" || !strings.Contains(r.stderr, "not in this CLI's list") {
+		t.Fatalf("exit %d body %v stderr %s", r.exit(), post.Body, r.stderr)
+	}
+}
+
+// The kind after the last ":" of --upload is split off for any kind word,
+// including logo (which the old copy did not list), and a URL stays whole.
+func TestUploadKindIsSplitForAnyKind(t *testing.T) {
+	srv, _ := setup(t)
+	r := run(t, "video", "create", "--brief", "x", "--no-wait",
+		"--upload", "https://cdn.example.com/a.png:logo", "--upload", "https://cdn.example.com:8443/b.png")
+	post, _ := srv.Last("POST", "/videos")
+	ups, _ := post.Body["uploads"].([]any)
+	if r.exit() != 0 || len(ups) != 2 {
+		t.Fatalf("exit %d uploads %v (%s)", r.exit(), post.Body["uploads"], r.stderr)
+	}
+	a, b := ups[0].(map[string]any), ups[1].(map[string]any)
+	if a["url"] != "https://cdn.example.com/a.png" || a["kind"] != "logo" || b["url"] != "https://cdn.example.com:8443/b.png" || b["kind"] != "other" {
+		t.Fatalf("uploads %v", ups)
+	}
+}
+
+func TestCreateRejectsBadInput(t *testing.T) {
 	for _, args := range [][]string{
-		{"--brief", "x", "--media-type", "hologram"},
-		{"--brief", "x", "--audio", "music"},
-		{"--brief", "x", "--input", "blog"},
-		{"--brief", "x", "--preset", "nope"},
-		{"--brief", "x", "--upload", "not-a-url"},
+		{"--brief", "x", "--upload", "not-a-url-or-file"},
+		{"--brief", "x", "--webhook-url", "http://example.com/hook"},
 		{"--seconds", "10"},
 	} {
 		srv, _ := setup(t)
@@ -240,7 +283,7 @@ func TestWaitPlanOnlyStopsAtPlanReady(t *testing.T) {
 	srv.On("GET", "/videos/{task_id}",
 		apitest.Answer{Example: "planning"}, apitest.Answer{Example: "planning"}, apitest.Answer{Example: "plan_ready"},
 		apitest.Answer{Example: "generating"})
-	r := run(t, "video", "create", "--brief", "x", "--plan-only", "--wait", "--idempotency-key", "k")
+	r := run(t, "video", "create", "--brief", "x", "--idempotency-key", "k")
 	if r.exit() != 0 {
 		t.Fatal(r.stderr)
 	}
@@ -256,7 +299,10 @@ func TestWaitOneCallRunsPastPlanReadyToCompleted(t *testing.T) {
 	srv.On("GET", "/videos/{task_id}",
 		apitest.Answer{Example: "planning"}, apitest.Answer{Example: "plan_ready"},
 		apitest.Answer{Example: "generating"}, apitest.Answer{Example: "completed"})
-	r := run(t, "video", "create", "--brief", "x", "--wait")
+	r := run(t, "video", "create", "--brief", "x", "--yes")
+	if post, _ := srv.Last("POST", "/videos"); post.Body["auto_generate"] != true {
+		t.Fatalf("--yes plans and generates in one call: %v", post.Body)
+	}
 	if r.exit() != 0 || r.JSON(t)["phase"] != "completed" {
 		t.Fatalf("exit %d, %s", r.exit(), r.stdout)
 	}

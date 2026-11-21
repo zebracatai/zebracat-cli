@@ -18,6 +18,12 @@
     "needs_yes": false
   },
   {
+    "name": "api",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
     "name": "auth login",
     "group": "account",
     "paid": false,
@@ -42,32 +48,98 @@
     "needs_yes": false
   },
   {
+    "name": "avatar clone",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "avatar clone status",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
     "name": "avatar list",
-    "group": "assets",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "background list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "brand create",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "brand delete",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "brand get",
+    "group": "library",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "brand list",
-    "group": "assets",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "brand update",
+    "group": "library",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "character create",
-    "group": "assets",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character delete",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character get",
+    "group": "library",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "character list",
-    "group": "assets",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character suggest",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character update",
+    "group": "library",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "chat",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
@@ -91,7 +163,7 @@
   },
   {
     "name": "create",
-    "group": "make",
+    "group": "videos",
     "paid": true,
     "needs_yes": true
   },
@@ -103,91 +175,175 @@
   },
   {
     "name": "image",
-    "group": "make",
+    "group": "legacy",
     "paid": true,
-    "needs_yes": false
+    "needs_yes": true
   },
   {
-    "name": "login",
-    "group": "account",
+    "name": "inspiration search",
+    "group": "inspiration",
     "paid": false,
     "needs_yes": false
   },
   {
-    "name": "models list",
-    "group": "make",
+    "name": "inspiration transcript",
+    "group": "inspiration",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "language list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "model list",
+    "group": "catalogs",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "music list",
-    "group": "assets",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "music search",
+    "group": "catalogs",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "plan chat",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "plan edit",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "plan show",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "plan undo",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
-    "name": "presets list",
-    "group": "make",
+    "name": "post cancel",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post connect",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post connected",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post disconnect",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post get",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post list",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post schedule",
+    "group": "publish",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "preset list",
+    "group": "catalogs",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "script",
-    "group": "make",
-    "paid": false,
-    "needs_yes": false
+    "group": "legacy",
+    "paid": true,
+    "needs_yes": true
   },
   {
     "name": "style list",
-    "group": "assets",
+    "group": "catalogs",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "swap",
-    "group": "make",
+    "group": "remake",
     "paid": true,
     "needs_yes": true
   },
   {
+    "name": "swap options",
+    "group": "remake",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
     "name": "swap status",
-    "group": "make",
+    "group": "remake",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "template list",
-    "group": "assets",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "template resolve",
+    "group": "catalogs",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "update",
     "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "upload",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "upload list",
+    "group": "library",
     "paid": false,
     "needs_yes": false
   },
@@ -199,109 +355,151 @@
   },
   {
     "name": "video answer",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "video cancel",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "video clone",
-    "group": "make",
+    "group": "remake",
     "paid": true,
-    "needs_yes": false
+    "needs_yes": true
   },
   {
     "name": "video create",
-    "group": "make",
+    "group": "videos",
     "paid": true,
-    "needs_yes": false
+    "needs_yes": true
   },
   {
     "name": "video download",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "video generate",
-    "group": "make",
+    "group": "videos",
     "paid": true,
     "needs_yes": true
   },
   {
     "name": "video get",
-    "group": "make",
-    "paid": false,
-    "needs_yes": false
-  },
-  {
-    "name": "video languages",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "video list",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "video prompt-styles",
-    "group": "make",
+    "group": "legacy",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "video quote",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "video status",
-    "group": "make",
+    "group": "videos",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "video translate",
-    "group": "make",
+    "group": "remake",
     "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "video types",
+    "group": "catalogs",
+    "paid": false,
     "needs_yes": false
   },
   {
     "name": "voice clone",
-    "group": "assets",
+    "group": "library",
     "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "voice clones",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "voice delete",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "voice get",
+    "group": "library",
+    "paid": false,
     "needs_yes": false
   },
   {
     "name": "voice list",
-    "group": "assets",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "voice rename",
+    "group": "library",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "webhook create",
-    "group": "account",
+    "group": "webhooks",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "webhook delete",
-    "group": "account",
+    "group": "webhooks",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook get",
+    "group": "webhooks",
     "paid": false,
     "needs_yes": false
   },
   {
     "name": "webhook list",
-    "group": "account",
+    "group": "webhooks",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook test",
+    "group": "webhooks",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook update",
+    "group": "webhooks",
     "paid": false,
     "needs_yes": false
   }

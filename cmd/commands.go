@@ -109,7 +109,7 @@ func describeCommands() map[string]any {
 			return
 		}
 		info := cmdInfo{
-			Name: path, Usage: c.UseLine(), Summary: c.Short, Group: groupOf(top),
+			Name: path, Usage: c.UseLine(), Summary: c.Short, Group: groupOf(path),
 			Paid: isPaid(path), Aliases: append([]string{}, c.Aliases...), Example: c.Example,
 			Flags: []cmdFlag{},
 		}
