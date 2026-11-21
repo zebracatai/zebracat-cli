@@ -5,14 +5,54 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # The release ships Linux, macOS and Windows binaries: build and test on all three.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
+      # Goldens are compared byte for byte: keep LF line endings on Windows too.
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          # Go 1.22's linker writes no LC_UUID, and macOS 26 refuses to start such
+          # a binary (dyld: "missing LC_UUID load command"). Same version as release.yml.
+          go-version: "1.26"
+      - name: gofmt
+        if: runner.os == 'Linux'
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "Run gofmt -w on:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
       - run: go build ./...
       - run: go vet ./...
-      - run: go test ./...
+      # internal/update runs install.sh (Linux, macOS) and install.ps1 (pwsh, all three).
+      - name: installer tests
+        run: go test -v -run 'Install|Release' ./internal/update/
+      - name: go test
+        if: runner.os != 'Windows'
+        run: go test ./...
+      # Known Windows test failures outside the installer (path handling in pasted
+      # pictures, a PATH-separator assumption in cmd's doctor test): shown, not
+      # blocking, until those packages are fixed. Then drop continue-on-error.
+      - name: go test (Windows, not blocking yet)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: go test ./...
+      - uses: actions/setup-node@v4
+        if: runner.os != 'Windows'
+        with:
+          node-version: "22"
+      - name: npm installer tests
+        if: runner.os != 'Windows'
+        run: node --test npm/test/install.test.js
