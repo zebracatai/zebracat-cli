@@ -56,6 +56,8 @@ func stubAPI(t *testing.T) *httptest.Server {
 		case strings.HasPrefix(r.URL.Path, "/m401/"):
 			send(401, "application/json", `{"error": "Invalid API key.", "code": "authentication_required", "type": "authentication",
 				"retryable": false, "request_id": "req_stub123"}`)
+		case strings.HasPrefix(r.URL.Path, "/m500bare/"):
+			send(500, "application/json", `{"status": false, "message": "Oops! Something went wrong."}`)
 		case strings.HasPrefix(r.URL.Path, "/m500/"):
 			send(500, "application/json", `{"error": "Something went wrong on our side.", "code": "internal", "type": "engine",
 				"retryable": true, "request_id": "req_stub123"}`)
@@ -93,9 +95,10 @@ func TestServerErrorsKeepTheServersWords(t *testing.T) {
 		rejected  bool
 	}{
 		{"m429", []string{"✗ You have reached today's plan limit.", "⎿ Try again tomorrow."}, []string{"Wait a minute", "Too many requests"}, false},
-		{"m429bare", []string{"✗ Too many requests just now.", "Try again in 30 s."}, []string{"Wait a minute"}, false},
+		{"m429bare", []string{"✗ Request was throttled.", "⎿ Try again in 30 s."}, []string{"Wait a minute", "API error"}, false},
 		{"m403", []string{"✗ You do not have permission to perform this action.", "isn't allowed to do this"}, []string{"rejected", "auth login"}, false},
-		{"m500html", []string{"✗ Zebracat is having trouble right now.", "Try again in a minute.", "Request id: req_stub123."}, []string{"base URL", "non-JSON"}, false},
+		{"m500html", []string{"✗ Zebracat is having trouble right now.\n", "⎿ Try again in a minute. Request id: req_stub123."}, []string{"base URL", "non-JSON", "HTTP 502", "minute. Try again"}, false},
+		{"m500bare", []string{"✗ Zebracat is having trouble right now.\n", "Request id: req_stub123."}, []string{"API error", "Oops"}, false},
 		{"m500", []string{"✗ Something went wrong on our side.", "Try again in a minute.", "Request id: req_stub123."}, nil, false},
 		{"m401", []string{"✗ Your API key was rejected", "/login"}, nil, true},
 	}
