@@ -86,13 +86,13 @@ func TestCtrlVPastesAClipboardPicture(t *testing.T) {
 func TestPicturesGoWithThePlan(t *testing.T) {
 	m, srv := against(t)
 	n := 0
-	srv.Handle("/api/user/upload_assets", func(w http.ResponseWriter, r *http.Request) {
+	srv.Handle(attach.UploadRoute, func(w http.ResponseWriter, r *http.Request) {
 		n++
 		_ = r.ParseMultipartForm(1 << 20)
-		if r.FormValue("path") != attach.UploadPath {
-			t.Fatalf("path %q", r.FormValue("path"))
+		if _, _, err := r.FormFile("file"); err != nil {
+			t.Fatalf("file part: %v", err)
 		}
-		fmt.Fprintf(w, `{"uploaded_files": [{"url": "https://cdn.example.com/ai-chat/uploads/%d.png"}]}`, n)
+		fmt.Fprintf(w, `{"url": "https://cdn.example.com/ai-chat/uploads/%d.png", "kind_hint": ""}`, n)
 	})
 	paste(m, picture(t, "a.png", 8, 8)+" "+picture(t, "b.png", 8, 8))
 	find[createdMsg](t, say(m, "a launch video for my mug"))
@@ -135,9 +135,9 @@ func TestChipGolden(t *testing.T) {
 // A failed upload gives the pictures back to the input.
 func TestFailedUploadKeepsThePictures(t *testing.T) {
 	m, srv := against(t)
-	srv.Handle("/api/user/upload_assets", func(w http.ResponseWriter, r *http.Request) {
+	srv.Handle(attach.UploadRoute, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
-		_, _ = w.Write([]byte(`{"status": false, "message": "storage is down"}`))
+		_, _ = w.Write([]byte(`{"error": {"code": "internal_error", "message": "storage is down"}}`))
 	})
 	paste(m, picture(t, "a.png", 8, 8))
 	created := find[createdMsg](t, say(m, "a mug video"))

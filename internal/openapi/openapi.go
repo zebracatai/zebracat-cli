@@ -159,9 +159,6 @@ var Sources = []Source{
 	{"video", "GET", "/videos/{task_id}", "200"},
 	{"plan_edit", "POST", "/videos/{task_id}/plan/edit", ""},
 	{"clone", "POST", "/video/clone", ""},
-	{"studio_image", "POST", "/studio/images", ""},
-	{"studio_clip", "POST", "/studio/clips", ""},
-	{"studio_hooks", "POST", "/studio/hooks", ""},
 }
 
 // Enums returns "<prefix>.<property path>" → allowed values for every Source.

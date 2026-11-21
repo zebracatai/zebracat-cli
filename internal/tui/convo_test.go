@@ -2,7 +2,6 @@ package tui
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/zebracatai/zebracat-cli/internal/videos"
 	"os"
@@ -103,8 +102,8 @@ func toPlan(t *testing.T, m *model, srv *apitest.Server, idea string) {
 }
 
 // The whole conversation: idea → plan card with Generate / Discard under it →
-// a change in plain words → the choice again → ↓↑ move it → Enter on Generate →
-// done → Ctrl+O opens it.
+// a change in plain words → the choice again → ↓↑ move it → Enter on Generate
+// asks once with the price → y → done → Ctrl+O opens it.
 func TestConversationPlanEditConfirm(t *testing.T) {
 	m, srv := against(t)
 	srv.On("GET", "/videos/{task_id}/quote", apitest.Answer{Status: "200", Raw: `{"pool": "api_dollar", "credits": 96,
@@ -162,8 +161,12 @@ func TestConversationPlanEditConfirm(t *testing.T) {
 		t.Fatal("↑ moves back to Generate and spends nothing")
 	}
 
-	// Enter on Generate → Generate, once, with an idempotency key (no second question).
+	// Enter on Generate asks once with the price; y → Generate, once, with an idempotency key.
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil || srv.Count("POST", "/generate") != 0 || !strings.Contains(m.View(), "Generate for 96 credits ($4.80)? y/N") {
+		t.Fatalf("Enter on Generate must ask first:\n%s", m.View())
+	}
+	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
 	gen := find[generatedMsg](t, msgs(cmd))
 	if c, _ := srv.Last("POST", "/generate"); srv.Count("POST", "/generate") != 1 || c.Header.Get("Idempotency-Key") == "" {
 		t.Fatalf("generate calls %d", srv.Count("POST", "/generate"))
@@ -303,54 +306,100 @@ func TestCtrlCUnderTheChoice(t *testing.T) {
 	}
 }
 
-// A quote the balance doesn't cover never generates.
+// A quote the balance doesn't cover never generates, nor asks to.
 func TestShortBalanceNeverGenerates(t *testing.T) {
 	m, srv := against(t)
 	m.job = &job{taskID: taskID, quote: map[string]any{"credits": float64(96), "sufficient": false}}
 	m.stage = stageReady
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
 	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.stage != stageReady || srv.Count("POST", "/generate") != 0 {
-		t.Fatalf("stage %v generate %d", m.stage, srv.Count("POST", "/generate"))
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	m.handleSlash("/generate", nil)
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	if m.stage != stageReady || m.confirming || srv.Count("POST", "/generate") != 0 {
+		t.Fatalf("stage %v confirming %v generate %d", m.stage, m.confirming, srv.Count("POST", "/generate"))
 	}
 }
 
-// g generates at once; d discards the plan (POST /cancel) and goes back to the
-// input; a change typed instead edits the plan.
-func TestChoiceShortcutsAndTyping(t *testing.T) {
+// Under a plan, letters always type (owner D1, 2026-11-20): g and d are the
+// first letters of a change, never Generate or Discard; Discard is ↓ + Enter.
+func TestLettersUnderAPlanAlwaysType(t *testing.T) {
 	m, srv := against(t)
 	srv.On("GET", "/videos/{task_id}/quote", apitest.Answer{Status: "200", Raw: `{"pool": "api_dollar", "credits": 96,
 		"usd": "4.80", "basis": "plan", "available": 25, "sufficient": true}`})
 	toPlan(t, m, srv, "why cats knock things off tables")
-	// typing a change: the choice lets the keys through to the input
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
-	if m.in.Value() != "m" || m.stage != stageReady {
-		t.Fatalf("typing went to %q (stage %v)", m.in.Value(), m.stage)
+	for _, letter := range []string{"g", "d", "G", "y"} {
+		_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(letter)})
+		for _, x := range msgs(cmd) {
+			switch x.(type) {
+			case generatedMsg, discardedMsg:
+				t.Fatalf("%q fired %T", letter, x)
+			}
+		}
+		if m.in.Value() != letter || m.stage != stageReady || m.job == nil || m.confirming {
+			t.Fatalf("%q: input %q stage %v confirming %v", letter, m.in.Value(), m.stage, m.confirming)
+		}
+		m.in.Reset()
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ore g")}) // a g inside words is just a letter
-	if m.in.Value() != "more g" || srv.Count("POST", "/generate") != 0 {
-		t.Fatalf("input %q generate %d", m.in.Value(), srv.Count("POST", "/generate"))
+	// "give it jazz" typed key by key is a change, sent to the plan chat.
+	for _, r := range "give it jazz" {
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
-	m.in.Reset()
+	if m.in.Value() != "give it jazz" {
+		t.Fatalf("typed %q", m.in.Value())
+	}
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	find[planMsg](t, msgs(cmd))
+	if chat, _ := srv.Last("POST", "/plan/chat"); chat.Body["message"] != "give it jazz" {
+		t.Fatalf("plan chat %v", chat.Body)
+	}
+	if srv.Count("POST", "/generate") != 0 || srv.Count("POST", "/cancel") != 0 {
+		t.Fatalf("generate %d cancel %d", srv.Count("POST", "/generate"), srv.Count("POST", "/cancel"))
+	}
+	if f := ansi.Strip(m.footer()); strings.Contains(f, "g generate") || strings.Contains(f, "d discard") {
+		t.Fatalf("footer still offers letter keys: %s", f)
+	}
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-	if m.stage != stageIdle || m.job != nil {
-		t.Fatalf("d leaves the plan: stage %v", m.stage)
-	}
+	// Discard is ↓ + Enter: POST /cancel, back to the input.
+	m.Update(planMsg{j: m.job, plan: m.job.plan, quote: m.job.quote})
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	disc := find[discardedMsg](t, msgs(cmd))
-	if srv.Count("POST", "/cancel") != 1 || srv.Count("POST", "/generate") != 0 || disc.err != nil {
+	if srv.Count("POST", "/cancel") != 1 || srv.Count("POST", "/generate") != 0 || disc.err != nil || m.job != nil {
 		t.Fatalf("discard: cancel %d generate %d err %v", srv.Count("POST", "/cancel"), srv.Count("POST", "/generate"), disc.err)
 	}
-	_, cmd = m.Update(disc)
-	if !strings.Contains(fmt.Sprint(msgs(cmd)), "Discarded") {
-		t.Fatalf("discard note: %v", msgs(cmd))
-	}
+}
 
-	toPlan(t, m, srv, "a second idea")
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+// Enter on Generate asks "Generate for N credits? y/N" once; anything but y
+// keeps the plan; /generate asks the same.
+func TestGenerateAsksOnce(t *testing.T) {
+	m, srv := against(t)
+	srv.On("GET", "/videos/{task_id}/quote", apitest.Answer{Status: "200", Raw: `{"pool": "api_dollar", "credits": 96,
+		"usd": "4.80", "basis": "plan", "available": 25, "sufficient": true}`})
+	toPlan(t, m, srv, "why cats knock things off tables")
+	for _, no := range []tea.KeyMsg{{Type: tea.KeyRunes, Runes: []rune("n")}, {Type: tea.KeyEnter}, {Type: tea.KeyEsc},
+		{Type: tea.KeyCtrlC}, {Type: tea.KeyRunes, Runes: []rune("yes"), Paste: true}} {
+		m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		if !m.confirming || !strings.Contains(ansi.Strip(m.View()), "❯ Generate for 96 credits ($4.80)? y/N") ||
+			!strings.Contains(ansi.Strip(m.footer()), "y generate") {
+			t.Fatalf("the question:\n%s", ansi.Strip(m.View()))
+		}
+		_, cmd := m.Update(no)
+		if out := printed(msgs(cmd)); !strings.Contains(out, "Not generated. The plan is kept") || hasQuit(msgs(cmd)) {
+			t.Fatalf("%v: %q", no, out)
+		}
+		if m.confirming || m.stage != stageReady || m.job == nil || m.in.Value() != "" || srv.Count("POST", "/generate") != 0 {
+			t.Fatalf("%v: confirming %v stage %v input %q generate %d", no, m.confirming, m.stage, m.in.Value(), srv.Count("POST", "/generate"))
+		}
+	}
+	m.in.SetValue("/generate")
+	m.handleEnter()
+	if !m.confirming || srv.Count("POST", "/generate") != 0 {
+		t.Fatal("/generate asks too")
+	}
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Y")})
 	find[generatedMsg](t, msgs(cmd))
-	if srv.Count("POST", "/generate") != 1 || m.stage != stageMaking {
-		t.Fatalf("g: generate %d stage %v", srv.Count("POST", "/generate"), m.stage)
+	if srv.Count("POST", "/generate") != 1 || m.stage != stageMaking || m.confirming {
+		t.Fatalf("generate %d stage %v", srv.Count("POST", "/generate"), m.stage)
 	}
 }
 

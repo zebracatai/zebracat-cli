@@ -1,25 +1,64 @@
 {
-  "created_at": "2026-10-19T12:00:00+00:00",
   "editor_url": "https://studio.zebracat.ai/storyboard/48213",
-  "engine": "director_v2",
   "idempotency_key": "k",
-  "links": {
-    "editor": "https://studio.zebracat.ai/storyboard/48213",
-    "plan": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/plan",
-    "quote": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01/quote",
-    "self": "/api/v1/public/videos/7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
-  },
+  "next": "zebracat video generate 7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01 --yes --wait",
   "phase": "plan_ready",
-  "plan_summary": {
-    "audio_mode": "narration",
-    "beats": 4,
-    "language": "english",
-    "media_type": "ai_video",
+  "plan": {
+    "asks": null,
+    "can_undo": true,
+    "project_id": 48213,
+    "render": {
+      "quality": "balanced"
+    },
     "rev": 3,
-    "seconds": 20,
-    "title": "Why cats knock things off tables"
+    "screenplay": {
+      "aspect": "vertical",
+      "audio": {
+        "mode": "narration"
+      },
+      "beats": [
+        {
+          "n": 1,
+          "narration": "Ever wondered why your cat swipes your mug off the table?",
+          "seconds": 5
+        },
+        {
+          "n": 2,
+          "narration": "It starts with instinct: cats test what moves.",
+          "seconds": 5
+        },
+        {
+          "n": 3,
+          "narration": "Then comes attention. A falling cup always gets you running.",
+          "seconds": 5
+        },
+        {
+          "n": 4,
+          "narration": "So next time, play with them first. Your mug will thank you.",
+          "seconds": 5
+        }
+      ],
+      "language": "english",
+      "media_type": "ai_video",
+      "title": "Why cats knock things off tables",
+      "version": 2
+    },
+    "summary_lines": [
+      "A 20 s narrated AI video, vertical, in English.",
+      "4 scenes, one voice."
+    ],
+    "versions": [
+      {
+        "rev": 1
+      },
+      {
+        "rev": 2
+      },
+      {
+        "rev": 3
+      }
+    ]
   },
-  "project_id": 48213,
   "quote": {
     "available": 0,
     "basis": "plan",
@@ -51,21 +90,10 @@
     ],
     "credit_part": "AIVF",
     "credits": 96,
-    "plan": {
-      "audio_mode": "narration",
-      "media_type": "ai_video",
-      "quality": "balanced",
-      "rev": 3,
-      "seconds": 20
-    },
     "pool": "api_dollar",
     "sufficient": false,
     "usd": "4.80",
     "why": "4 AI-video scenes of 5 s at balanced quality."
   },
-  "run_id": "run_5f2a91c0d3",
-  "status": "pending",
-  "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01",
-  "updated_at": "2026-10-19T12:01:00+00:00",
-  "video_type": "idea"
+  "task_id": "7c1e9b2a-4f0d-4c55-9a1e-3d2f6b8a9c01"
 }

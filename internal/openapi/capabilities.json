@@ -1,0 +1,1582 @@
+{
+  "version": 1,
+  "updated": "2026-11-20",
+  "about": "Every public capability once, with its name on each surface: `api` (the OpenAPI operationId under /api/v1/public), `mcp` (the MCP tool), `cli` (the `zebracat` command), `guide` (/docs/guides/<slug>.md). A null side says why in `why`. `category` is one of the nine categories every surface groups by; `pending` names the package that adds a side still in flight. Tests on each surface hold it to this table.",
+  "categories": [
+    "Videos",
+    "Remake a video",
+    "Inspiration",
+    "Catalogs",
+    "Library",
+    "Publish",
+    "Account",
+    "Webhooks",
+    "Workflows",
+    "Legacy"
+  ],
+  "own_tags": {
+    "Workflows": "Workflows (category 9) is on DEV only; its operations join this table when Workflows ships (owner O10)."
+  },
+  "capabilities": [
+    {
+      "id": "videos.create",
+      "category": "Videos",
+      "section": "Make a video",
+      "method": "POST",
+      "path": "/videos",
+      "api": "create_video",
+      "mcp": "create_video",
+      "cli": "video create",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.plan_and_wait",
+      "category": "Videos",
+      "section": "Make a video",
+      "method": null,
+      "path": null,
+      "api": null,
+      "mcp": "plan_video",
+      "cli": "create",
+      "guide": "video-lifecycle",
+      "since": "v1",
+      "why": {
+        "api": "`POST /videos`, then `GET /videos/{task_id}` until the plan is ready (the MCP tool waits in one call)"
+      }
+    },
+    {
+      "id": "videos.plan.get",
+      "category": "Videos",
+      "section": "The plan",
+      "method": "GET",
+      "path": "/videos/{task_id}/plan",
+      "api": "get_video_plan",
+      "mcp": "get_plan",
+      "cli": "plan show",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.plan.edit",
+      "category": "Videos",
+      "section": "The plan",
+      "method": "POST",
+      "path": "/videos/{task_id}/plan/edit",
+      "api": "edit_video_plan",
+      "mcp": "edit_plan",
+      "cli": "plan edit",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.plan.chat",
+      "category": "Videos",
+      "section": "The plan",
+      "method": "POST",
+      "path": "/videos/{task_id}/plan/chat",
+      "api": "chat_video_plan",
+      "mcp": "chat_plan",
+      "cli": "plan chat",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.plan.undo",
+      "category": "Videos",
+      "section": "The plan",
+      "method": "POST",
+      "path": "/videos/{task_id}/plan/undo",
+      "api": "undo_video_plan",
+      "mcp": "undo_plan",
+      "cli": "plan undo",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.answer",
+      "category": "Videos",
+      "section": "The plan",
+      "method": "POST",
+      "path": "/videos/{task_id}/answer",
+      "api": "answer_video_question",
+      "mcp": "answer_video_question",
+      "cli": "video answer",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.quote",
+      "category": "Videos",
+      "section": "Quote and generate",
+      "method": "GET",
+      "path": "/videos/{task_id}/quote",
+      "api": "quote_video",
+      "mcp": "quote_video",
+      "cli": "video quote",
+      "guide": "idempotency-and-dry-run",
+      "since": "v1"
+    },
+    {
+      "id": "videos.generate",
+      "category": "Videos",
+      "section": "Quote and generate",
+      "method": "POST",
+      "path": "/videos/{task_id}/generate",
+      "api": "generate_video",
+      "mcp": "generate_video",
+      "cli": "video generate",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.get",
+      "category": "Videos",
+      "section": "Read, list, cancel, download",
+      "method": "GET",
+      "path": "/videos/{task_id}",
+      "api": "get_video",
+      "mcp": "get_video",
+      "cli": "video get",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.list",
+      "category": "Videos",
+      "section": "Read, list, cancel, download",
+      "method": "GET",
+      "path": "/videos",
+      "api": "list_videos",
+      "mcp": "list_videos",
+      "cli": "video list",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.cancel",
+      "category": "Videos",
+      "section": "Read, list, cancel, download",
+      "method": "POST",
+      "path": "/videos/{task_id}/cancel",
+      "api": "cancel_video_plan",
+      "mcp": "cancel_video",
+      "cli": "video cancel",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.download",
+      "category": "Videos",
+      "section": "Read, list, cancel, download",
+      "method": "GET",
+      "path": "/videos/{task_id}/download",
+      "api": "download_video_file",
+      "mcp": null,
+      "cli": "video download",
+      "guide": "video-lifecycle",
+      "since": "2026-11-20",
+      "why": {
+        "mcp": "the finished file's link is in `get_video`'s answer"
+      }
+    },
+    {
+      "id": "videos.rename",
+      "category": "Videos",
+      "section": "Read, list, cancel, download",
+      "method": "PUT",
+      "path": "/projects/{project_id}",
+      "api": "rename_project",
+      "mcp": null,
+      "cli": null,
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "not offered to agents yet",
+        "cli": "not in the CLI yet",
+        "guide": "described in the reference only"
+      }
+    },
+    {
+      "id": "videos.delete",
+      "category": "Videos",
+      "section": "Read, list, cancel, download",
+      "method": "DELETE",
+      "path": "/projects/{project_id}",
+      "api": "delete_project",
+      "mcp": null,
+      "cli": null,
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "deleting a video is left to the dashboard and the API",
+        "cli": "not in the CLI yet",
+        "guide": "described in the reference only"
+      }
+    },
+    {
+      "id": "videos.list_projects",
+      "category": "Videos",
+      "section": "Older ways to read a video (deprecated)",
+      "method": "GET",
+      "path": "/projects",
+      "api": "list_projects",
+      "mcp": "list_projects",
+      "cli": null,
+      "guide": "video-lifecycle",
+      "since": "v1",
+      "why": {
+        "cli": "`video list` (`GET /videos`)"
+      }
+    },
+    {
+      "id": "videos.task_status",
+      "category": "Videos",
+      "section": "Older ways to read a video (deprecated)",
+      "method": "GET",
+      "path": "/video/status",
+      "api": "get_video_task_status",
+      "mcp": "get_video_status",
+      "cli": "video status",
+      "guide": "video-lifecycle",
+      "since": "v1"
+    },
+    {
+      "id": "videos.latest",
+      "category": "Videos",
+      "section": "Older ways to read a video (deprecated)",
+      "method": "POST",
+      "path": "/latest_videos",
+      "api": "list_latest_videos",
+      "mcp": "list_latest_videos",
+      "cli": null,
+      "guide": "video-lifecycle",
+      "since": "v1",
+      "why": {
+        "cli": "`video list` (`GET /videos`)"
+      }
+    },
+    {
+      "id": "videos.cancel_old_path",
+      "category": "Videos",
+      "section": "Older ways to read a video (deprecated)",
+      "method": "POST",
+      "path": "/video/{task_id}/cancel",
+      "api": "cancel_video",
+      "mcp": null,
+      "cli": null,
+      "guide": "video-lifecycle",
+      "since": "v1",
+      "why": {
+        "mcp": "`cancel_video` (`POST /videos/{task_id}/cancel`)",
+        "cli": "`video cancel` (`POST /videos/{task_id}/cancel`)"
+      }
+    },
+    {
+      "id": "videos.download_old_path",
+      "category": "Videos",
+      "section": "Older ways to read a video (deprecated)",
+      "method": "GET",
+      "path": "/video/{task_id}/download",
+      "api": "download_video",
+      "mcp": null,
+      "cli": null,
+      "guide": "video-lifecycle",
+      "since": "v1",
+      "why": {
+        "mcp": "the link is in `get_video`'s answer",
+        "cli": "`video download` (`GET /videos/{task_id}/download`)"
+      }
+    },
+    {
+      "id": "videos.get_project",
+      "category": "Videos",
+      "section": "Older ways to read a video (deprecated)",
+      "method": null,
+      "path": null,
+      "api": null,
+      "mcp": "get_project",
+      "cli": null,
+      "guide": "video-lifecycle",
+      "since": "v1",
+      "why": {
+        "api": "`GET /videos/{task_id}`",
+        "cli": "`video get`"
+      }
+    },
+    {
+      "id": "remake.clone",
+      "category": "Remake a video",
+      "section": "Clone",
+      "method": "POST",
+      "path": "/video/clone",
+      "api": "clone_video",
+      "mcp": "clone_video",
+      "cli": "video clone",
+      "guide": "clone",
+      "since": "v1"
+    },
+    {
+      "id": "remake.translate",
+      "category": "Remake a video",
+      "section": "Translate",
+      "method": "POST",
+      "path": "/video/translate",
+      "api": "translate_video",
+      "mcp": "translate_video",
+      "cli": "video translate",
+      "guide": "translate",
+      "since": "v1"
+    },
+    {
+      "id": "remake.swap",
+      "category": "Remake a video",
+      "section": "Character swap",
+      "method": "POST",
+      "path": "/character-swap",
+      "api": "character_swap",
+      "mcp": "swap_character",
+      "cli": "swap",
+      "guide": "character-swap",
+      "since": "v1"
+    },
+    {
+      "id": "remake.swap.analyze",
+      "category": "Remake a video",
+      "section": "Character swap",
+      "method": "POST",
+      "path": "/character-swap/analyze",
+      "api": "character_swap_analyze",
+      "mcp": "analyze_character_swap",
+      "cli": null,
+      "guide": "character-swap",
+      "since": "v1",
+      "why": {
+        "cli": "`swap` runs the analysis itself"
+      }
+    },
+    {
+      "id": "remake.swap.options",
+      "category": "Remake a video",
+      "section": "Character swap",
+      "method": "GET",
+      "path": "/character-swap/options",
+      "api": "character_swap_options",
+      "mcp": "get_character_swap_options",
+      "cli": "swap options",
+      "guide": "character-swap",
+      "since": "v1"
+    },
+    {
+      "id": "remake.swap.get",
+      "category": "Remake a video",
+      "section": "Character swap",
+      "method": "GET",
+      "path": "/character-swap/{job_id}",
+      "api": "character_swap_job",
+      "mcp": "get_character_swap",
+      "cli": "swap status",
+      "guide": "character-swap",
+      "since": "v1"
+    },
+    {
+      "id": "inspiration.search",
+      "category": "Inspiration",
+      "section": "Viral videos",
+      "method": "GET",
+      "path": "/inspiration",
+      "api": "search_inspiration",
+      "mcp": "search_inspiration",
+      "cli": "inspiration search",
+      "guide": null,
+      "since": "2026-11-20",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "inspiration.transcript",
+      "category": "Inspiration",
+      "section": "Viral videos",
+      "method": "GET",
+      "path": "/inspiration/{video_id}/transcript",
+      "api": "get_inspiration_transcript",
+      "mcp": "get_inspiration_transcript",
+      "cli": "inspiration transcript",
+      "guide": null,
+      "since": "2026-11-20",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.video_types",
+      "category": "Catalogs",
+      "section": "Video types and models",
+      "method": "GET",
+      "path": "/video/types",
+      "api": "list_video_types",
+      "mcp": "list_video_types",
+      "cli": "video types",
+      "guide": null,
+      "since": "2026-11-20",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.models",
+      "category": "Catalogs",
+      "section": "Video types and models",
+      "method": "GET",
+      "path": "/video/models",
+      "api": "list_video_models",
+      "mcp": "list_video_models",
+      "cli": "model list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.presets",
+      "category": "Catalogs",
+      "section": "Presets",
+      "method": "GET",
+      "path": "/video/presets",
+      "api": "list_video_presets",
+      "mcp": "list_presets",
+      "cli": "preset list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.voices",
+      "category": "Catalogs",
+      "section": "Voices",
+      "method": "GET",
+      "path": "/voices",
+      "api": "list_voices",
+      "mcp": "list_voices",
+      "cli": "voice list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.languages",
+      "category": "Catalogs",
+      "section": "Languages",
+      "method": "GET",
+      "path": "/video/languages",
+      "api": "list_languages",
+      "mcp": "list_languages",
+      "cli": "language list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.translate_languages",
+      "category": "Catalogs",
+      "section": "Languages",
+      "method": "GET",
+      "path": "/video/translate/languages",
+      "api": "translate_languages",
+      "mcp": "list_translate_languages",
+      "cli": "language list --translate",
+      "guide": "translate",
+      "since": "v1"
+    },
+    {
+      "id": "catalogs.visual_styles",
+      "category": "Catalogs",
+      "section": "Visual styles",
+      "method": "GET",
+      "path": "/visual_styles",
+      "api": "list_visual_styles",
+      "mcp": "list_visual_styles",
+      "cli": "style list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.music",
+      "category": "Catalogs",
+      "section": "Music",
+      "method": "POST",
+      "path": "/music",
+      "api": "list_music",
+      "mcp": "list_music",
+      "cli": "music list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.music.search",
+      "category": "Catalogs",
+      "section": "Music",
+      "method": "POST",
+      "path": "/music/search",
+      "api": "search_music",
+      "mcp": "search_music",
+      "cli": "music search",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.backgrounds",
+      "category": "Catalogs",
+      "section": "Brainrot backgrounds",
+      "method": "GET",
+      "path": "/video/backgrounds",
+      "api": "list_video_backgrounds",
+      "mcp": "list_brainrot_backgrounds",
+      "cli": "background list",
+      "guide": null,
+      "since": "2026-11-20",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.templates",
+      "category": "Catalogs",
+      "section": "Templates",
+      "method": "GET",
+      "path": "/templates",
+      "api": "list_templates",
+      "mcp": "list_templates",
+      "cli": "template list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.templates.resolve",
+      "category": "Catalogs",
+      "section": "Templates",
+      "method": "POST",
+      "path": "/templates/resolve",
+      "api": "resolve_template",
+      "mcp": "resolve_template",
+      "cli": "template resolve",
+      "guide": null,
+      "since": "2026-11-20",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "catalogs.avatars",
+      "category": "Catalogs",
+      "section": "Stock avatars",
+      "method": "GET",
+      "path": "/avatars",
+      "api": "list_avatars",
+      "mcp": "list_avatars",
+      "cli": "avatar list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.uploads.create",
+      "category": "Library",
+      "section": "Uploads",
+      "method": "POST",
+      "path": "/uploads",
+      "api": "upload_file",
+      "mcp": null,
+      "cli": "upload",
+      "guide": "uploads",
+      "since": "v1",
+      "why": {
+        "mcp": "an assistant cannot send a file: it asks for `create_upload_link` and the user's browser uploads"
+      }
+    },
+    {
+      "id": "library.uploads.link",
+      "category": "Library",
+      "section": "Uploads",
+      "method": "POST",
+      "path": "/uploads/link",
+      "api": "create_upload_link",
+      "mcp": "create_upload_link",
+      "cli": null,
+      "guide": "uploads",
+      "since": "2026-11-20",
+      "why": {
+        "cli": "the CLI sends the file itself (`upload`)"
+      }
+    },
+    {
+      "id": "library.uploads.list",
+      "category": "Library",
+      "section": "Uploads",
+      "method": "GET",
+      "path": "/uploads",
+      "api": "list_uploads",
+      "mcp": "list_uploads",
+      "cli": "upload list",
+      "guide": "uploads",
+      "since": "2026-11-20"
+    },
+    {
+      "id": "library.uploads.send_to_link",
+      "category": "Library",
+      "section": "Uploads",
+      "method": "PUT",
+      "path": "/uploads/link/{token}",
+      "api": "upload_to_link",
+      "mcp": null,
+      "cli": null,
+      "guide": "uploads",
+      "since": "2026-11-20",
+      "why": {
+        "mcp": "the link is sent to by the person or script holding the file, not by an agent tool",
+        "cli": "the CLI sends the file itself (`upload`)"
+      }
+    },
+    {
+      "id": "library.characters.list",
+      "category": "Library",
+      "section": "Characters",
+      "method": "GET",
+      "path": "/characters",
+      "api": "list_characters",
+      "mcp": "list_characters",
+      "cli": "character list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.characters.create",
+      "category": "Library",
+      "section": "Characters",
+      "method": "POST",
+      "path": "/characters",
+      "api": "create_character",
+      "mcp": "create_character",
+      "cli": "character create",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.characters.suggest",
+      "category": "Library",
+      "section": "Characters",
+      "method": "POST",
+      "path": "/characters/suggest",
+      "api": "suggest_character",
+      "mcp": null,
+      "cli": "character suggest",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "the assistant writes the description itself and calls `create_character`",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.characters.get",
+      "category": "Library",
+      "section": "Characters",
+      "method": "GET",
+      "path": "/characters/{id}",
+      "api": "get_character",
+      "mcp": null,
+      "cli": "character get",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "`list_characters` answers every character",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.characters.update",
+      "category": "Library",
+      "section": "Characters",
+      "method": "PUT",
+      "path": "/characters/{id}",
+      "api": "update_character",
+      "mcp": "update_character",
+      "cli": "character update",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.characters.patch",
+      "category": "Library",
+      "section": "Characters",
+      "method": "PATCH",
+      "path": "/characters/{id}",
+      "api": "partial_update_character",
+      "mcp": null,
+      "cli": null,
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "`update_character` sends only the fields given",
+        "cli": "`character update`",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.characters.delete",
+      "category": "Library",
+      "section": "Characters",
+      "method": "DELETE",
+      "path": "/characters/{id}",
+      "api": "delete_character",
+      "mcp": "delete_character",
+      "cli": "character delete",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.brands.list",
+      "category": "Library",
+      "section": "Brand kits",
+      "method": "GET",
+      "path": "/brands",
+      "api": "list_brands",
+      "mcp": "list_brands",
+      "cli": "brand list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.brands.create",
+      "category": "Library",
+      "section": "Brand kits",
+      "method": "POST",
+      "path": "/brands",
+      "api": "create_brand",
+      "mcp": "create_brand",
+      "cli": "brand create",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.brands.get",
+      "category": "Library",
+      "section": "Brand kits",
+      "method": "GET",
+      "path": "/brands/{pk}",
+      "api": "get_brand",
+      "mcp": null,
+      "cli": "brand get",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "`list_brands` answers every kit",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.brands.update",
+      "category": "Library",
+      "section": "Brand kits",
+      "method": "PUT",
+      "path": "/brands/{pk}",
+      "api": "update_brand_by_id",
+      "mcp": "update_brand",
+      "cli": "brand update",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.brands.patch",
+      "category": "Library",
+      "section": "Brand kits",
+      "method": "PATCH",
+      "path": "/brands/{pk}",
+      "api": "partial_update_brand_by_id",
+      "mcp": null,
+      "cli": null,
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "`update_brand` sends only the fields given",
+        "cli": "`brand update`",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.brands.delete",
+      "category": "Library",
+      "section": "Brand kits",
+      "method": "DELETE",
+      "path": "/brands/{pk}",
+      "api": "delete_brand_by_id",
+      "mcp": null,
+      "cli": "brand delete",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "deleting a brand kit is left to the dashboard, the API and the CLI",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.brands.update_no_id",
+      "category": "Library",
+      "section": "Brand kits",
+      "method": "PUT",
+      "path": "/brands",
+      "api": "update_brand",
+      "mcp": null,
+      "cli": null,
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "the older form without an id; agents use the `{pk}` route's tools",
+        "cli": "the CLI uses `/brands/{pk}`",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.brands.patch_no_id",
+      "category": "Library",
+      "section": "Brand kits",
+      "method": "PATCH",
+      "path": "/brands",
+      "api": "partial_update_brand",
+      "mcp": null,
+      "cli": null,
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "the older form without an id; agents use the `{pk}` route's tools",
+        "cli": "the CLI uses `/brands/{pk}`",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.brands.delete_no_id",
+      "category": "Library",
+      "section": "Brand kits",
+      "method": "DELETE",
+      "path": "/brands",
+      "api": "delete_brand",
+      "mcp": null,
+      "cli": null,
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "the older form without an id; agents use the `{pk}` route's tools",
+        "cli": "the CLI uses `/brands/{pk}`",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.voices.list",
+      "category": "Library",
+      "section": "Cloned voices",
+      "method": "GET",
+      "path": "/voice/clone",
+      "api": "list_clone_voices",
+      "mcp": "list_cloned_voices",
+      "cli": "voice clones",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.voices.clone",
+      "category": "Library",
+      "section": "Cloned voices",
+      "method": "POST",
+      "path": "/voice/clone",
+      "api": "create_clone_voice",
+      "mcp": "clone_voice",
+      "cli": "voice clone",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.voices.rename",
+      "category": "Library",
+      "section": "Cloned voices",
+      "method": "PATCH",
+      "path": "/voice/clone/{voice_id}",
+      "api": "rename_cloned_voice",
+      "mcp": null,
+      "cli": "voice rename",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "renaming is left to the dashboard and the API",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.voices.delete",
+      "category": "Library",
+      "section": "Cloned voices",
+      "method": "DELETE",
+      "path": "/voice/clone/{voice_id}",
+      "api": "delete_cloned_voice",
+      "mcp": "delete_cloned_voice",
+      "cli": "voice delete",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.avatars.clone",
+      "category": "Library",
+      "section": "Own avatars",
+      "method": "POST",
+      "path": "/avatars/clone",
+      "api": "clone_avatar",
+      "mcp": "create_avatar_from_image",
+      "cli": "avatar clone",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.avatars.clone_status",
+      "category": "Library",
+      "section": "Own avatars",
+      "method": "GET",
+      "path": "/avatars/clone/{avatar_id}",
+      "api": "clone_avatar_status",
+      "mcp": null,
+      "cli": "avatar clone status",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "no tool reads one avatar's progress yet; `list_avatars` lists it",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.styles.create",
+      "category": "Library",
+      "section": "Own visual styles",
+      "method": "POST",
+      "path": "/visual_styles",
+      "api": "create_visual_style",
+      "mcp": null,
+      "cli": null,
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "later (own styles are not on MCP yet)",
+        "cli": "later (own styles are not in the CLI yet)",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.styles.activate",
+      "category": "Library",
+      "section": "Own visual styles",
+      "method": "PATCH",
+      "path": "/visual_styles",
+      "api": "activate_visual_style",
+      "mcp": null,
+      "cli": null,
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "later (own styles are not on MCP yet)",
+        "cli": "later (own styles are not in the CLI yet)",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "library.styles.delete",
+      "category": "Library",
+      "section": "Own visual styles",
+      "method": "DELETE",
+      "path": "/visual_styles",
+      "api": "delete_visual_style",
+      "mcp": null,
+      "cli": null,
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "later (own styles are not on MCP yet)",
+        "cli": "later (own styles are not in the CLI yet)",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "publish.accounts.connect",
+      "category": "Publish",
+      "section": "Social accounts",
+      "method": "POST",
+      "path": "/scheduling/connect",
+      "api": "connect_platform",
+      "mcp": null,
+      "cli": "post connect",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "connecting an account needs the user's own browser sign-in on the dashboard",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "publish.accounts.list",
+      "category": "Publish",
+      "section": "Social accounts",
+      "method": "GET",
+      "path": "/scheduling/connected",
+      "api": "connected_platforms",
+      "mcp": "list_social_accounts",
+      "cli": "post connected",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "publish.accounts.disconnect",
+      "category": "Publish",
+      "section": "Social accounts",
+      "method": "POST",
+      "path": "/scheduling/disconnect",
+      "api": "disconnect_platform",
+      "mcp": null,
+      "cli": "post disconnect",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "mcp": "disconnecting an account is left to the dashboard",
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "publish.posts.create",
+      "category": "Publish",
+      "section": "Posts",
+      "method": "POST",
+      "path": "/scheduling/posts",
+      "api": "create_post",
+      "mcp": "schedule_post",
+      "cli": "post schedule",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "publish.posts.list",
+      "category": "Publish",
+      "section": "Posts",
+      "method": "GET",
+      "path": "/scheduling/posts/list",
+      "api": "list_posts",
+      "mcp": "list_scheduled_posts",
+      "cli": "post list",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "publish.posts.get",
+      "category": "Publish",
+      "section": "Posts",
+      "method": "GET",
+      "path": "/scheduling/posts/{scheduling_id}",
+      "api": "get_post",
+      "mcp": "get_post",
+      "cli": "post get",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "publish.posts.cancel",
+      "category": "Publish",
+      "section": "Posts",
+      "method": "DELETE",
+      "path": "/scheduling/posts/{scheduling_id}",
+      "api": "delete_post",
+      "mcp": "cancel_post",
+      "cli": "post cancel",
+      "guide": null,
+      "since": "v1",
+      "why": {
+        "guide": "no guide for this category yet (gap-docs G31 adds it)"
+      }
+    },
+    {
+      "id": "account.get",
+      "category": "Account",
+      "section": "Balance, prices and usage",
+      "method": "GET",
+      "path": "/account",
+      "api": "get_account",
+      "mcp": "get_balance",
+      "cli": "account show",
+      "guide": "auth-and-billing",
+      "since": "v1"
+    },
+    {
+      "id": "account.pricing",
+      "category": "Account",
+      "section": "Balance, prices and usage",
+      "method": "GET",
+      "path": "/pricing",
+      "api": "get_pricing",
+      "mcp": "get_pricing",
+      "cli": "account pricing",
+      "guide": "auth-and-billing",
+      "since": "v1"
+    },
+    {
+      "id": "account.usage",
+      "category": "Account",
+      "section": "Balance, prices and usage",
+      "method": "GET",
+      "path": "/credit/usage",
+      "api": "get_usage",
+      "mcp": "get_usage",
+      "cli": "account usage",
+      "guide": "auth-and-billing",
+      "since": "v1"
+    },
+    {
+      "id": "account.usage.detail",
+      "category": "Account",
+      "section": "Balance, prices and usage",
+      "method": "GET",
+      "path": "/credit/usage/detail",
+      "api": "get_usage_detail",
+      "mcp": null,
+      "cli": "account usage --detail",
+      "guide": "auth-and-billing",
+      "since": "v1",
+      "why": {
+        "mcp": "`get_usage` answers the totals; the per-call detail is for developers"
+      }
+    },
+    {
+      "id": "account.balance_and_purchases",
+      "category": "Account",
+      "section": "Balance, prices and usage",
+      "method": "GET",
+      "path": "/credit/purchase",
+      "api": "get_balance_and_purchases",
+      "mcp": null,
+      "cli": null,
+      "guide": "auth-and-billing",
+      "since": "v1",
+      "why": {
+        "mcp": "`get_balance`",
+        "cli": "`account show`"
+      }
+    },
+    {
+      "id": "account.topup",
+      "category": "Account",
+      "section": "API keys and top-up",
+      "method": "POST",
+      "path": "/credit/purchase",
+      "api": "purchase_credits",
+      "mcp": null,
+      "cli": null,
+      "guide": "auth-and-billing",
+      "since": "v1",
+      "why": {
+        "mcp": "dashboard only (owner D2: keys and top-ups are managed signed in to zebracat.ai)",
+        "cli": "dashboard only (owner D2: keys and top-ups are managed signed in to zebracat.ai)"
+      }
+    },
+    {
+      "id": "account.keys.list",
+      "category": "Account",
+      "section": "API keys and top-up",
+      "method": "GET",
+      "path": "/api_keys",
+      "api": "list_api_keys",
+      "mcp": null,
+      "cli": null,
+      "guide": "auth-and-billing",
+      "since": "v1",
+      "why": {
+        "mcp": "`get_balance` lists the keys, masked",
+        "cli": "dashboard only (owner D2: keys and top-ups are managed signed in to zebracat.ai)"
+      }
+    },
+    {
+      "id": "account.keys.create",
+      "category": "Account",
+      "section": "API keys and top-up",
+      "method": "POST",
+      "path": "/api_keys",
+      "api": "create_api_key",
+      "mcp": null,
+      "cli": null,
+      "guide": "auth-and-billing",
+      "since": "v1",
+      "why": {
+        "mcp": "dashboard only (owner D2: keys and top-ups are managed signed in to zebracat.ai)",
+        "cli": "dashboard only (owner D2: keys and top-ups are managed signed in to zebracat.ai)"
+      }
+    },
+    {
+      "id": "account.keys.get",
+      "category": "Account",
+      "section": "API keys and top-up",
+      "method": "GET",
+      "path": "/api_keys/{key_id}",
+      "api": "get_api_key",
+      "mcp": null,
+      "cli": null,
+      "guide": "auth-and-billing",
+      "since": "v1",
+      "why": {
+        "mcp": "dashboard only (owner D2: keys and top-ups are managed signed in to zebracat.ai)",
+        "cli": "dashboard only (owner D2: keys and top-ups are managed signed in to zebracat.ai)"
+      }
+    },
+    {
+      "id": "account.keys.delete",
+      "category": "Account",
+      "section": "API keys and top-up",
+      "method": "DELETE",
+      "path": "/api_keys/{key_id}",
+      "api": "delete_api_key",
+      "mcp": null,
+      "cli": null,
+      "guide": "auth-and-billing",
+      "since": "v1",
+      "why": {
+        "mcp": "dashboard only (owner D2: keys and top-ups are managed signed in to zebracat.ai)",
+        "cli": "dashboard only (owner D2: keys and top-ups are managed signed in to zebracat.ai)"
+      }
+    },
+    {
+      "id": "account.mcp.info",
+      "category": "Account",
+      "section": "What this API offers",
+      "method": "GET",
+      "path": "/mcp",
+      "api": "mcp_server_info",
+      "mcp": null,
+      "cli": null,
+      "guide": "mcp",
+      "since": "v1",
+      "why": {
+        "mcp": "describes the MCP server itself; an MCP client reads `tools/list`",
+        "cli": "the CLI ships its own list (`zebracat commands --json`)"
+      }
+    },
+    {
+      "id": "account.mcp.tools",
+      "category": "Account",
+      "section": "What this API offers",
+      "method": "GET",
+      "path": "/mcp/tools",
+      "api": "mcp_list_tools",
+      "mcp": null,
+      "cli": null,
+      "guide": "mcp",
+      "since": "v1",
+      "why": {
+        "mcp": "describes the MCP server itself; an MCP client reads `tools/list`",
+        "cli": "the CLI ships its own list (`zebracat commands --json`)"
+      }
+    },
+    {
+      "id": "account.mcp.skills",
+      "category": "Account",
+      "section": "What this API offers",
+      "method": "GET",
+      "path": "/mcp/skills",
+      "api": "mcp_list_skills",
+      "mcp": null,
+      "cli": null,
+      "guide": "mcp",
+      "since": "v1",
+      "why": {
+        "mcp": "describes the MCP server itself; an MCP client reads `tools/list`",
+        "cli": "the CLI ships its own list (`zebracat commands --json`)"
+      }
+    },
+    {
+      "id": "account.capabilities",
+      "category": "Account",
+      "section": "What this API offers",
+      "method": "GET",
+      "path": "/capabilities",
+      "api": "list_capabilities",
+      "mcp": null,
+      "cli": "commands",
+      "guide": null,
+      "since": "2026-11-20",
+      "why": {
+        "mcp": "an MCP client reads `tools/list`",
+        "guide": "described in the reference only"
+      }
+    },
+    {
+      "id": "webhooks.list",
+      "category": "Webhooks",
+      "section": "Endpoints",
+      "method": "GET",
+      "path": "/webhooks",
+      "api": "list_webhooks",
+      "mcp": null,
+      "cli": "webhook list",
+      "guide": "webhooks",
+      "since": "v1",
+      "why": {
+        "mcp": "not an agent job: webhooks are set up once, by a developer"
+      }
+    },
+    {
+      "id": "webhooks.create",
+      "category": "Webhooks",
+      "section": "Endpoints",
+      "method": "POST",
+      "path": "/webhooks",
+      "api": "create_webhook",
+      "mcp": null,
+      "cli": "webhook create",
+      "guide": "webhooks",
+      "since": "v1",
+      "why": {
+        "mcp": "not an agent job: webhooks are set up once, by a developer"
+      }
+    },
+    {
+      "id": "webhooks.get",
+      "category": "Webhooks",
+      "section": "Endpoints",
+      "method": "GET",
+      "path": "/webhooks/{webhook_id}",
+      "api": "get_webhook",
+      "mcp": null,
+      "cli": "webhook get",
+      "guide": "webhooks",
+      "since": "v1",
+      "why": {
+        "mcp": "not an agent job: webhooks are set up once, by a developer"
+      }
+    },
+    {
+      "id": "webhooks.update",
+      "category": "Webhooks",
+      "section": "Endpoints",
+      "method": "PATCH",
+      "path": "/webhooks/{webhook_id}",
+      "api": "update_webhook",
+      "mcp": null,
+      "cli": "webhook update",
+      "guide": "webhooks",
+      "since": "v1",
+      "why": {
+        "mcp": "not an agent job: webhooks are set up once, by a developer"
+      }
+    },
+    {
+      "id": "webhooks.delete",
+      "category": "Webhooks",
+      "section": "Endpoints",
+      "method": "DELETE",
+      "path": "/webhooks/{webhook_id}",
+      "api": "delete_webhook",
+      "mcp": null,
+      "cli": "webhook delete",
+      "guide": "webhooks",
+      "since": "v1",
+      "why": {
+        "mcp": "not an agent job: webhooks are set up once, by a developer"
+      }
+    },
+    {
+      "id": "webhooks.test",
+      "category": "Webhooks",
+      "section": "Endpoints",
+      "method": "POST",
+      "path": "/webhooks/{webhook_id}/test",
+      "api": "test_webhook",
+      "mcp": null,
+      "cli": "webhook test",
+      "guide": "webhooks",
+      "since": "2026-11-20",
+      "why": {
+        "mcp": "not an agent job: webhooks are set up once, by a developer"
+      }
+    },
+    {
+      "id": "legacy.idea",
+      "category": "Legacy",
+      "section": "v1",
+      "method": "POST",
+      "path": "/video/idea",
+      "api": "idea_to_video",
+      "mcp": "create_video_from_idea",
+      "cli": null,
+      "guide": "migrating-to-v2",
+      "since": "v1",
+      "why": {
+        "cli": "`video create`"
+      }
+    },
+    {
+      "id": "legacy.script",
+      "category": "Legacy",
+      "section": "v1",
+      "method": "POST",
+      "path": "/video/script",
+      "api": "script_to_video",
+      "mcp": "create_video_from_script",
+      "cli": null,
+      "guide": "migrating-to-v2",
+      "since": "v1",
+      "why": {
+        "cli": "`video create --script`"
+      }
+    },
+    {
+      "id": "legacy.blog",
+      "category": "Legacy",
+      "section": "v1",
+      "method": "POST",
+      "path": "/video/blog",
+      "api": "blog_to_video",
+      "mcp": "create_video_from_blog",
+      "cli": null,
+      "guide": "migrating-to-v2",
+      "since": "v1",
+      "why": {
+        "cli": "`video create` with the link"
+      }
+    },
+    {
+      "id": "legacy.audio",
+      "category": "Legacy",
+      "section": "v1",
+      "method": "POST",
+      "path": "/video/audio",
+      "api": "audio_to_video",
+      "mcp": "create_video_from_audio",
+      "cli": null,
+      "guide": "migrating-to-v2",
+      "since": "v1",
+      "why": {
+        "cli": "no CLI command; it is removed with the v1 engine"
+      }
+    },
+    {
+      "id": "legacy.agentic",
+      "category": "Legacy",
+      "section": "v1",
+      "method": "POST",
+      "path": "/video/agentic",
+      "api": "agentic_video",
+      "mcp": "create_agentic_video",
+      "cli": null,
+      "guide": "migrating-to-v2",
+      "since": "v1",
+      "why": {
+        "cli": "`video create`"
+      }
+    },
+    {
+      "id": "legacy.prompt_styles",
+      "category": "Legacy",
+      "section": "v1",
+      "method": "GET",
+      "path": "/video/prompt_styles",
+      "api": "list_prompt_styles",
+      "mcp": "list_prompt_styles",
+      "cli": "video prompt-styles",
+      "guide": "migrating-to-v2",
+      "since": "v1"
+    },
+    {
+      "id": "legacy.script_generator",
+      "category": "Legacy",
+      "section": "v1",
+      "method": "POST",
+      "path": "/script_generator",
+      "api": "generate_script",
+      "mcp": "generate_script",
+      "cli": "script",
+      "guide": "migrating-to-v2",
+      "since": "v1"
+    },
+    {
+      "id": "legacy.image",
+      "category": "Legacy",
+      "section": "v1",
+      "method": "POST",
+      "path": "/generate_image",
+      "api": "generate_image",
+      "mcp": null,
+      "cli": "image",
+      "guide": "migrating-to-v2",
+      "since": "v1",
+      "why": {
+        "mcp": "not on MCP"
+      }
+    }
+  ]
+}

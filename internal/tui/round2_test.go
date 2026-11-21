@@ -232,9 +232,10 @@ func TestOfflinePollSaysItOnce(t *testing.T) {
 func TestErrorsArePlain(t *testing.T) {
 	m, _ := against(t)
 	cases := map[string]*clierr.Error{
-		"Your API key was rejected":  clierr.Auth("Invalid API key."),
-		"Can't reach Zebracat":       {Exit: 1, Code: "network_error", Message: "network error: x"},
-		"Your balance doesn't cover": {Exit: 1, Code: "insufficient_funds", Message: "x", Hint: "Top up at https://studio.zebracat.ai/billing"},
+		"Your API key was rejected": clierr.Auth("Invalid API key."),
+		"Can't reach Zebracat":      {Exit: 1, Code: "network_error", Message: "network error: x"},
+		"Your API balance doesn't cover this video": {Exit: 1, Code: "insufficient_funds", Type: "insufficient_funds", Status: 402,
+			Message: "Your API balance doesn't cover this video ($4.80).", Hint: "Top up at https://studio.zebracat.ai/billing"},
 	}
 	for want, e := range cases {
 		out := printed(msgs(m.sayAPIErr(e, "")))
@@ -386,13 +387,13 @@ func TestLogoGolden(t *testing.T) {
 	}
 }
 
-// The `/` menu shows 8 rows at a time and scrolls with the selection.
+// The `/` menu shows 8 rows at a time (and how many more) and scrolls with the selection.
 func TestSlashMenuScrolls(t *testing.T) {
 	m := layoutModel(t, 100, true)
 	m.in.SetValue("/")
 	m.refreshMatches()
 	v := m.menuView()
-	if len(strings.Split(v, "\n")) != menuRows || !strings.Contains(v, "› /help") {
+	if len(strings.Split(v, "\n")) != menuRows+1 || !strings.Contains(v, "› /help") || !strings.Contains(v, "… 8 more") {
 		t.Fatalf("menu:\n%s", v)
 	}
 	for i := 0; i < len(commands)-1; i++ {

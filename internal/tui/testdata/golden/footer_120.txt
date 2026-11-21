@@ -1,2 +1,2 @@
   / for commands · alt+enter new line · ↑ history
-  Cat Mode · $208.25 API balance · 1,240 credits · admin@example.com · v0.6.4
+  Cat Mode · $208.25 API balance · 1,240 credits · admin@example.com · v0.0.0

@@ -1,8 +1,7 @@
 // Package attach turns pictures the person gives the CLI — pasted from the
 // clipboard, dragged in as a file path, or passed with --image — into checked
-// images, uploads them the way the studio's /chat does (POST
-// /api/user/upload_assets, multipart "files" + "path"), and hands the plan the
-// stored URLs as its uploads.
+// images, uploads them to the public API (POST /api/v1/public/uploads, one
+// multipart "file"), and hands the plan the stored URLs as its uploads.
 package attach
 
 import (
@@ -28,8 +27,8 @@ import (
 // MaxBytes is the studio's photo cap (squanchy FaceVideoPanel MAX_PHOTO_BYTES).
 const MaxBytes = 12 << 20
 
-// UploadPath is the folder the studio's /chat uploads attached pictures to.
-const UploadPath = "ai-chat/uploads/"
+// UploadRoute is the public API's picture upload (PNG/JPEG/WebP ≤ 12 MB).
+const UploadRoute = "/api/v1/public/uploads"
 
 // Kinds the plan takes for an upload (backend doors.UPLOAD_KINDS); "other"
 // lets the plan read the picture itself.
@@ -218,11 +217,19 @@ func imageExt(p string) bool {
 
 // ---- upload --------------------------------------------------------------------
 
-// Upload sends one picture to POST /api/user/upload_assets and returns its URL.
-func Upload(ctx context.Context, cl *client.Client, im Image) (string, error) {
+// Stored is one uploaded picture: its URL, and what the server thinks it shows
+// (kind_hint: person | place | product | style | logo | other, or "").
+type Stored struct {
+	URL      string `json:"url"`
+	KindHint string `json:"kind_hint"`
+}
+
+// Upload sends one picture to POST /api/v1/public/uploads (multipart, one
+// "file") and returns where it was stored.
+func Upload(ctx context.Context, cl *client.Client, im Image) (Stored, error) {
 	data, err := os.ReadFile(im.Path)
 	if err != nil {
-		return "", clierr.Usage("cannot read %s: %v", im.Path, err)
+		return Stored{}, clierr.Usage("cannot read %s: %v", im.Path, err)
 	}
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
@@ -235,49 +242,45 @@ func Upload(ctx context.Context, cl *client.Client, im Image) (string, error) {
 		name = "pasted-image." + ext
 	}
 	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="files"; filename=%q`, name))
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename=%q`, name))
 	h.Set("Content-Type", "image/"+im.Format)
 	part, err := mw.CreatePart(h)
 	if err != nil {
-		return "", clierr.API("%v", err)
+		return Stored{}, clierr.API("%v", err)
 	}
 	_, _ = part.Write(data)
-	_ = mw.WriteField("path", UploadPath)
 	_ = mw.Close()
-	var out struct {
-		UploadedFiles []struct {
-			URL string `json:"url"`
-		} `json:"uploaded_files"`
-		FailedFiles []struct {
-			Error string `json:"error"`
-		} `json:"failed_files"`
-		Message string `json:"message"`
+	var out Stored
+	if _, err := cl.Do(ctx, "POST", UploadRoute, client.RawBody{ContentType: mw.FormDataContentType(), Data: body.Bytes()}, &out); err != nil {
+		return Stored{}, err
 	}
-	if _, err := cl.Do(ctx, "POST", "/api/user/upload_assets", client.RawBody{ContentType: mw.FormDataContentType(), Data: body.Bytes()}, &out); err != nil {
-		return "", err
+	if out.URL == "" {
+		return Stored{}, clierr.API("upload of %s failed: the server answered no url", name)
 	}
-	if len(out.UploadedFiles) == 0 || out.UploadedFiles[0].URL == "" {
-		why := out.Message
-		if len(out.FailedFiles) > 0 && out.FailedFiles[0].Error != "" {
-			why = out.FailedFiles[0].Error
-		}
-		if why == "" {
-			why = "the server kept no file"
-		}
-		return "", clierr.API("upload of %s failed: %s", name, why)
-	}
-	return out.UploadedFiles[0].URL, nil
+	return out, nil
 }
 
-// Uploads is the plan request's uploads field for stored pictures.
-func Uploads(urls []string, imgs []Image) []map[string]any {
-	out := make([]map[string]any, 0, len(urls))
-	for i, u := range urls {
+// Uploads is the plan request's uploads field for stored pictures. The kind is
+// the one the person gave, else the server's kind_hint, else "other".
+func Uploads(stored []Stored, imgs []Image) []map[string]any {
+	out := make([]map[string]any, 0, len(stored))
+	for i, st := range stored {
 		kind := "other"
 		if i < len(imgs) && imgs[i].Kind != "" {
 			kind = imgs[i].Kind
+		} else if knownKind(st.KindHint) {
+			kind = st.KindHint
 		}
-		out = append(out, map[string]any{"url": u, "kind": kind})
+		out = append(out, map[string]any{"url": st.URL, "kind": kind})
 	}
 	return out
+}
+
+func knownKind(k string) bool {
+	for _, v := range Kinds {
+		if v == k {
+			return true
+		}
+	}
+	return false
 }

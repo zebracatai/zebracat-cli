@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -59,7 +60,9 @@ func fakeGitHub(t *testing.T, tag string, delay time.Duration) (*int32, func()) 
 }
 
 func cleanEnv(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	t.Setenv("ZEBRACAT_NO_UPDATE_CHECK", "")
 	for _, k := range ciVars {
 		t.Setenv(k, "")
@@ -167,7 +170,7 @@ func TestCheckIsSkipped(t *testing.T) {
 func TestMethodOf(t *testing.T) {
 	cases := map[string]string{
 		"/usr/local/lib/node_modules/@zebracat/cli/bin/zebracat": "npm",
-		"/opt/homebrew/Cellar/zebracat/0.3.0/bin/zebracat":       "brew",
+		"/opt/homebrew/bin/zebracat":                             "binary", // no Homebrew tap: a copy put there by hand
 		"/home/me/go/bin/zebracat-cli":                           "go",
 		"/home/me/.local/bin/zebracat":                           "binary",
 	}
@@ -194,12 +197,16 @@ func TestApplyToReplacesTheBinaryAndChecksTheSum(t *testing.T) {
 	arch := tarball(t, "new-binary")
 	sum := sha256.Sum256(arch)
 	sums := hex.EncodeToString(sum[:]) + "  zebracat_linux_amd64.tar.gz\n"
-	bad := false
+	bad, missing := false, false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/" + Repo + "/releases/download/v0.3.0/zebracat_linux_amd64.tar.gz":
 			_, _ = w.Write(arch)
 		case "/" + Repo + "/releases/download/v0.3.0/checksums.txt":
+			if missing {
+				http.NotFound(w, r)
+				return
+			}
 			if bad {
 				_, _ = w.Write([]byte(strings.Repeat("0", 64) + "  zebracat_linux_amd64.tar.gz\n"))
 				return
@@ -231,10 +238,25 @@ func TestApplyToReplacesTheBinaryAndChecksTheSum(t *testing.T) {
 	if b, _ := os.ReadFile(exe); string(b) != "old-binary" {
 		t.Fatal("a refused download leaves the old binary")
 	}
+
+	// A release whose checksums.txt can't be read is refused, not installed unchecked.
+	bad, missing = false, true
+	if err := ApplyTo(context.Background(), "v0.3.0", exe, "linux", "amd64"); err == nil || !strings.Contains(err.Error(), "checksums.txt") {
+		t.Fatalf("a missing checksums.txt must refuse, got %v", err)
+	}
+	if b, _ := os.ReadFile(exe); string(b) != "old-binary" {
+		t.Fatal("an unchecked download must leave the old binary")
+	}
 }
 
 // Relaunch execs the new binary with the same args and says what it replaced.
 func TestRelaunchExecsTheNewBinary(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		if err := Relaunch("zebracat.exe", "v0.3.0", nil); err == nil {
+			t.Fatal("Windows has no exec: Relaunch must refuse")
+		}
+		return
+	}
 	var gotPath string
 	var gotArgs, gotEnv []string
 	old := execFn
@@ -254,5 +276,13 @@ func TestRelaunchExecsTheNewBinary(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("the new binary is told the old version")
+	}
+}
+
+// On Windows `zebracat update` points at the PowerShell installer.
+func TestApplyToOnWindowsNamesTheInstaller(t *testing.T) {
+	err := ApplyTo(context.Background(), "v0.3.0", "zebracat.exe", "windows", "amd64")
+	if err == nil || !strings.Contains(err.Error(), "install.ps1 | iex") {
+		t.Fatalf("got %v", err)
 	}
 }

@@ -129,20 +129,24 @@ func Wait(c *client.Client, taskID string, o WaitOptions) (map[string]any, error
 	}
 	deadline := clk.Now().Add(o.Timeout)
 	var last map[string]any
+	fails := 0
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		out, err := Fetch(ctx, c, taskID)
 		cancel()
 		sleep := interval
 		if err != nil {
-			var ce *clierr.Error
-			if !(errors.As(err, &ce) && ce.Status == 429) {
+			retry, after := Transient(err)
+			if !retry {
 				return nil, err
 			}
-			if ce.RetryAfter > 0 {
-				sleep = ce.RetryAfter
+			fails++
+			sleep = Backoff(interval, fails)
+			if after > 0 {
+				sleep = after
 			}
 		} else {
+			fails = 0
 			last = out
 			if o.OnPoll != nil {
 				o.OnPoll(out)
@@ -160,6 +164,38 @@ func Wait(c *client.Client, taskID string, o WaitOptions) (map[string]any, error
 		}
 		clk.Sleep(sleep)
 	}
+}
+
+// Transient reports whether a failed poll is worth retrying while waiting: a
+// 429 (with its Retry-After), a network error, a timeout, or a 502/503/504.
+// The job keeps running on the server either way, so a blip never ends a wait.
+func Transient(err error) (bool, time.Duration) {
+	var ce *clierr.Error
+	if !errors.As(err, &ce) {
+		return false, 0
+	}
+	switch {
+	case ce.Status == 429:
+		return true, ce.RetryAfter
+	case ce.Status == 502, ce.Status == 503, ce.Status == 504:
+		return true, ce.RetryAfter
+	case ce.Status == 0 && (ce.Code == "network_error" || ce.Code == "timeout"):
+		return true, 0
+	}
+	return false, 0
+}
+
+// Backoff is the pause after the n-th failed poll in a row: the interval,
+// doubled each time, at most a minute.
+func Backoff(interval time.Duration, n int) time.Duration {
+	d := interval
+	for i := 1; i < n && d < time.Minute; i++ {
+		d *= 2
+	}
+	if d > time.Minute {
+		d = time.Minute
+	}
+	return d
 }
 
 // PhaseOrStatus is the phase for a v2 task, else the status.

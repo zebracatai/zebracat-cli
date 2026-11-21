@@ -1,5 +1,5 @@
 {
-  "auto_generate": true,
+  "auto_generate": false,
   "brief": "why cats knock things off tables",
   "input_kind": "idea",
   "options": {

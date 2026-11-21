@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -24,6 +25,7 @@ var (
 	flagAPIKey  string
 	flagBaseURL string
 	flagQuiet   bool
+	flagNoColor bool
 )
 
 var rootCmd = &cobra.Command{
@@ -31,9 +33,13 @@ var rootCmd = &cobra.Command{
 	Short: "Zebracat — AI video generation from your terminal",
 	Long: ui.Banner() + `
 Create AI videos, manage projects, and drive Zebracat from scripts and agents.
+Run zebracat with no arguments to open the conversation.
 
-Auth: run "zebracat auth login" (uses your plan credits) or set ZEBRACAT_API_KEY
-(pay-as-you-go). Output is JSON by default; add --human for readable tables.`,
+Auth: an API key, billed pay-as-you-go from your API balance. Set
+ZEBRACAT_API_KEY, or run "zebracat auth login" once to save one.
+
+Output: tables for people in a terminal, JSON when piped or scripted. Force one
+with --human or --json. "zebracat commands --json" lists every command for agents.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	Version:       version.Version,
@@ -41,26 +47,130 @@ Auth: run "zebracat auth login" (uses your plan credits) or set ZEBRACAT_API_KEY
 
 // Execute runs the root command and maps errors to stable exit codes.
 func Execute() {
+	prepareCommands()
 	if err := rootCmd.Execute(); err != nil {
-		var ce *clierr.Error
-		if errors.As(err, &ce) {
-			ui.PrintErrorEnvelope(ce.Envelope())
-			os.Exit(ce.Exit)
-		}
-		ui.PrintError("error", err.Error(), "")
-		os.Exit(1)
+		ce := asCLIError(err)
+		printError(ce)
+		os.Exit(ce.Exit)
+	}
+}
+
+// asCLIError turns any error into the envelope; one that is not already a
+// *clierr.Error is an API/network failure (exit 1).
+func asCLIError(err error) *clierr.Error {
+	var ce *clierr.Error
+	if errors.As(err, &ce) {
+		return ce
+	}
+	return clierr.API("%v", err)
+}
+
+// printError writes the error to stderr: "✗ message" + hint for a person at a
+// terminal, the JSON envelope for --json, pipes, scripts and agents.
+func printError(ce *clierr.Error) {
+	if humanMode() && ui.IsTTY(os.Stderr) {
+		ui.PrintHumanError(ce)
+		return
+	}
+	ui.PrintErrorEnvelope(ce.Envelope())
+}
+
+// prepare runs once before the first Execute: cobra's own errors (unknown
+// flag or command, a missing argument, a bad value) become usage errors
+// (exit 2, usage_error), and the help groups are assigned (help.go).
+var prepare sync.Once
+
+// pureGroups are the commands that only hold subcommands (`zebracat video`).
+var pureGroups = map[*cobra.Command]bool{}
+
+func prepareCommands() {
+	prepare.Do(func() {
+		rootCmd.InitDefaultHelpCmd()
+		rootCmd.InitDefaultCompletionCmd()
+		rootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
+			e := clierr.Usage("%v", err)
+			e.Hint = "Run `" + c.CommandPath() + " --help` for its flags."
+			return e
+		})
+		walkCommands(rootCmd, func(c *cobra.Command) {
+			if c.HasSubCommands() && !c.Runnable() {
+				pureGroups[c] = true
+				// A group (`zebracat video`): no argument shows its help; an
+				// unknown subcommand is a usage error, not help with exit 0.
+				c.RunE = func(cmd *cobra.Command, args []string) error {
+					if len(args) == 0 {
+						return cmd.Help()
+					}
+					return unknownCommand(cmd, args[0])
+				}
+				return
+			}
+			if c.Args != nil {
+				check := c.Args
+				c.Args = func(cmd *cobra.Command, args []string) error {
+					if err := check(cmd, args); err != nil {
+						if !cmd.HasParent() && len(args) > 0 {
+							return unknownCommand(cmd, args[0])
+						}
+						e := clierr.Usage("%s: %v", cmd.CommandPath(), err)
+						e.Hint = "Usage: " + cmd.UseLine()
+						return e
+					}
+					return nil
+				}
+			}
+		})
+		assignHelpGroups()
+	})
+}
+
+// unknownCommand is the usage error for `zebracat <parent> <name>` where
+// name is not a subcommand, with cobra's "did you mean" suggestions.
+func unknownCommand(parent *cobra.Command, name string) error {
+	e := clierr.Usage("unknown command %q for %q", name, parent.CommandPath())
+	e.Hint = "Run `" + parent.CommandPath() + " --help` to see its commands."
+	if parent.SuggestionsMinimumDistance <= 0 {
+		parent.SuggestionsMinimumDistance = 2 // cobra's own default for `did you mean`
+	}
+	if s := parent.SuggestionsFor(name); len(s) > 0 {
+		e.Hint = "Did you mean `" + parent.CommandPath() + " " + s[0] + "`? " + e.Hint
+	}
+	return e
+}
+
+// walkCommands calls fn for c and every command under it.
+func walkCommands(c *cobra.Command, fn func(*cobra.Command)) {
+	fn(c)
+	for _, sub := range c.Commands() {
+		walkCommands(sub, fn)
 	}
 }
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&flagHuman, "human", false, "Force human-readable output (default when run in a terminal)")
 	rootCmd.PersistentFlags().BoolVar(&flagJSON, "json", false, "Force JSON output (default when piped or scripted)")
-	rootCmd.PersistentFlags().StringVar(&flagAPIKey, "api-key", "", "API key (overrides ZEBRACAT_API_KEY / stored credentials)")
+	rootCmd.PersistentFlags().StringVar(&flagAPIKey, "api-key", "", "API key for this run (prefer ZEBRACAT_API_KEY: a flag stays in shell history and ps)")
 	rootCmd.PersistentFlags().StringVar(&flagBaseURL, "base-url", "", "Override the API base URL")
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "Suppress non-essential stderr output")
-	rootCmd.SetVersionTemplate(ui.Banner() + "zebracat {{.Version}}\n" + update.CurrentPath() + " (" + update.Method() + ") — `zebracat doctor` lists every copy on your PATH\n")
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) { startUpdateCheck(cmd) }
+	rootCmd.PersistentFlags().BoolVar(&flagNoColor, "no-color", false, "No colours (also NO_COLOR=1 or TERM=dumb)")
+	rootCmd.SetVersionTemplate("zebracat {{.Version}}\n")
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		if flagNoColor {
+			ui.DisableColor()
+		}
+		warnAPIKeyFlag()
+		startUpdateCheck(cmd)
+	}
 	rootCmd.PersistentPostRun = func(cmd *cobra.Command, args []string) { finishUpdateCheck() }
+}
+
+// warnAPIKeyFlag says once, on a terminal, that a key passed with --api-key
+// is visible in shell history and to other users through ps.
+func warnAPIKeyFlag() {
+	if flagAPIKey == "" || flagQuiet || !ui.IsTTY(os.Stdin) || !ui.IsTTY(os.Stderr) {
+		return
+	}
+	ui.Warn("--api-key stays in your shell history and shows in `ps`. Prefer ZEBRACAT_API_KEY, or `zebracat auth login` (it reads the key hidden).")
 }
 
 // updateNotice waits for the launch update check (see startUpdateCheck).
@@ -73,7 +183,7 @@ var updateNotice func() string
 func startUpdateCheck(cmd *cobra.Command) {
 	updateNotice = nil
 	switch cmd.Name() {
-	case "zebracat", "chat", "create", "update", "version", "doctor", "completion", "help", "__complete", "__completeNoDesc":
+	case "zebracat", "chat", "create", "update", "version", "doctor", "commands", "completion", "help", "__complete", "__completeNoDesc":
 		return // the TUI shows its own notice; these commands shouldn't nag
 	}
 	if flagQuiet || !ui.IsTTY(os.Stderr) {
@@ -142,6 +252,7 @@ func humanMode() bool {
 // human renderer is provided it's used; otherwise a generic themed renderer runs.
 func emit(v any, human func()) error {
 	if humanMode() {
+		scrubControl(v) // server text never drives the terminal
 		if human != nil {
 			human()
 		} else {
