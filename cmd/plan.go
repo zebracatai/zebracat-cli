@@ -350,7 +350,7 @@ pass --yes. --dry-run answers the price and spends nothing.
 		if err != nil {
 			return err
 		}
-		src, err := mediaURL(c, "--url", clURL, "")
+		src, err := mediaURL(c, "--url", clURL, "clone", "")
 		if err != nil {
 			return err
 		}

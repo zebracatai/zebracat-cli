@@ -99,6 +99,7 @@ func TestDownloadUsesTheVideosRoute(t *testing.T) {
 func TestDownloadFallsBackToTheOldRoute(t *testing.T) {
 	srv, _ := setup(t)
 	mp4, _ := fileServer(t, srv, "OLD")
+	srv.On("GET", "/videos/{task_id}/download", apitest.Answer{Status: "404", Raw: `{"error":"Not found.","code":"not_found"}`})
 	srv.On("GET", "/video/{task_id}/download", apitest.Answer{Status: "302", Raw: " ", Header: map[string]string{"Location": mp4}})
 	if r := run(t, "video", "download", gapTask); r.exit() != 0 || r.JSON(t)["video_url"] != mp4 {
 		t.Fatalf("exit %d %s %s", r.exit(), r.stdout, r.stderr)
@@ -202,7 +203,8 @@ func linkServer(t *testing.T, srv *apitest.Server, method string) (got *[]byte, 
 				}
 			}
 		}
-		w.WriteHeader(204)
+		w.WriteHeader(201) // the server answers the stored file
+		_, _ = w.Write([]byte(`{"url":"https://cdata.example.com/u/clip.mp4","use":"clone"}`))
 	})
 	return &data, &key, &lb
 }
@@ -226,16 +228,26 @@ func TestUploadAnyMediaFile(t *testing.T) {
 		t.Fatalf("picture: exit %d %s form %v", r.exit(), r.stdout, form)
 	}
 
-	for _, method := range []string{"PUT", "POST"} {
-		got, sawKey, lb := linkServer(t, srv, method)
+	// The link's `use` sets the server's types and caps: a video is for clone
+	// unless --use says otherwise.
+	for _, tc := range []struct{ method, use string }{{"PUT", ""}, {"POST", ""}, {"PUT", "translate"}} {
+		got, sawKey, lb := linkServer(t, srv, tc.method)
 		clip := tmpFile(t, "clip.mp4", mp4Bytes)
-		r = run(t, "upload", clip)
+		args := []string{"upload", clip}
+		want := "clone"
+		if tc.use != "" {
+			args, want = append(args, "--use", tc.use), tc.use
+		}
+		r = run(t, args...)
 		if r.exit() != 0 || r.JSON(t)["url"] != "https://cdata.example.com/u/clip.mp4" {
-			t.Fatalf("%s video: exit %d %s %s", method, r.exit(), r.stdout, r.stderr)
+			t.Fatalf("%v video: exit %d %s %s", tc, r.exit(), r.stdout, r.stderr)
 		}
-		if !bytes.Equal(*got, mp4Bytes) || *sawKey || (*lb)["content_type"] != "video/mp4" || (*lb)["size"] != float64(len(mp4Bytes)) {
-			t.Fatalf("%s: bytes %d key %v link body %v", method, len(*got), *sawKey, *lb)
+		if !bytes.Equal(*got, mp4Bytes) || *sawKey || (*lb)["content_type"] != "video/mp4" || (*lb)["use"] != want || (*lb)["filename"] != "clip.mp4" {
+			t.Fatalf("%v: bytes %d key %v link body %v", tc, len(*got), *sawKey, *lb)
 		}
+	}
+	if r := run(t, "upload", tmpFile(t, "clip.mp4", mp4Bytes), "--use", "movie"); r.exit() != 2 {
+		t.Fatalf("an unknown --use: exit %d", r.exit())
 	}
 	txt := tmpFile(t, "notes.txt", []byte("hello"))
 	if r := run(t, "upload", txt); r.exit() != 2 {
@@ -252,18 +264,26 @@ func pngBytes(t *testing.T) []byte {
 // A local file where a URL is taken is uploaded first (clone --url, create --upload).
 func TestLocalFilesAreUploadedFirst(t *testing.T) {
 	srv, _ := setup(t)
-	linkServer(t, srv, "PUT")
+	_, _, lb := linkServer(t, srv, "PUT")
 	clip := tmpFile(t, "ref.mp4", mp4Bytes)
 	r := run(t, "video", "clone", "--url", clip, "--yes")
 	c, _ := srv.Last("POST", "/video/clone")
-	if r.exit() != 0 || c.Body["video_url"] != "https://cdata.example.com/u/clip.mp4" {
+	if r.exit() != 0 || c.Body["video_url"] != "https://cdata.example.com/u/clip.mp4" || (*lb)["use"] != "clone" {
 		t.Fatalf("clone: exit %d body %v %s", r.exit(), c.Body, r.stderr)
 	}
-	r = run(t, "video", "create", "--brief", "x", "--no-wait", "--upload", clip+":place")
+	srv.Handle("/api/v1/public/uploads", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"url":"https://cdata.example.com/u/beach.png","kind_hint":"place"}`))
+	})
+	beach := tmpFile(t, "beach.png", pngBytes(t))
+	r = run(t, "video", "create", "--brief", "x", "--no-wait", "--upload", beach+":place")
 	post, _ := srv.Last("POST", "/videos")
 	ups, _ := post.Body["uploads"].([]any)
-	if r.exit() != 0 || len(ups) != 1 || ups[0].(map[string]any)["url"] != "https://cdata.example.com/u/clip.mp4" || ups[0].(map[string]any)["kind"] != "place" {
+	if r.exit() != 0 || len(ups) != 1 || ups[0].(map[string]any)["url"] != "https://cdata.example.com/u/beach.png" || ups[0].(map[string]any)["kind"] != "place" {
 		t.Fatalf("create --upload: exit %d %v %s", r.exit(), post.Body["uploads"], r.stderr)
+	}
+	// The plan's uploads are pictures: a video there is refused before any call.
+	if r := run(t, "video", "create", "--brief", "x", "--no-wait", "--upload", clip+":place"); r.exit() != 2 || !strings.Contains(r.err.Message, "picture") {
+		t.Fatalf("create --upload video: exit %d %+v", r.exit(), r.err)
 	}
 }
 

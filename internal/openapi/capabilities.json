@@ -392,8 +392,7 @@
       "since": "2026-11-20",
       "why": {
         "guide": "no guide for this category yet (gap-docs G31 adds it)"
-      },
-      "pending": "gap-api-jobs"
+      }
     },
     {
       "id": "inspiration.transcript",
@@ -408,8 +407,7 @@
       "since": "2026-11-20",
       "why": {
         "guide": "no guide for this category yet (gap-docs G31 adds it)"
-      },
-      "pending": "gap-api-jobs"
+      }
     },
     {
       "id": "catalogs.video_types",
@@ -616,8 +614,7 @@
       "since": "v1",
       "why": {
         "mcp": "an assistant cannot send a file: it asks for `create_upload_link` and the user's browser uploads"
-      },
-      "pending": "gap-api-uploads (guide uploads.md)"
+      }
     },
     {
       "id": "library.uploads.link",
@@ -632,8 +629,7 @@
       "since": "2026-11-20",
       "why": {
         "cli": "the CLI sends the file itself (`upload`)"
-      },
-      "pending": "gap-api-uploads"
+      }
     },
     {
       "id": "library.uploads.list",
@@ -645,8 +641,23 @@
       "mcp": "list_uploads",
       "cli": "upload list",
       "guide": "uploads",
+      "since": "2026-11-20"
+    },
+    {
+      "id": "library.uploads.send_to_link",
+      "category": "Library",
+      "section": "Uploads",
+      "method": "PUT",
+      "path": "/uploads/link/{token}",
+      "api": "upload_to_link",
+      "mcp": null,
+      "cli": null,
+      "guide": "uploads",
       "since": "2026-11-20",
-      "pending": "gap-api-uploads (guide uploads.md)"
+      "why": {
+        "mcp": "the link is sent to by the person or script holding the file, not by an agent tool",
+        "cli": "the CLI sends the file itself (`upload`)"
+      }
     },
     {
       "id": "library.characters.list",
@@ -1451,8 +1462,7 @@
       "since": "2026-11-20",
       "why": {
         "mcp": "not an agent job: webhooks are set up once, by a developer"
-      },
-      "pending": "gap-api-jobs"
+      }
     },
     {
       "id": "legacy.idea",

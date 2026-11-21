@@ -93,11 +93,11 @@ price per second and the length limits: ` + "`zebracat swap options`" + `.`,
 		if err := requireSwap(c, cmd); err != nil {
 			return err
 		}
-		video, err := mediaURL(c, "--video", swVideo, "")
+		video, err := mediaURL(c, "--video", swVideo, "swap", "")
 		if err != nil {
 			return err
 		}
-		face, err := mediaURL(c, "--character", swCharacter, "person")
+		face, err := mediaURL(c, "--character", swCharacter, "", "person")
 		if err != nil {
 			return err
 		}

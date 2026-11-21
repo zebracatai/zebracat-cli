@@ -19,6 +19,7 @@ import (
 var uploadTimeout = 30 * time.Minute
 
 var (
+	upUse   string
 	upKind  string
 	upName  string
 	upLimit int
@@ -29,14 +30,18 @@ var uploadCmd = &cobra.Command{
 	Short: "Upload a picture, video or audio file; answers its URL",
 	Long: `Upload one file from your computer to Zebracat storage and print the URL to
 use in other commands: a picture (PNG, JPEG, WebP up to 12 MB), a video (MP4,
-MOV) or an audio file (MP3, WAV). Video and audio size and length limits are
-the ones the dashboard applies; the server says when a file is over them.
+MOV) or an audio file (MP3, WAV). --use says what the file is for, which sets
+the types and limits the server takes: picture (12 MB), translate (MP4/MOV,
+100 MB, 10 minutes), clone and swap (MP4/MOV, 100 MB), voice_clone (MP3/WAV,
+10 MB). By default a picture is a picture, a video is for clone, audio is for
+voice_clone; the server says when a file is over the limits.
 
 Commands that take a URL also take a local path and upload it for you:
 video create --upload, video clone --url, video translate --url, swap --video
 and --character, voice clone --audio, avatar clone --image.`,
 	Example: `  zebracat upload mug.png --kind product
   zebracat upload clip.mp4
+  zebracat upload talk.mp4 --use translate
   url=$(zebracat upload voice.mp3 --json | jq -r .url)`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -44,13 +49,16 @@ and --character, voice clone --audio, avatar clone --image.`,
 		if err != nil {
 			return clierr.Usage("%v", err)
 		}
+		if err := attach.CheckUse(m, upUse); err != nil {
+			return clierr.Usage("--use: %v", err)
+		}
 		c, err := newClient()
 		if err != nil {
 			return err
 		}
 		ctx, cancel := ctxTimeout(uploadTimeout)
 		defer cancel()
-		st, err := attach.UploadMedia(ctx, c, m, upKind, upName)
+		st, err := attach.UploadMedia(ctx, c, m, upUse, upKind, upName)
 		if err != nil {
 			return err
 		}
@@ -80,8 +88,9 @@ var uploadListCmd = &cobra.Command{
 }
 
 // mediaURL is a flag value as a URL: an http(s) URL as is, a local file
-// uploaded first (pictures, videos, audio). flag names the flag in errors.
-func mediaURL(c *client.Client, flag, value, kind string) (string, error) {
+// uploaded first (pictures, videos, audio) for use (see attach.Uses; "" =
+// by the file's type). flag names the flag in errors.
+func mediaURL(c *client.Client, flag, value, use, kind string) (string, error) {
 	v := strings.TrimSpace(value)
 	if v == "" {
 		return "", nil
@@ -94,12 +103,15 @@ func mediaURL(c *client.Client, flag, value, kind string) (string, error) {
 		return "", clierr.Usage("%s needs a public http(s) URL or a local file, got %q", flag, value)
 	}
 	m, err := attach.OpenMedia(path)
+	if err == nil {
+		err = attach.CheckUse(m, use)
+	}
 	if err != nil {
 		return "", clierr.Usage("%s: %v", flag, err)
 	}
 	ctx, cancel := ctxTimeout(uploadTimeout)
 	defer cancel()
-	st, err := attach.UploadMedia(ctx, c, m, kind, "")
+	st, err := attach.UploadMedia(ctx, c, m, use, kind, "")
 	if err != nil {
 		return "", err
 	}
@@ -140,6 +152,7 @@ func withQuery(path string, q url.Values) string {
 }
 
 func init() {
+	uploadCmd.Flags().StringVar(&upUse, "use", "", "What the file is for: "+strings.Join(attach.Uses, ", ")+" (default: by the file type)")
 	uploadCmd.Flags().StringVar(&upKind, "kind", "", "What the file shows, for a picture: "+client.EnumHelp("create.uploads.kind"))
 	uploadCmd.Flags().StringVar(&upName, "name", "", "A name for the file in your library")
 	uploadListCmd.Flags().IntVar(&upLimit, "limit", 50, "Max rows")

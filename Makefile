@@ -39,8 +39,8 @@ openapi: ## Refresh the schema copy from $(API)/docs/openapi.json, then regenera
 
 capabilities: ## Refresh the capability table copy from $(API)/api/v1/public/capabilities
 	curl -fsS $(API)/api/v1/public/capabilities -o internal/openapi/capabilities.json.new
-	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["capabilities"]' internal/openapi/capabilities.json.new
-	mv internal/openapi/capabilities.json.new internal/openapi/capabilities.json
+	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["capabilities"]; open(sys.argv[2],"w").write(json.dumps(d,indent=2,ensure_ascii=False)+"\n")' internal/openapi/capabilities.json.new internal/openapi/capabilities.json
+	rm internal/openapi/capabilities.json.new
 
 lint: ## golangci-lint (if installed)
 	golangci-lint run ./... || echo "golangci-lint not installed; skipping"

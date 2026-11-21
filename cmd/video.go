@@ -278,7 +278,7 @@ and agents pass --yes. --dry-run answers the price and spends nothing.`,
 		if err != nil {
 			return err
 		}
-		src, err := mediaURL(c, "--url", vURL, "")
+		src, err := mediaURL(c, "--url", vURL, "translate", "")
 		if err != nil {
 			return err
 		}

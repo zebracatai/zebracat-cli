@@ -276,7 +276,7 @@ func resolveUploads(c *client.Client, body map[string]any, imgs []attach.Image) 
 			continue
 		}
 		kind, _ := u["kind"].(string)
-		got, err := mediaURL(c, "--upload", v, kind)
+		got, err := mediaURL(c, "--upload", v, "picture", kind)
 		if err != nil {
 			return err
 		}

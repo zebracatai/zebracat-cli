@@ -19,8 +19,9 @@ import (
 )
 
 // LinkRoute is the public API's one-time upload link (api-gap-audit G18/G19):
-// it answers where to send one file and the URL the file will have. Video and
-// audio files go this way; the size and length caps are the server's.
+// it answers where to send one file (PUT the bytes, no API key) and the URL
+// the file will have. Video and audio files go this way; `use` picks the
+// types and caps, which are the server's.
 const LinkRoute = "/api/v1/public/uploads/link"
 
 // Media is one local file to upload: a picture, a video or an audio file.
@@ -90,14 +91,56 @@ func sniffMedia(head []byte, path string) string {
 	return ct
 }
 
+// Uses are what an uploaded file is for, as the upload link's `use` names
+// them: it sets the types and caps the server accepts (picture: PNG, JPEG,
+// WebP, 12 MB; translate: MP4, MOV, 100 MB, 10 minutes; clone and swap: MP4,
+// MOV, 100 MB; voice_clone: MP3, WAV, 10 MB).
+var Uses = []string{"picture", "translate", "clone", "swap", "voice_clone"}
+
+// DefaultUse is the use a file gets when the caller names none: pictures are
+// pictures, a video is a clone source (the widest video caps), audio is a
+// voice sample.
+func DefaultUse(m Media) string {
+	switch m.Family {
+	case "video":
+		return "clone"
+	case "audio":
+		return "voice_clone"
+	}
+	return "picture"
+}
+
+// families are the file types each use takes.
+var families = map[string]string{"picture": "image", "translate": "video", "clone": "video", "swap": "video", "voice_clone": "audio"}
+
+// CheckUse says why m can't be uploaded for use ("" fits any file).
+func CheckUse(m Media, use string) error {
+	if use == "" {
+		return nil
+	}
+	fam, ok := families[use]
+	if !ok {
+		return fmt.Errorf("the use must be one of %s, got %q", strings.Join(Uses, ", "), use)
+	}
+	if fam != m.Family {
+		what := map[string]string{"image": "a picture (PNG, JPEG, WebP)", "video": "a video (MP4, MOV)", "audio": "an audio file (MP3, WAV)"}[fam]
+		return fmt.Errorf("%s is %s; %s takes %s", filepath.Base(m.Path), map[string]string{"image": "a picture", "video": "a video", "audio": "an audio file"}[m.Family], use, what)
+	}
+	return nil
+}
+
 // UploadMedia sends one local file to Zebracat storage and returns its URL:
-// a picture through POST /uploads (multipart file, kind, name), a video or an
-// audio file through a one-time upload link. kind and name may be "".
-func UploadMedia(ctx context.Context, cl *client.Client, m Media, kind, name string) (Stored, error) {
-	if m.Family == "image" {
+// a picture through POST /uploads (multipart file, kind, name), anything else
+// through a one-time upload link for that use. use, kind and name may be ""
+// (use then follows the file's type).
+func UploadMedia(ctx context.Context, cl *client.Client, m Media, use, kind, name string) (Stored, error) {
+	if use == "" {
+		use = DefaultUse(m)
+	}
+	if m.Family == "image" && use == "picture" {
 		return uploadPicture(ctx, cl, m, kind, name)
 	}
-	return uploadByLink(ctx, cl, m, kind, name)
+	return uploadByLink(ctx, cl, m, use, kind, name)
 }
 
 func uploadPicture(ctx context.Context, cl *client.Client, m Media, kind, name string) (Stored, error) {
@@ -146,8 +189,8 @@ type link struct {
 // API key: the link authorizes the one file. Tests swap it.
 var Transfer = &http.Client{}
 
-func uploadByLink(ctx context.Context, cl *client.Client, m Media, kind, name string) (Stored, error) {
-	req := map[string]any{"filename": filepath.Base(m.Path), "content_type": m.ContentType, "size": m.Bytes}
+func uploadByLink(ctx context.Context, cl *client.Client, m Media, use, kind, name string) (Stored, error) {
+	req := map[string]any{"use": use, "filename": filepath.Base(m.Path), "content_type": m.ContentType}
 	if kind != "" {
 		req["kind"] = kind
 	}

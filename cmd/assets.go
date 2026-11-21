@@ -479,13 +479,13 @@ state with ` + "`zebracat avatar clone status <avatar_id>`" + `.`,
 		}
 		body := map[string]any{}
 		if avImage != "" {
-			u, err := mediaURL(c, "--image", avImage, "person")
+			u, err := mediaURL(c, "--image", avImage, "", "person")
 			if err != nil {
 				return err
 			}
 			body["image_url"] = u
 		} else {
-			u, err := mediaURL(c, "--video", avVideo, "")
+			u, err := mediaURL(c, "--video", avVideo, "clone", "")
 			if err != nil {
 				return err
 			}
@@ -786,7 +786,7 @@ func saveBrand(method, path string) error {
 		if err != nil {
 			return err
 		}
-		u, err := mediaURL(c, "--logo", brLogo, "logo")
+		u, err := mediaURL(c, "--logo", brLogo, "", "logo")
 		if err != nil {
 			return err
 		}
