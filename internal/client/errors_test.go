@@ -44,7 +44,7 @@ func TestHTMLNotFoundNamesAMissingEndpoint(t *testing.T) {
 	if e.Exit != 1 || e.Status != 404 || !strings.Contains(e.Message, "no such endpoint") {
 		t.Fatalf("%+v", e)
 	}
-	if e := apiError(502, []byte("<html>bad gateway</html>"), http.Header{}); !strings.Contains(e.Message, "check your base URL") {
+	if e := apiError(400, []byte("<html>bad request</html>"), http.Header{}); !strings.Contains(e.Message, "check your base URL") {
 		t.Fatalf("%+v", e)
 	}
 }

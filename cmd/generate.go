@@ -20,37 +20,28 @@ var (
 	imgWidth  int
 	imgHeight int
 	imgCount  int
+
+	legacyYes bool
 )
 
 var scriptCmd = &cobra.Command{
 	Use:   "script <idea>",
-	Short: "Generate a voice-over script from an idea",
-	Long: `Generate a ready-to-use voice-over script from a one-line idea — no video.
+	Short: "Write a voice-over script from an idea (old call; spends API balance)",
+	Long: `Write a ready-to-use voice-over script from a one-line idea, no video. This is
+an old call kept working; for a video, zebracat create writes the script as
+part of its plan.
 
-  zebracat script "benefits of morning walks" --duration 30
-
-When the server has the Studio API this is ` + "`zebracat studio script --wait`" + ` (the
-answer keeps a "script" key with the narration); otherwise the classic
-script generator.`,
-	Args: cobra.MinimumNArgs(1),
+It spends API balance: on a terminal you are asked first; scripts and agents
+pass --yes.`,
+	Example: `  zebracat script "benefits of morning walks" --duration 30 --yes`,
+	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if ok, err := legacySpend("script"); !ok {
+			return err
+		}
 		c, err := newClient()
 		if err != nil {
 			return err
-		}
-		if c.HasPath(cmd.Context(), "/studio/scripts") {
-			if sgMood != "" || sgPromptStyle != "" {
-				note("--mood and --prompt-style are not Studio script options; they are ignored")
-			}
-			stTimeout = 3 * time.Minute
-			out, err := studioScript(c, strings.Join(args, " "), sgDuration, sgLanguage, true)
-			if err != nil {
-				return err
-			}
-			if res, ok := out["result"].(map[string]any); ok {
-				out["script"] = res["narration_text"]
-			}
-			return emit(out, func() { printStudioJobHuman(out) })
 		}
 		body := map[string]any{"idea": strings.Join(args, " ")}
 		if sgDuration != 0 {
@@ -82,29 +73,20 @@ script generator.`,
 
 var imageCmd = &cobra.Command{
 	Use:   "image <prompt>",
-	Short: "Generate an AI image",
-	Long: `Generate one or more AI images from a prompt.
+	Short: "Make AI images from a prompt (old call; spends API balance)",
+	Long: `Make one or more AI images from a prompt. This is an old call kept working.
 
-  zebracat image "a neon city skyline at dusk" --n 2
-
-When the server has the Studio API this is ` + "`zebracat studio image --wait`" + `;
-otherwise the classic image generator.`,
-	Args: cobra.MinimumNArgs(1),
+It spends API balance: on a terminal you are asked first; scripts and agents
+pass --yes.`,
+	Example: `  zebracat image "a neon city skyline at dusk" --n 2 --yes`,
+	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if ok, err := legacySpend("image"); !ok {
+			return err
+		}
 		c, err := newClient()
 		if err != nil {
 			return err
-		}
-		if c.HasPath(cmd.Context(), "/studio/images") {
-			if imgStyle != 0 || imgWidth != 0 || imgHeight != 0 {
-				note("--style, --width and --height are not Studio image options; use `zebracat studio image --aspect`")
-			}
-			stTimeout = 3 * time.Minute
-			out, err := studioImage(c, strings.Join(args, " "), "", imgCount, true)
-			if err != nil {
-				return err
-			}
-			return emit(out, func() { printStudioJobHuman(out) })
 		}
 		body := map[string]any{"prompt": strings.Join(args, " ")}
 		if imgStyle != 0 {
@@ -129,11 +111,23 @@ otherwise the classic image generator.`,
 	},
 }
 
+// legacySpend is D2 for script and image: --yes, or a y on a terminal.
+func legacySpend(action string) (bool, error) {
+	ok, err := confirmSpend(legacyYes, action, func() (string, error) {
+		return "This spends API balance (see zebracat account pricing). Go ahead?", nil
+	})
+	if err == nil && !ok {
+		_ = emit(map[string]any{"done": false}, func() { ui.Info("Nothing was made or charged.") })
+	}
+	return ok, err
+}
+
 func init() {
 	sf := scriptCmd.Flags()
 	sf.IntVar(&sgDuration, "duration", 0, "Target length in seconds: 15|30|60|120|180")
 	sf.StringVar(&sgMood, "mood", "", "Mood (e.g. energetic, inspiring)")
 	sf.StringVar(&sgPromptStyle, "prompt-style", "", "Narration style (see `zebracat video prompt-styles`)")
+	sf.BoolVar(&legacyYes, "yes", false, "Don't ask; required when not on a terminal")
 	sf.StringVar(&sgLanguage, "language", "", "Language")
 
 	gf := imageCmd.Flags()
@@ -141,6 +135,7 @@ func init() {
 	gf.IntVar(&imgWidth, "width", 0, "Width in px")
 	gf.IntVar(&imgHeight, "height", 0, "Height in px")
 	gf.IntVar(&imgCount, "n", 0, "Number of images")
+	gf.BoolVar(&legacyYes, "yes", false, "Don't ask; required when not on a terminal")
 
 	rootCmd.AddCommand(scriptCmd, imageCmd)
 }

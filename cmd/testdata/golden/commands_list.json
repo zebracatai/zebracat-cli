@@ -1,0 +1,506 @@
+[
+  {
+    "name": "account pricing",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "account show",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "account usage",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "api",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "auth login",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "auth logout",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "auth status",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "auth whoami",
+    "group": "account",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "avatar clone",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "avatar clone status",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "avatar list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "background list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "brand create",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "brand delete",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "brand get",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "brand list",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "brand update",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character create",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character delete",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character get",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character list",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character suggest",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "character update",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "chat",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "commands",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "config list",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "config set",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "create",
+    "group": "videos",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "doctor",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "image",
+    "group": "legacy",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "inspiration search",
+    "group": "inspiration",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "inspiration transcript",
+    "group": "inspiration",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "language list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "model list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "music list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "music search",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "plan chat",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "plan edit",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "plan show",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "plan undo",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post cancel",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post connect",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post connected",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post disconnect",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post get",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post list",
+    "group": "publish",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "post schedule",
+    "group": "publish",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "preset list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "script",
+    "group": "legacy",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "style list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "swap",
+    "group": "remake",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "swap options",
+    "group": "remake",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "swap status",
+    "group": "remake",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "template list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "template resolve",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "update",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "upload",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "upload list",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "version",
+    "group": "cli",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video answer",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video cancel",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video clone",
+    "group": "remake",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "video create",
+    "group": "videos",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "video download",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video generate",
+    "group": "videos",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "video get",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video list",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video prompt-styles",
+    "group": "legacy",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video quote",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video status",
+    "group": "videos",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "video translate",
+    "group": "remake",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "video types",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "voice clone",
+    "group": "library",
+    "paid": true,
+    "needs_yes": true
+  },
+  {
+    "name": "voice clones",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "voice delete",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "voice get",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "voice list",
+    "group": "catalogs",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "voice rename",
+    "group": "library",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook create",
+    "group": "webhooks",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook delete",
+    "group": "webhooks",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook get",
+    "group": "webhooks",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook list",
+    "group": "webhooks",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook test",
+    "group": "webhooks",
+    "paid": false,
+    "needs_yes": false
+  },
+  {
+    "name": "webhook update",
+    "group": "webhooks",
+    "paid": false,
+    "needs_yes": false
+  }
+]

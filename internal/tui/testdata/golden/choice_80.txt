@@ -4,5 +4,5 @@
 ───────────────────────────────────────────────────────────────────────────────
 › Choose above, or type a change                                               
 ───────────────────────────────────────────────────────────────────────────────
-  ↑↓ enter choose · g generate · d discard · or type a change
-  $208.25 API balance · admin@example.com · v0.6.4
+  ↑↓ enter choose · or type a change
+  $208.25 API balance · admin@example.com · v0.0.0

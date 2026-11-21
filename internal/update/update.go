@@ -31,14 +31,14 @@ import (
 // Repo is the GitHub repo releases are published to.
 const Repo = "zebracatai/zebracat-cli"
 
-// GitHub is the host releases are read from. A test points it at a fake server;
-// ZEBRACAT_RELEASES_URL does the same for a manual smoke test.
-var GitHub = func() string {
-	if u := os.Getenv("ZEBRACAT_RELEASES_URL"); u != "" {
-		return strings.TrimRight(u, "/")
-	}
-	return "https://github.com"
-}()
+// GitHub is the host releases are read from. A test points it at a fake server.
+// A shipped binary always reads github.com: ZEBRACAT_RELEASES_URL is honoured only
+// by a build with the `testreleases` tag (see releases_*.go), so nothing in the
+// environment can send `zebracat update` to another host.
+var GitHub = releasesHost()
+
+// WindowsInstaller is the PowerShell installer a Windows copy is updated with.
+const WindowsInstaller = "https://raw.githubusercontent.com/" + Repo + "/main/install.ps1"
 
 // CheckTimeout bounds the launch check: it never delays a command by more.
 const CheckTimeout = 1500 * time.Millisecond
@@ -172,7 +172,7 @@ func Check(current string) func() string {
 	}
 }
 
-// Method is how this binary was installed: "npm", "brew", "go" or "binary".
+// Method is how this binary was installed: "npm", "go" or "binary".
 func Method() string { return methodOf(CurrentPath()) }
 
 func methodOf(exe string) string {
@@ -180,8 +180,6 @@ func methodOf(exe string) string {
 	switch {
 	case strings.Contains(p, "/node_modules/"):
 		return "npm"
-	case strings.Contains(p, "/Cellar/") || strings.Contains(p, "/homebrew/") || strings.Contains(p, "/linuxbrew/"):
-		return "brew"
 	case filepath.Base(p) == "zebracat-cli":
 		return "go"
 	}
@@ -193,8 +191,6 @@ func UpgradeCommand() string {
 	switch Method() {
 	case "npm":
 		return "npm install -g @zebracat/cli@latest"
-	case "brew":
-		return "brew upgrade zebracat"
 	case "go":
 		return "go install github.com/zebracatai/zebracat-cli@latest"
 	}
@@ -237,7 +233,7 @@ func (e *ErrManaged) Error() string {
 
 // Apply downloads the release `tag` for this OS/arch, checks it against the
 // release's checksums.txt, and replaces the running executable in place.
-// Linux/macOS only; an npm/brew/go install is left to its package manager.
+// Linux/macOS only; an npm or go install is left to its package manager.
 // It returns the path it replaced, to relaunch.
 func Apply(ctx context.Context, tag string) (string, error) {
 	if m := Method(); m != "binary" {
@@ -277,7 +273,7 @@ func TakeUpdatedFrom() string {
 // ApplyTo installs release `tag` for goos/goarch over the file at exe.
 func ApplyTo(ctx context.Context, tag, exe, goos, goarch string) error {
 	if goos == "windows" {
-		return fmt.Errorf("self-update isn't supported on Windows yet — download the .exe from %s/%s/releases", GitHub, Repo)
+		return fmt.Errorf("self-update isn't supported on Windows yet — run the installer again in PowerShell: irm %s | iex", WindowsInstaller)
 	}
 	asset := fmt.Sprintf("zebracat_%s_%s.tar.gz", goos, goarch)
 	base := fmt.Sprintf("%s/%s/releases/download/%s/", GitHub, Repo, tag)
@@ -286,10 +282,14 @@ func ApplyTo(ctx context.Context, tag, exe, goos, goarch string) error {
 	if err != nil {
 		return err
 	}
-	if sums, err := fetch(ctx, base+"checksums.txt"); err == nil {
-		if err := verify(sums, asset, archive); err != nil {
-			return err
-		}
+	// No checksums.txt, no install: a release without one (or a blocked
+	// download of it) must not slip an unchecked binary in.
+	sums, err := fetch(ctx, base+"checksums.txt")
+	if err != nil {
+		return fmt.Errorf("could not read the release's checksums.txt, so the download was not installed: %w", err)
+	}
+	if err := verify(sums, asset, archive); err != nil {
+		return err
 	}
 	bin, err := extractBinary(bytes.NewReader(archive))
 	if err != nil {

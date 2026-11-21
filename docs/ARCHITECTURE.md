@@ -12,14 +12,14 @@ on the backend). It does no generation itself: every command is a thin HTTP call
 | `cmd/video.go` | `video list/get/status/cancel/download/translate`, `waitTask`, the human task view |
 | `cmd/video_create.go` | `video create` (Director v2 `POST /videos`; legacy flag mapping; `--audio-file` → v1 `/video/audio`) |
 | `cmd/plan.go` | `plan show/edit/chat/undo`, `video quote/generate/answer/clone` |
-| `cmd/studio.go` | `studio script/hooks/voice/image/clip/job`, `models list`, `presets list` |
-| `cmd/swap.go` | `swap`: `POST /character-swap/analyze`, then `POST /character-swap` (consent, quoted credits, confirm) |
+| `cmd/swap.go` | `swap`: `POST /character-swap/analyze`, then `POST /character-swap` (consent, quoted credits, confirm); `swap status`; both only when the server's schema lists `/character-swap` |
+| `cmd/catalog.go` | `models list`, `presets list` |
 | `cmd/common.go` | idempotency keys, `postIdempotent` (429 + Retry-After under `--wait`), file/stdin args, the Generate confirmation, the injectable clock |
 | `cmd/assets.go` | voices, avatars, styles, music, templates, characters, brand kits, languages |
-| `cmd/account.go`, `cmd/auth.go`, `cmd/webhook.go`, `cmd/generate.go`, `cmd/misc.go` | account/pricing, API-key login/logout, webhooks, `script`/`image` (Studio aliases when the server has the routes), config + version/update |
+| `cmd/account.go`, `cmd/auth.go`, `cmd/webhook.go`, `cmd/generate.go`, `cmd/misc.go` | account/pricing, API-key login/logout, webhooks, `script`/`image`, config + version/update |
 | `cmd/chat.go` | `zebracat` with no args / `zebracat chat` → launches the TUI (only with a terminal; else exit 2 `needs_terminal`) |
 | `cmd/create.go` | `zebracat create`: the TUI on a terminal; otherwise a plan-only create that prints plan + quote (`--yes` also generates); `zebracat login` |
-| `internal/attach/` | pictures: `Clipboard()` (macOS osascript, Linux wl-paste/xclip, Windows PowerShell → temp PNG), `Paths()` (a paste/drop that names picture files: quotes, `\ `, `file://`, `~/`), `Open()` (PNG/JPEG/WebP ≤12 MB, size), `Upload()` (`POST /api/user/upload_assets`, multipart `files` + `path=ai-chat/uploads/`, like the studio), `Uploads()` (the plan's `uploads`) |
+| `internal/attach/` | pictures: `Clipboard()` (macOS osascript, Linux wl-paste/xclip, Windows PowerShell → temp PNG), `Paths()` (a paste/drop that names picture files: quotes, `\ `, `file://`, `~/`), `Open()` (PNG/JPEG/WebP ≤12 MB, size), `Upload()` (`POST /api/v1/public/uploads`, one multipart `file` → `{url, kind_hint}`), `Uploads()` (the plan's `uploads`) |
 | `internal/brief/` | a typed message → the `POST /videos` body the studio's /chat sends: video-post links → `source_video` (read from URL parts, no regex), a lone page link → the URL door, always `auto_generate: false` |
 | `internal/client/` | HTTP client: auth resolution (flag > env > stored key > OAuth token), one 401 refresh retry, typed API errors (`apiError`: type/code/retryable/hint/request_id/Retry-After); `enums_gen.go` + `enums.go` (allowed flag values); `capabilities.go` (`HasPath`: the server's OpenAPI paths, cached a day) |
 | `internal/openapi/` | `openapi.json` (checked-in copy of the public API schema), enum extraction and example lookup; `enumgen/` writes `internal/client/enums_gen.go` (`go generate`) |
@@ -29,7 +29,7 @@ on the backend). It does no generation itself: every command is a thin HTTP call
 | `internal/clierr/` | error type and exit codes (0 ok, 1 API, 2 usage, 3 auth, 4 timeout) |
 | `internal/ui/` | JSON/human output, colours, spinner, tables |
 | `internal/dash/` | project-status labels/icons/relative time shared by `video list` and the TUI dashboard |
-| `internal/update/` | launch check via the `/releases/latest` redirect (cached a day in `update.json`, 1.5 s cap, off in CI / `ZEBRACAT_NO_UPDATE_CHECK=1`), install-method detection (npm/brew/go), checksum-verified self-update |
+| `internal/update/` | launch check via the `/releases/latest` redirect (cached a day in `update.json`, 1.5 s cap, off in CI / `ZEBRACAT_NO_UPDATE_CHECK=1`), install-method detection (npm/brew/go), self-update that refuses a download without a matching line in the release's `checksums.txt` (so does `install.sh`) |
 | `internal/tui/tui.go` | TUI model, `Run` (account + update check before the welcome box; returns a relaunch request after an in-app update), keys (history, completion, the `u` offer), message types |
 | `internal/tui/commands.go` | Enter handling, API-key capture, slash-command table + dispatcher + signed-out gate, `/help` text |
 | `internal/tui/convo.go` | the conversation: stages (idle → planning → asking/ready ⇄ editing → confirm → making → done); a `plan_blocked` / `*_request` end is an assistant turn (the answer is sent with the first message), real failures say what to do; the animated progress line; Esc / Ctrl+C (never cancel) |

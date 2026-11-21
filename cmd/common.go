@@ -74,6 +74,32 @@ var confirm = func(question string) bool {
 	return false
 }
 
+// confirmSpend is the one rule every paid command follows (owner decision D2,
+// 2026-11-20). yes is the command's --yes; question builds the "[y/N]"
+// question (it may fetch the quote) and only runs when we actually ask.
+//
+//   - --yes: go ahead (true, nil).
+//   - off a terminal (agents, pipes, CI, --json): refuse with exit 2
+//     confirmation_required, naming the flag, before anything is spent.
+//   - on a terminal: ask once; "n" or Enter answers (false, nil) and the caller
+//     prints that nothing was spent.
+func confirmSpend(yes bool, action string, question func() (string, error)) (bool, error) {
+	if yes {
+		return true, nil
+	}
+	if !interactive() {
+		e := clierr.Usage("%s spends credits: pass --yes to confirm", action)
+		e.Code = "confirmation_required"
+		e.Hint = "Add --yes to go ahead, or --dry-run to see the price first."
+		return false, e
+	}
+	q, err := question()
+	if err != nil {
+		return false, err
+	}
+	return confirm(q), nil
+}
+
 // note prints a one-line notice on stderr (deprecations, ignored flags); it
 // never touches stdout, so JSON stays clean.
 func note(format string, args ...any) {

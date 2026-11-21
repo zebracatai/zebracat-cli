@@ -51,8 +51,10 @@ var chatCmd = &cobra.Command{
 	Use:   "chat",
 	Short: "Open the interactive Zebracat conversation",
 	Long:  "Open the interactive Zebracat conversation — the same thing you get by running `zebracat` with no arguments.",
-	Args:  cobra.NoArgs,
-	RunE:  func(cmd *cobra.Command, args []string) error { return runInteractive("") },
+	Example: `  zebracat chat
+  zebracat          # the same`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error { return runInteractive("") },
 }
 
 func init() {

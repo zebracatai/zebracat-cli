@@ -37,7 +37,8 @@ go install github.com/zebracatai/zebracat-cli@latest   # installs as `zebracat-c
 # or grab a binary from the Releases page
 ```
 
-> The installer downloads binaries from GitHub Releases. `https://cli.zebracat.ai`
+> The installer downloads binaries from GitHub Releases and checks each archive against the
+> release's `checksums.txt` (with `sha256sum` or `shasum`) before installing it. `https://cli.zebracat.ai`
 > (and `/install.sh`) serves this repo's `install.sh` live from `main`; the raw GitHub
 > URL `https://raw.githubusercontent.com/zebracatai/zebracat-cli/main/install.sh` works too.
 
@@ -50,7 +51,7 @@ change it **in plain words**, and nothing is spent until you choose **Generate**
 ```
  ▙               ▟
  █ ▖           ▗ █
- █ █           █ █    Zebracat v0.6.4
+ █ █           █ █    Zebracat v0.7.0
  █ █ █ █ █ █ █ █ █    you@example.com · $208.25 API balance
  █ █ █ █ █ █ █ █ █    ~/projects/coffee
  █ █ █ █ █ █ █ █ █
@@ -94,7 +95,7 @@ footer: what you can do now, then your **plan, balance, credits, account and ver
 › Describe your video, paste a script or a link
 ───────────────────────────────────────────────────────────────────────────────
   / for commands · alt+enter new line · ↑ history
-  Cat Mode · $208.25 API balance · 1,240 credits · you@example.com · v0.6.4
+  Cat Mode · $208.25 API balance · 1,240 credits · you@example.com · v0.7.0
 ```
 
 - **Type an idea, paste a script, or paste a link.** A TikTok / YouTube / Reel link is
@@ -127,8 +128,8 @@ footer: what you can do now, then your **plan, balance, credits, account and ver
 
 Attach pictures to your message (a product, a person, a place, a style). They show in
 the input as chips, `[Image #1 · 1080×1920 · 240 KB]` (paste with **Ctrl+V**, or **Alt+V**); **Backspace** on an empty line
-removes the last one. On send they're uploaded the way the studio's chat does it, and the
-plan uses them. PNG, JPEG or WebP, up to 12 MB each; several per message are fine.
+removes the last one. On send they're uploaded to the API (`POST /api/v1/public/uploads`),
+and the plan uses them. PNG, JPEG or WebP, up to 12 MB each; several per message are fine.
 
 | Where | Paste a picture | Drop a file |
 |---|---|---|
@@ -220,18 +221,12 @@ zebracat video clone --url https://www.tiktok.com/@x/video/1 --mode generate_sim
 zebracat video translate --url https://…/in.mp4 --to spanish --render --wait
 ```
 
-Studio tools, one call each:
+Character Swap (paid plans, per second; on servers whose API lists it):
 
 ```bash
-zebracat studio script "3 tips for better sleep" --seconds 30 --wait   # free, daily allowance
-zebracat studio hooks --script script.txt                             # free
-zebracat studio voice --text script.txt --voice <id> -o vo.mp3        # paid (voice credits)
-zebracat studio image "a neon city at dusk" --aspect vertical --count 2
-zebracat studio clip "a cat surfing a wave" --seconds 5 --dry-run     # paid per started 5 s
-zebracat swap --video https://…/clip.mp4 --character https://…/face.jpg --consent --dry-run   # character swap, paid per second
+zebracat swap --video https://…/clip.mp4 --character https://…/face.jpg --consent --dry-run   # the quote
+zebracat swap status <job_id> --wait
 ```
-
-`--aspect` on Studio images and clips takes `9:16|16:9|1:1` (or `vertical|horizontal|square`).
 
 ### Phases
 
@@ -249,8 +244,8 @@ v1 task ids (older videos) keep their v1 `status`.
 
 ### Money
 
-- `--dry-run` (on `video create`, `video generate`, `studio voice`, `studio image`,
-  `studio clip`, `swap`) answers the quote and spends nothing.
+- `--dry-run` (on `video create`, `video generate`, `swap`) answers the quote and spends
+  nothing.
 - `video generate` and `swap` on a terminal show the quote and ask; scripts and agents
   are never asked and must pass `--yes`. `swap` also needs `--consent`: you state you
   have the right to use the face.
@@ -267,12 +262,12 @@ zebracat auth        login | logout | status | whoami
 zebracat video       create | list | get | status | quote | generate | answer | cancel
                      download | clone | translate | prompt-styles | languages
 zebracat plan        show | edit | chat | undo
-zebracat studio      script | hooks | voice | image | clip | job
 zebracat swap        --video <url> --character <image-url> --consent  # character swap
+zebracat swap status <job_id> [--wait]
 zebracat models      list                       # qualities, models, credits per 5 s
 zebracat presets     list                       # street interview, podcast, UGC ad, …
-zebracat script      <idea>                     # alias of `studio script` when the server has Studio
-zebracat image       <prompt>                   # alias of `studio image` when the server has Studio
+zebracat script      <idea>                     # a voice-over script, no video
+zebracat image       <prompt>                   # an AI image
 zebracat voice       list | clone
 zebracat avatar      list
 zebracat style       list
@@ -351,7 +346,7 @@ Override per-invocation with `--base-url`, `--api-key`, or the `ZEBRACAT_API_KEY
 ## Updating
 
 ```bash
-zebracat update           # download the latest release, check its checksum, replace this binary, start it
+zebracat update           # download the latest release, check it against checksums.txt, replace this binary, start it
 zebracat update --check   # just tell me if an update is available
 ```
 

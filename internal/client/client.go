@@ -1,24 +1,27 @@
 // Package client is the thin HTTP layer over the Zebracat public API.
 //
-// It resolves auth in this order: --api-key flag > ZEBRACAT_API_KEY env >
-// stored API key > stored OAuth access token. OAuth tokens are refreshed
-// transparently (proactively when expired, and once on a 401).
+// Auth is an API key, sent as X-API-KEY, resolved in this order: --api-key
+// flag > ZEBRACAT_API_KEY env > the stored key (~/.zebracat/credentials.json).
 package client
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
-	"net/url"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/zebracatai/zebracat-cli/internal/clierr"
 	"github.com/zebracatai/zebracat-cli/internal/config"
+	"github.com/zebracatai/zebracat-cli/internal/version"
 )
 
 // Client talks to the Zebracat public API.
@@ -27,18 +30,42 @@ type Client struct {
 	HTTP       *http.Client
 	creds      *config.Credentials
 	apiKeyFlag string
-	saveCreds  bool
+}
+
+// UserAgent names the CLI, its version and platform, e.g.
+// "zebracat-cli/0.7.0 (linux; amd64)".
+func UserAgent() string {
+	return fmt.Sprintf("zebracat-cli/%s (%s; %s)", version.Version, runtime.GOOS, runtime.GOARCH)
 }
 
 // New builds a client. apiKeyFlag (from --api-key) takes top precedence.
+//
+// The client has no overall timeout: every caller passes a context with its
+// own deadline, so a 12 MB upload on a slow link or a 3-minute plan call is not
+// cut at 60 s. Connecting and the TLS handshake still give up on their own.
 func New(baseURL string, creds *config.Credentials, apiKeyFlag string) *Client {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.DialContext = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	tr.TLSHandshakeTimeout = 15 * time.Second
 	return &Client{
 		BaseURL:    strings.TrimRight(baseURL, "/"),
-		HTTP:       &http.Client{Timeout: 60 * time.Second},
+		HTTP:       &http.Client{Transport: tr, CheckRedirect: keepKeyOnHost},
 		creds:      creds,
 		apiKeyFlag: apiKeyFlag,
-		saveCreds:  true,
 	}
+}
+
+// keepKeyOnHost follows a redirect, but the API key goes only to the API's own
+// host: Go forwards custom headers like X-API-KEY to any host by default.
+func keepKeyOnHost(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	if req.URL.Host != via[0].URL.Host {
+		req.Header.Del("X-API-KEY")
+		req.Header.Del("Authorization")
+	}
+	return nil
 }
 
 func envAPIKey() string { return strings.TrimSpace(os.Getenv("ZEBRACAT_API_KEY")) }
@@ -57,21 +84,13 @@ func (c *Client) apiKey() string {
 	return ""
 }
 
-// IsAuthenticated reports whether any credential is available.
-func (c *Client) IsAuthenticated() bool {
-	if c.apiKey() != "" {
-		return true
-	}
-	return c.creds != nil && c.creds.AccessToken != ""
-}
+// IsAuthenticated reports whether an API key is available.
+func (c *Client) IsAuthenticated() bool { return c.apiKey() != "" }
 
-// AuthMode returns "api_key", "oauth", or "none" for display.
+// AuthMode returns "api_key" or "none" for display.
 func (c *Client) AuthMode() string {
 	if c.apiKey() != "" {
 		return "api_key"
-	}
-	if c.creds != nil && c.creds.AccessToken != "" {
-		return "oauth"
 	}
 	return "none"
 }
@@ -79,14 +98,6 @@ func (c *Client) AuthMode() string {
 func (c *Client) setAuth(req *http.Request) error {
 	if key := c.apiKey(); key != "" {
 		req.Header.Set("X-API-KEY", key)
-		return nil
-	}
-	if c.creds != nil && c.creds.AccessToken != "" {
-		// Refresh proactively if expired.
-		if !c.creds.ExpiresAt.IsZero() && time.Now().After(c.creds.ExpiresAt.Add(-30*time.Second)) {
-			_ = c.refresh(req.Context())
-		}
-		req.Header.Set("Authorization", "Bearer "+c.creds.AccessToken)
 		return nil
 	}
 	return clierr.Auth("not authenticated")
@@ -110,21 +121,15 @@ func (c *Client) DoWith(ctx context.Context, method, path string, body any, head
 	if err != nil {
 		return nil, err
 	}
-	// One transparent retry on 401 for OAuth (token may have just expired).
-	if resp.StatusCode == http.StatusUnauthorized && c.AuthMode() == "oauth" {
-		if rerr := c.refresh(ctx); rerr == nil {
-			raw, resp, err = c.doOnce(ctx, method, path, body, headers)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
 	if resp.StatusCode >= 400 {
 		return raw, apiError(resp.StatusCode, raw, resp.Header)
 	}
 	if out != nil && len(raw) > 0 {
 		if jerr := json.Unmarshal(raw, out); jerr != nil {
-			return raw, clierr.API("could not parse response: %v", jerr)
+			e := clierr.API("the server's answer is not valid JSON (HTTP %d): %v", resp.StatusCode, jerr)
+			e.Code, e.Status = "bad_response", resp.StatusCode
+			e.RequestID = resp.Header.Get("X-Request-ID")
+			return raw, e
 		}
 	}
 	return raw, nil
@@ -151,7 +156,7 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body any, head
 		req.Header.Set("Content-Type", contentType)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "zebracat-cli")
+	req.Header.Set("User-Agent", UserAgent())
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -163,68 +168,36 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body any, head
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, nil, clierr.Timeout("request timed out")
 		}
-		e := clierr.API("network error: %v", err)
-		e.Code = "network_error"
-		return nil, nil, e
+		return nil, nil, clierr.Network("network error: %v", err)
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
-	return raw, resp, nil
-}
-
-// refresh exchanges the stored refresh token for a new access token.
-func (c *Client) refresh(ctx context.Context) error {
-	if c.creds == nil || c.creds.RefreshToken == "" || c.creds.ClientID == "" {
-		return clierr.Auth("session expired")
-	}
-	form := url.Values{}
-	form.Set("grant_type", "refresh_token")
-	form.Set("refresh_token", c.creds.RefreshToken)
-	form.Set("client_id", c.creds.ClientID)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/oauth/token", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := c.HTTP.Do(req)
+	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return clierr.API("token refresh failed: %v", err)
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, nil, clierr.Timeout("request timed out while reading the answer")
+		}
+		return nil, nil, clierr.Network("the connection broke while reading the answer: %v", err)
 	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		return clierr.Auth("token refresh rejected")
-	}
-	var tok struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int    `json:"expires_in"`
-	}
-	if err := json.Unmarshal(raw, &tok); err != nil {
-		return clierr.API("bad refresh response")
-	}
-	c.creds.AccessToken = tok.AccessToken
-	if tok.RefreshToken != "" {
-		c.creds.RefreshToken = tok.RefreshToken
-	}
-	if tok.ExpiresIn > 0 {
-		c.creds.ExpiresAt = time.Now().Add(time.Duration(tok.ExpiresIn) * time.Second)
-	}
-	if c.saveCreds {
-		_ = config.SaveCredentials(c.creds)
-	}
-	return nil
+	return raw, resp, nil
 }
 
 func apiError(status int, raw []byte, header http.Header) *clierr.Error {
 	// Try the {"error": "...", "error_description": "..."} / {"error": {...}} shapes,
-	// plus the typed public-API siblings (type, code, retryable, hint, request_id).
+	// plus the typed public-API siblings (type, code, retryable, hint, request_id,
+	// field, allowed_values, docs_url, errors).
 	var generic map[string]any
 	msg := strings.TrimSpace(string(raw))
-	if strings.HasPrefix(msg, "<") {
-		// A proxy/CDN returned HTML (e.g. an nginx 404) instead of JSON — almost
-		// always a wrong base URL or a gateway that isn't routing to the API, or a
-		// server that does not have this endpoint yet.
-		msg = "the server returned a non-JSON response — check your base URL (ZEBRACAT_BASE_URL / --base-url)"
-		if status == http.StatusNotFound {
+	html := strings.HasPrefix(msg, "<")
+	if html {
+		// A proxy/CDN answered with an HTML page instead of JSON.
+		switch {
+		case status >= 500:
+			// nginx/Cloudflare in front of a server that is down or restarting.
+			msg = fmt.Sprintf("Zebracat is having trouble right now (HTTP %d). Try again in a minute.", status)
+		case status == http.StatusNotFound:
 			msg = "this server has no such endpoint: it is not deployed there yet, or the base URL is wrong (ZEBRACAT_BASE_URL / --base-url)"
+		default:
+			msg = "the server returned a non-JSON response — check your base URL (ZEBRACAT_BASE_URL / --base-url)"
 		}
 	}
 	str := func(k string) string { s, _ := generic[k].(string); return s }
@@ -240,6 +213,8 @@ func apiError(status int, raw []byte, header http.Header) *clierr.Error {
 			}
 		} else if d := str("detail"); d != "" {
 			msg = d
+		} else if m := str("message"); m != "" {
+			msg = m
 		}
 	}
 	retryAfter := parseRetryAfter(header.Get("Retry-After"))
@@ -254,39 +229,72 @@ func apiError(status int, raw []byte, header http.Header) *clierr.Error {
 		requestID = header.Get("X-Request-ID")
 	}
 
-	// A typed error (PLAN §1.6): the server's own type decides the exit code,
-	// and its code and hint reach stderr verbatim.
+	var e *clierr.Error
 	if typ := str("type"); typ != "" {
+		// A typed error (PLAN §1.6): the server's own type decides the exit
+		// code, and its code, hint and retryable reach stderr verbatim.
 		code := str("code")
 		if code == "" {
 			code = typ
 		}
 		retryable, _ := generic["retryable"].(bool)
-		return &clierr.Error{
+		e = &clierr.Error{
 			Exit: clierr.ExitForType(typ), Code: code, Message: msg, Hint: str("hint"),
-			Type: typ, Retryable: retryable, RequestID: requestID,
-			Status: status, RetryAfter: retryAfter,
+			Type: typ, Retryable: retryable,
+		}
+	} else {
+		e = untypedError(status, msg)
+		if code := str("code"); code != "" {
+			e.Code = code
+		}
+		if h := str("hint"); h != "" {
+			e.Hint = h
 		}
 	}
+	e.RequestID, e.Status, e.RetryAfter = requestID, status, retryAfter
+	e.Field, e.DocsURL = str("field"), str("docs_url")
+	if v, ok := generic["allowed_values"].([]any); ok {
+		e.AllowedValues = v
+	}
+	if v, ok := generic["errors"].([]any); ok {
+		e.Errors = v
+	}
+	return e
+}
 
+// untypedError maps an answer without a "type" (an older server, a proxy, a
+// framework default) by its HTTP status, so type and retryable are never empty.
+func untypedError(status int, msg string) *clierr.Error {
 	var e *clierr.Error
-	switch status {
-	case http.StatusUnauthorized, http.StatusForbidden:
+	switch {
+	case status == http.StatusUnauthorized:
 		e = clierr.Auth("%s", msg)
-	case http.StatusPaymentRequired:
+		e.Code = "authentication_failed"
+	case status == http.StatusForbidden:
+		// The key was read and is valid; it may not do this. Logging in again
+		// does not help, so there is no login hint.
+		e = clierr.Auth("%s", msg)
+		e.Code, e.Type, e.Hint = "permission_denied", clierr.TypePermission, ""
+	case status == http.StatusPaymentRequired:
 		e = clierr.APIHint("Top up at https://studio.zebracat.ai/billing", "%s", msg)
+		e.Code, e.Type = "insufficient_funds", "insufficient_funds"
+	case status == http.StatusNotFound:
+		e = clierr.API("API error (%d): %s", status, msg)
+		e.Code, e.Type = "not_found", "not_found"
+	case status == http.StatusConflict:
+		e = clierr.API("API error (%d): %s", status, msg)
+		e.Type = "conflict"
+	case status == http.StatusTooManyRequests:
+		e = clierr.API("API error (%d): %s", status, msg)
+		e.Code, e.Type, e.Retryable = "rate_limited", "rate_limited", true
+	case status >= 500:
+		e = clierr.API("%s", msg)
+		if !strings.HasPrefix(msg, "Zebracat is having trouble") {
+			e.Message = fmt.Sprintf("API error (%d): %s", status, msg)
+		}
+		e.Code, e.Type, e.Retryable = "server_error", clierr.TypeUnavailable, true
 	default:
 		e = clierr.API("API error (%d): %s", status, msg)
-	}
-	if code := str("code"); code != "" {
-		e.Code = code
-	}
-	if h := str("hint"); h != "" {
-		e.Hint = h
-	}
-	e.RequestID, e.Status, e.RetryAfter = requestID, status, retryAfter
-	if status == http.StatusTooManyRequests {
-		e.Retryable = true
 	}
 	return e
 }

@@ -2,7 +2,8 @@
 // pastes a link (or loads a script); Director v2 writes the plan (POST /videos,
 // plan only); the CLI shows it as a card with the quote; plain words change it
 // (the plan chat, POST /videos/{id}/plan/chat); under the card the person
-// chooses Generate (POST /generate) or Discard (POST /cancel). When the plan asks something — a question card, or a brief
+// chooses Generate (POST /generate, after one "y" to the price) or Discard
+// (POST /cancel); letters always type, no single key spends. When the plan asks something — a question card, or a brief
 // with nothing to film ("What should your video be about?") — that is the
 // assistant's turn and the person's next message answers it; it is never shown
 // as a failure.
@@ -136,9 +137,13 @@ func (m *model) onCreated(msg createdMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if msg.err != nil {
+		after := "Nothing was charged."
+		if len(m.job.images) > 0 {
+			after += " Your pictures are still attached; send again."
+		}
 		m.images = append(m.job.images, m.images...) // the pictures come back to the input
 		m.stage, m.job = stageIdle, nil
-		return m, m.sayAPIErr(msg.err, "Nothing was charged. Your pictures are still attached; send again.")
+		return m, m.sayAPIErr(msg.err, after)
 	}
 	for _, im := range m.job.images { // sent: a pasted picture's temp file can go
 		if im.Temp {
@@ -169,8 +174,9 @@ func (m *model) onPoll(msg pollMsg) (tea.Model, tea.Cmd) {
 	})
 	if msg.err != nil {
 		if ce, ok := msg.err.(*clierr.Error); ok && ce.Exit == clierr.CodeAuth {
-			m.stage = stageIdle
-			return m, m.sayAPIErr(msg.err, "")
+			m.stage, m.job = stageIdle, nil // the job can't be watched with this key
+			return m, tea.Sequence(m.sayAPIErr(msg.err, ""),
+				m.note("The video stays on our servers. After /login, follow it with `zebracat video status "+j.taskID+"`."))
 		}
 		if j.offline {
 			return m, again // said once; keep trying quietly
@@ -258,6 +264,7 @@ func (m *model) onPlan(msg planMsg) (tea.Model, tea.Cmd) {
 	}
 	m.stage = stageReady
 	m.choice = choiceGenerate
+	m.confirming = false
 	var out []tea.Cmd
 	if msg.reply != "" {
 		out = append(out, m.assistant(clean(msg.reply)))
@@ -295,33 +302,89 @@ func (m *model) onGenerated(msg generatedMsg) (tea.Model, tea.Cmd) {
 		m.pollCmd(m.job.taskID, true), m.refreshAccount())
 }
 
-// sayAPIErr turns a call's error into a plain sentence and one fix line.
+// sayAPIErr turns a call's error into a plain sentence and one fix line. The
+// sentence is the server's own message from the CLI's error envelope (without
+// the "API error (NNN):" prefix the envelope keeps for agents); the fix line is
+// the server's hint, else one chosen by the envelope's type. The shell only
+// words what the server didn't: a rejected key, no connection, a 5xx without
+// the server's own type (a gateway page or a crash).
 func (m *model) sayAPIErr(err error, after string) tea.Cmd {
 	ce, ok := err.(*clierr.Error)
 	if !ok {
 		return m.sayErr(err.Error(), after)
 	}
 	switch {
-	case ce.Exit == clierr.CodeAuth:
-		return m.sayErr("Your API key was rejected (expired or removed).", "Type /login to add a new one.")
 	case ce.Code == "network_error" || ce.Exit == clierr.CodeTimeout:
-		return m.sayErr("Can't reach Zebracat right now.", strings.TrimSpace("Check your internet connection. "+after))
-	case ce.Code == "insufficient_funds" || ce.Type == "insufficient_funds":
+		return m.sayErr("Can't reach Zebracat right now.", joinFix("Check your internet connection.", after))
+	case forbidden(ce):
 		fix := ce.Hint
 		if fix == "" {
-			fix = "Top up at https://studio.zebracat.ai, then try again."
+			fix = "Your key works but isn't allowed to do this. Check it at https://studio.zebracat.ai → API Keys, or /login with another key."
 		}
-		return m.sayErr("Your balance doesn't cover this.", fix)
-	case ce.Code == "rate_limited" || ce.Type == "rate_limited":
-		return m.sayErr("Too many requests just now.", strings.TrimSpace("Wait a minute. "+after))
+		return m.sayErr(serverWords(ce), joinFix(fix, after))
+	case ce.Exit == clierr.CodeAuth:
+		m.keyRejected = true
+		return m.sayErr("Your API key was rejected (expired or removed).", "Type /login to add a new one.")
+	case ce.Code == "server_error": // the client's code for a 5xx the server didn't type
+		return m.sayErr("Zebracat is having trouble right now.", joinFix("Try again in a minute.", after, requestLine(ce)))
 	}
 	fix := ce.Hint
 	if fix == "" {
-		fix = after
-	} else if after != "" {
-		fix += " " + after
+		switch {
+		case ce.Type == "insufficient_funds":
+			fix = "Top up at https://studio.zebracat.ai, then try again."
+		case ce.Type == "rate_limited":
+			fix = waitFix(ce.RetryAfter)
+		case ce.Type == clierr.TypeUnavailable || ce.Status >= 500:
+			fix = "Try again in a minute."
+		}
 	}
-	return m.sayErr(ce.Message, strings.TrimSpace(fix))
+	if ce.Status >= 500 {
+		fix = joinFix(fix, requestLine(ce))
+	}
+	return m.sayErr(serverWords(ce), joinFix(fix, after))
+}
+
+// serverWords is the error's message without the "API error (NNN): " prefix
+// the client adds for agents (people don't need the status code).
+func serverWords(ce *clierr.Error) string {
+	return strings.TrimPrefix(ce.Message, "API error ("+strconv.Itoa(ce.Status)+"): ")
+}
+
+// forbidden: the key was accepted but may not do this (403 / permission), which
+// is not a rejected key.
+func forbidden(ce *clierr.Error) bool { return ce.Status == 403 || ce.Type == "permission" }
+
+// waitFix is when to try again, from the server's Retry-After when it sent one.
+func waitFix(d time.Duration) string {
+	switch {
+	case d <= 0:
+		return "Wait a moment, then try again."
+	case d < 2*time.Minute:
+		return "Try again in " + strconv.Itoa(int((d+time.Second-1)/time.Second)) + " s."
+	case d < 2*time.Hour:
+		return "Try again in " + strconv.Itoa(int(d/time.Minute)) + " min."
+	}
+	return "Try again in " + strconv.Itoa(int(d/time.Hour)) + " h."
+}
+
+// requestLine names the request for support, when the server gave its id.
+func requestLine(ce *clierr.Error) string {
+	if ce.RequestID == "" {
+		return ""
+	}
+	return "Request id: " + ce.RequestID + "."
+}
+
+// joinFix joins the non-empty parts of a fix line.
+func joinFix(parts ...string) string {
+	var out []string
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 // ---- input ----------------------------------------------------------------------
@@ -360,10 +423,11 @@ const (
 	choiceDiscard
 )
 
-// choose runs a choice under the plan card. Generate is the studio's Generate
-// on this plan (it writes the screenplay first when the plan has none yet);
-// Discard lets the plan go (POST /cancel: nothing was charged) and goes back to
-// the input.
+// choose runs a choice under the plan card. Generate asks once for the price
+// ("Generate for 96 credits? y/N", answered in confirmKey) before the studio's
+// Generate on this plan (it writes the screenplay first when the plan has none
+// yet); Discard lets the plan go (POST /cancel: nothing was charged) and goes
+// back to the input.
 func (m *model) choose(c int) (tea.Model, tea.Cmd) {
 	if m.stage != stageReady || m.job == nil {
 		return m, nil
@@ -380,6 +444,16 @@ func (m *model) choose(c int) (tea.Model, tea.Cmd) {
 		return m, m.sayErr("Your balance doesn't cover this video ("+strings.SplitN(main, " — ", 2)[0]+").",
 			"Top up at https://studio.zebracat.ai, then choose Generate again. The plan is kept.")
 	}
+	m.confirming = true
+	return m, nil
+}
+
+// generate presses Generate on the plan: only ever after the person's y.
+func (m *model) generate() (tea.Model, tea.Cmd) {
+	m.confirming = false
+	if m.stage != stageReady || m.job == nil {
+		return m, nil
+	}
 	m.stage = stageMaking
 	m.job.started = m.now()
 	m.job.phase = "generating"
@@ -395,9 +469,18 @@ func (m *model) onDiscarded(msg discardedMsg) (tea.Model, tea.Cmd) {
 }
 
 // choiceKey is a key while the choice under the plan card has the keys (the
-// input is empty): ↑/↓ move, Enter picks, g / d pick directly. Any other key
-// is typing a change (handled = false).
+// input is empty): ↑/↓ move, Enter picks. Letters are never shortcuts: any
+// other key is typing a change (handled = false). While Generate waits for its
+// y/N, every key answers it (confirmKey).
 func (m *model) choiceKey(msg tea.KeyMsg) (handled bool, model tea.Model, cmd tea.Cmd) {
+	if m.confirming {
+		if m.stage != stageReady || m.job == nil {
+			m.confirming = false
+			return false, m, nil
+		}
+		model, cmd = m.confirmKey(msg)
+		return true, model, cmd
+	}
 	if m.stage != stageReady || m.job == nil || m.busy || m.askKey || len(m.matches) > 0 ||
 		m.in.Value() != "" || len(m.images) > 0 {
 		return false, m, nil
@@ -412,23 +495,37 @@ func (m *model) choiceKey(msg tea.KeyMsg) (handled bool, model tea.Model, cmd te
 		}
 		model, cmd = m.choose(m.choice)
 		return true, model, cmd
-	case tea.KeyRunes:
-		switch string(msg.Runes) {
-		case "g":
-			model, cmd = m.choose(choiceGenerate)
-			return true, model, cmd
-		case "d":
-			model, cmd = m.choose(choiceDiscard)
-			return true, model, cmd
-		}
 	}
 	return false, m, nil
+}
+
+// confirmKey answers "Generate for N credits? y/N": y generates; any other key
+// (n, Enter, Esc, Ctrl-C, a letter, a paste) keeps the plan and spends nothing.
+func (m *model) confirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.Type == tea.KeyRunes && !msg.Paste && (string(msg.Runes) == "y" || string(msg.Runes) == "Y") {
+		return m.generate()
+	}
+	m.confirming = false
+	return m, m.note("Not generated. The plan is kept: choose Generate again, or type a change.")
+}
+
+// confirmQuestion is the one question before Generate spends.
+func confirmQuestion(q map[string]any) string {
+	if q == nil {
+		return "Generate this video? y/N"
+	}
+	main, _ := priceLines(q)
+	main = strings.SplitN(main, " from your ", 2)[0]
+	return "Generate for " + main + "? y/N"
 }
 
 // choiceView is the choice under the plan card.
 func (m *model) choiceView() string {
 	if m.stage != stageReady || m.job == nil {
 		return ""
+	}
+	if m.confirming {
+		return stKey.Render("❯ "+confirmQuestion(m.job.quote)) + "\n"
 	}
 	items := []string{generateLabel(m.job.quote), "Discard"}
 	var b strings.Builder

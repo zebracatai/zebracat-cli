@@ -3,7 +3,7 @@
 // Files live under ~/.zebracat/ :
 //
 //	config.json       — { base_url, mcp_url, output }
-//	credentials.json  — { api_key, access_token, refresh_token, expires_at, client_id }
+//	credentials.json  — { api_key } (older versions also wrote OAuth tokens; they are ignored)
 //
 // Environment variables override files: ZEBRACAT_API_KEY, ZEBRACAT_BASE_URL,
 // ZEBRACAT_OUTPUT. With ZEBRACAT_API_KEY set, nothing reads the TTY — the CLI is
@@ -33,7 +33,8 @@ type Settings struct {
 type Credentials struct {
 	// API key path (pay-as-you-go, billed from api_dollar_balance).
 	APIKey string `json:"api_key,omitempty"`
-	// OAuth path (billed from the account's plan credit).
+	// OAuth fields from older versions: no longer used to sign in, kept so a
+	// login or logout can clear them from an old file.
 	AccessToken  string    `json:"access_token,omitempty"`
 	RefreshToken string    `json:"refresh_token,omitempty"`
 	TokenType    string    `json:"token_type,omitempty"`
@@ -62,12 +63,30 @@ func readJSON(path string, v any) error {
 	return json.Unmarshal(b, v)
 }
 
+// writeJSON writes v to path (mode 0600) through a temp file and a rename,
+// so a crash or a full disk never leaves a half-written file behind.
 func writeJSON(path string, v any) error {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, b, 0o600)
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name()) // no-op after a successful rename
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // LoadSettings reads config.json (missing file -> zero Settings, no error).

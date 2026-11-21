@@ -10,7 +10,7 @@ LDFLAGS := -s -w \
 
 API     ?= https://api.zebracat.ai
 
-.PHONY: build install test vet fmt lint clean tidy generate openapi
+.PHONY: build install test vet fmt lint clean tidy generate openapi capabilities
 
 build: ## Build the binary into ./bin
 	@mkdir -p bin
@@ -36,6 +36,11 @@ openapi: ## Refresh the schema copy from $(API)/docs/openapi.json, then regenera
 	go run ./internal/openapi/enumgen -validate internal/openapi/openapi.json.new
 	mv internal/openapi/openapi.json.new internal/openapi/openapi.json
 	go generate ./...
+
+capabilities: ## Refresh the capability table copy from $(API)/api/v1/public/capabilities
+	curl -fsS $(API)/api/v1/public/capabilities -o internal/openapi/capabilities.json.new
+	python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["capabilities"]; open(sys.argv[2],"w").write(json.dumps(d,indent=2,ensure_ascii=False)+"\n")' internal/openapi/capabilities.json.new internal/openapi/capabilities.json
+	rm internal/openapi/capabilities.json.new
 
 lint: ## golangci-lint (if installed)
 	golangci-lint run ./... || echo "golangci-lint not installed; skipping"

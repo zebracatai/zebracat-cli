@@ -80,7 +80,8 @@ func TestCreateWithAVideoLink(t *testing.T) {
 	}
 }
 
-// --yes is the explicit confirm for scripts: plan, Generate once, wait.
+// --yes is the explicit confirm for scripts: one create that plans and
+// generates (auto_generate), waited to the finished video.
 func TestCreateYesGeneratesOnce(t *testing.T) {
 	srv, _ := setup(t)
 	noShell(t)
@@ -90,8 +91,11 @@ func TestCreateYesGeneratesOnce(t *testing.T) {
 	if r.exit() != 0 {
 		t.Fatalf("exit %d: %s", r.exit(), r.stderr)
 	}
-	if srv.Count("POST", "/generate") != 1 {
-		t.Fatalf("generate calls %d", srv.Count("POST", "/generate"))
+	if srv.Count("POST", "/api/v1/public/videos") != 1 || srv.Count("POST", "/generate") != 0 {
+		t.Fatalf("creates %d generates %d", srv.Count("POST", "/api/v1/public/videos"), srv.Count("POST", "/generate"))
+	}
+	if post, _ := srv.Last("POST", "/videos"); post.Body["auto_generate"] != true {
+		t.Fatalf("body %v", post.Body)
 	}
 	if out := r.JSON(t); out["phase"] != "completed" || out["video_url"] == nil {
 		t.Fatalf("out %v", out)
@@ -109,13 +113,13 @@ func TestCreateStopsOnAQuestion(t *testing.T) {
 	}
 }
 
-// --image uploads the picture like the studio and sends it with the plan.
+// --image uploads the picture to /uploads and sends it with the plan.
 func TestCreateWithAnImage(t *testing.T) {
 	srv, _ := setup(t)
 	noShell(t)
 	srv.On("GET", "/videos/{task_id}", apitest.Answer{Example: "plan_ready"})
-	srv.Handle("/api/user/upload_assets", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"uploaded_files": [{"url": "https://cdn.example.com/ai-chat/uploads/mug.png"}]}`))
+	srv.Handle("/api/v1/public/uploads", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"url": "https://cdn.example.com/ai-chat/uploads/mug.png", "kind_hint": "person"}`))
 	})
 	var b bytes.Buffer
 	_ = png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 10, 10)))

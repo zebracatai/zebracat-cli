@@ -34,7 +34,7 @@ var capsFile = func() string {
 }
 
 // HasPath reports whether the server's OpenAPI schema lists a path ending in
-// suffix (e.g. "/studio/scripts"). The path list comes from /docs/openapi.json
+// suffix (e.g. "/character-swap"). The path list comes from /docs/openapi.json
 // once a day and is cached on disk. Any failure answers false, so callers fall
 // back to the endpoints every server has.
 func (c *Client) HasPath(ctx context.Context, suffix string) bool {

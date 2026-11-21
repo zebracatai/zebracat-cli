@@ -120,12 +120,13 @@ func (m *model) note(text string) tea.Cmd {
 	return m.sayR(func() string { return m.hang(stProg.Render("  ⎿ "), stProg.Render(text)) })
 }
 
-// sayErr is a red line with what happened and one line with what to do.
+// sayErr is a red line with what happened and one line with what to do. Both
+// may carry server text (message, hint, request id), so both are cleaned.
 func (m *model) sayErr(what, fix string) tea.Cmd {
 	return m.sayR(func() string {
 		s := m.hang(stErr.Render("✗ "), stErr.Render(clean(what)))
 		if fix != "" {
-			s += "\n" + m.hang(stMuted.Render("  ⎿ "), stMuted.Render(fix))
+			s += "\n" + m.hang(stMuted.Render("  ⎿ "), stMuted.Render(clean(fix)))
 		}
 		return s
 	})
@@ -143,7 +144,9 @@ func (m *model) welcomeView() string {
 	if m.launch.JustUpdated != "" {
 		text = append(text, stOK.Render("Updated from "+m.launch.JustUpdated))
 	}
-	if m.cl != nil && m.cl.IsAuthenticated() {
+	if m.cl != nil && m.cl.IsAuthenticated() && m.keyRejected {
+		text = append(text, stErr.Render("Your API key was rejected · ")+stKey.Render("/login"))
+	} else if m.cl != nil && m.cl.IsAuthenticated() {
 		if a := m.accountLine(); a != "" {
 			text = append(text, stMuted.Render(strings.TrimPrefix(a, " · ")))
 		} else {
@@ -330,8 +333,9 @@ func (m *model) chipLines() string {
 	return strings.Join(lines, "\n")
 }
 
-// menuView is the `/` completion list: two aligned columns, at most menuRows
-// rows, scrolled to keep the selection in view ("" when closed).
+// menuView is the `/` completion list: two aligned columns, as many rows as fit
+// (menuRows at most), scrolled to keep the selection in view, with "… N more"
+// when some are hidden ("" when closed).
 func (m *model) menuView() string {
 	if len(m.matches) == 0 {
 		return ""
@@ -342,11 +346,12 @@ func (m *model) menuView() string {
 			nameW = n
 		}
 	}
+	rows := m.menuFit()
 	first := 0
-	if m.sel >= menuRows {
-		first = m.sel - menuRows + 1
+	if m.sel >= rows {
+		first = m.sel - rows + 1
 	}
-	last := first + menuRows
+	last := first + rows
 	if last > len(m.matches) {
 		last = len(m.matches)
 	}
@@ -362,11 +367,34 @@ func (m *model) menuView() string {
 		}
 		lines = append(lines, ansi.Truncate(line, m.inputWidth(), "…"))
 	}
+	if hidden := len(m.matches) - (last - first); hidden > 0 {
+		lines = append(lines, stMuted.Render(fmt.Sprintf("  … %d more (↑↓)", hidden)))
+	}
 	return strings.Join(lines, "\n")
 }
 
-// menuRows is how many `/` commands show at once.
+// menuRows is how many `/` commands show at most.
 const menuRows = 8
+
+// menuFit is how many `/` commands fit: the terminal's rows less the input,
+// its rules, the footer and the "… more" line, so the selection never sits
+// above the top of the screen (menuRows when the height is unknown).
+func (m *model) menuFit() int {
+	rows := menuRows
+	if m.height > 0 {
+		room := m.height - (m.in.Height() + 4) - 1 // rules 2 + footer 2; the "… more" line
+		if len(m.matches) <= room && room < rows {
+			room++ // everything fits: no "… more" line needed
+		}
+		if room < rows {
+			rows = room
+		}
+	}
+	if rows < 1 {
+		rows = 1
+	}
+	return rows
+}
 
 // inputWidth is the input's full width: the whole terminal, like the rules.
 func (m *model) inputWidth() int { return m.cols() }
@@ -384,7 +412,10 @@ func (m *model) footer() string {
 	case stageAsking:
 		hints = []string{"type your answer", "a number picks an option"}
 	case stageReady:
-		hints = []string{"↑↓ enter choose", "g generate · d discard", "or type a change"}
+		hints = []string{"↑↓ enter choose", "or type a change"}
+		if m.confirming {
+			hints = []string{"y generate", "any other key keeps the plan"}
+		}
 	case stageDone:
 		hints = []string{"ctrl+o open the video", "type a new idea"}
 	case stagePlanning, stageMaking:
@@ -423,6 +454,9 @@ func (m *model) statusItems() []string {
 	ver := "v" + version.Version
 	if m.cl == nil || !m.cl.IsAuthenticated() {
 		return []string{"not signed in · /login", ver}
+	}
+	if m.keyRejected {
+		return []string{"API key rejected · /login", ver}
 	}
 	if m.acct == nil {
 		return []string{"signed in", ver}

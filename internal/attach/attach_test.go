@@ -207,37 +207,65 @@ func TestClipboardPerOS(t *testing.T) {
 	}
 }
 
-// Upload posts the file the way the studio does and returns the stored URL.
-func TestUploadLikeTheStudio(t *testing.T) {
+// Upload posts one "file" to the public API's /uploads and returns the stored URL.
+func TestUploadToThePublicAPI(t *testing.T) {
 	srv := apitest.New(t)
-	var gotPath, gotName, gotKey string
-	var gotLen int
-	srv.Handle("/api/user/upload_assets", func(w http.ResponseWriter, r *http.Request) {
+	var gotName, gotKey, gotType string
+	var gotLen, gotParts int
+	srv.Handle(UploadRoute, func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseMultipartForm(1 << 20); err != nil {
 			t.Fatal(err)
 		}
-		gotPath, gotKey = r.FormValue("path"), r.Header.Get("X-API-KEY")
-		f, h, err := r.FormFile("files")
+		gotKey = r.Header.Get("X-API-KEY")
+		f, h, err := r.FormFile("file")
 		if err != nil {
 			t.Fatal(err)
 		}
 		b, _ := io.ReadAll(f)
-		gotLen, gotName = len(b), h.Filename
-		_, _ = w.Write([]byte(`{"status": true, "uploaded_files": [{"url": "https://cdn.example.com/ai-chat/uploads/u1.png", "original_name": "mug.png"}]}`))
+		gotLen, gotName, gotType = len(b), h.Filename, h.Header.Get("Content-Type")
+		gotParts = len(r.MultipartForm.File) + len(r.MultipartForm.Value)
+		w.WriteHeader(201)
+		_, _ = w.Write([]byte(`{"url": "https://cdn.example.com/uploads/u1.png", "kind_hint": "product"}`))
+	})
+	srv.Handle("/api/user/upload_assets", func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("the dashboard upload route is not on api.zebracat.ai")
 	})
 	t.Setenv("ZEBRACAT_API_KEY", "sk-dummy")
 	cl := client.New(srv.URL, &config.Credentials{}, "")
 	data := pngBytes(8, 8)
 	im, _ := Open(write(t, t.TempDir(), "mug.png", data))
-	u, err := Upload(context.Background(), cl, im)
-	if err != nil || u != "https://cdn.example.com/ai-chat/uploads/u1.png" {
-		t.Fatalf("upload: %q %v", u, err)
+	st, err := Upload(context.Background(), cl, im)
+	if err != nil || st.URL != "https://cdn.example.com/uploads/u1.png" || st.KindHint != "product" {
+		t.Fatalf("upload: %+v %v", st, err)
 	}
-	if gotPath != UploadPath || gotName != "mug.png" || gotKey != "sk-dummy" || gotLen != len(data) {
-		t.Fatalf("multipart: path %q name %q key %q len %d", gotPath, gotName, gotKey, gotLen)
+	if gotName != "mug.png" || gotKey != "sk-dummy" || gotLen != len(data) || gotType != "image/png" || gotParts != 1 {
+		t.Fatalf("multipart: name %q key %q len %d type %q parts %d", gotName, gotKey, gotLen, gotType, gotParts)
 	}
-	up := Uploads([]string{u}, []Image{{Kind: "product"}})
-	if up[0]["url"] != u || up[0]["kind"] != "product" {
+	// The person's kind wins; else the server's hint; else other.
+	up := Uploads([]Stored{st, st, {URL: "u3", KindHint: "spaceship"}}, []Image{{Kind: "person"}, {}, {}})
+	if up[0]["url"] != st.URL || up[0]["kind"] != "person" || up[1]["kind"] != "product" || up[2]["kind"] != "other" {
 		t.Fatalf("uploads %v", up)
+	}
+}
+
+// A refused upload (type, size) surfaces the API's error, and no url is an error.
+func TestUploadErrors(t *testing.T) {
+	srv := apitest.New(t)
+	answer := `{"error": {"code": "unsupported_file_type", "message": "Only PNG, JPEG or WebP pictures.", "type": "invalid_request_error"}}`
+	status := 400
+	srv.Handle(UploadRoute, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(answer))
+	})
+	t.Setenv("ZEBRACAT_API_KEY", "sk-dummy")
+	cl := client.New(srv.URL, &config.Credentials{}, "")
+	im, _ := Open(write(t, t.TempDir(), "mug.png", pngBytes(8, 8)))
+	if _, err := Upload(context.Background(), cl, im); err == nil || !strings.Contains(err.Error(), "PNG, JPEG or WebP") {
+		t.Fatalf("400: %v", err)
+	}
+	status, answer = 201, `{}`
+	if _, err := Upload(context.Background(), cl, im); err == nil || !strings.Contains(err.Error(), "no url") {
+		t.Fatalf("no url: %v", err)
 	}
 }
